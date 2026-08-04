@@ -1,0 +1,1968 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Tarkov Quest Node Graph</title>
+  <style>
+    :root {
+      --bg: #0a0c0b;
+      --panel: rgba(18, 21, 17, .96);
+      --panel-2: #171b16;
+      --panel-3: #20241d;
+      --line: #3d4238;
+      --line-soft: rgba(157, 161, 137, .18);
+      --text: #ded9c5;
+      --muted: #9c9a87;
+      --dim: #737565;
+      --accent: #c9b477;
+      --accent-strong: #ecd79a;
+      --olive: #858b63;
+      --collector: #ab82d7;
+      --collector-bg: rgba(112, 71, 146, .18);
+      --event-christmas: #91b8d8;
+      --event-halloween: #d9965f;
+      --bear: #d17b68;
+      --usec: #69a2c1;
+      --edge-success: #7da36c;
+      --edge-fail: #c46f64;
+      --edge-either: #d0a85e;
+      --edge-started: #6d94bd;
+      --edge-started-success: #6fa7a0;
+      --edge-neutral: #777d70;
+      --node-width: 292px;
+      --node-height: 116px;
+      --radius: 4px;
+      --shadow: 0 14px 40px rgba(0,0,0,.34);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 18% -10%, rgba(113, 122, 83, .15), transparent 34rem),
+        radial-gradient(circle at 92% 0%, rgba(145, 111, 59, .09), transparent 28rem),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+
+    .app-shell {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .topbar {
+      position: relative;
+      z-index: 100;
+      border-bottom: 1px solid var(--line);
+      background: rgba(12, 14, 12, .96);
+      box-shadow: 0 4px 14px rgba(0,0,0,.22);
+    }
+
+    .topbar-main {
+      display: grid;
+      grid-template-columns: minmax(260px, .8fr) minmax(320px, 1.25fr) auto;
+      gap: 16px;
+      align-items: center;
+      padding: 12px clamp(12px, 2vw, 26px);
+    }
+
+    .brand { min-width: 0; }
+    .eyebrow {
+      margin: 0 0 4px;
+      color: var(--accent);
+      font: 700 10px/1.1 ui-monospace, SFMono-Regular, Consolas, monospace;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(20px, 2.2vw, 32px);
+      line-height: 1;
+      letter-spacing: -.035em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .search-wrap { position: relative; }
+    .search-wrap::before {
+      content: "⌕";
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-55%);
+      color: var(--accent);
+      font-size: 20px;
+      pointer-events: none;
+    }
+    input[type="search"] {
+      width: 100%;
+      height: 42px;
+      padding: 0 12px 0 39px;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      outline: none;
+      background: #0a0c0a;
+      color: var(--text);
+    }
+    input[type="search"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(201,180,119,.11);
+    }
+
+    .view-controls {
+      display: flex;
+      gap: 7px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+    .btn {
+      min-height: 38px;
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: linear-gradient(#25291f, #171a15);
+      cursor: pointer;
+      font-weight: 750;
+      font-size: 12px;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent-strong); }
+    .btn.primary { border-color: #756a4b; background: linear-gradient(#4b4733, #29271d); color: var(--accent-strong); }
+    .btn.square { width: 38px; padding: 0; font-size: 19px; }
+
+    .filter-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 9px clamp(12px, 2vw, 26px) 11px;
+      border-top: 1px solid var(--line-soft);
+    }
+
+    .trader-filters {
+      display: flex;
+      gap: 8px;
+      min-width: 0;
+      overflow-x: auto;
+      padding: 2px 1px 5px;
+      scrollbar-width: thin;
+    }
+    .trader-filter {
+      flex: 0 0 70px;
+      display: grid;
+      justify-items: center;
+      gap: 4px;
+      min-width: 70px;
+      padding: 5px 4px 6px;
+      border: 1px solid transparent;
+      border-radius: 3px;
+      background: transparent;
+      cursor: pointer;
+    }
+    .trader-filter:hover { border-color: #4c5145; background: rgba(255,255,255,.025); }
+    .trader-filter[aria-pressed="true"] {
+      border-color: #82754f;
+      background: rgba(101, 91, 59, .24);
+      color: var(--accent-strong);
+    }
+    .trader-filter-icon {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 50px;
+      height: 50px;
+      overflow: hidden;
+      border: 1px solid #4a4f42;
+      border-radius: 3px;
+      background: #181b16;
+      color: var(--muted);
+      font: 800 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .trader-filter[aria-pressed="true"] .trader-filter-icon { border-color: #9c8a59; }
+    .trader-filter-icon img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+    }
+    .trader-filter-name {
+      width: 100%;
+      overflow: hidden;
+      color: var(--muted);
+      font: 700 9px/1.1 ui-monospace, SFMono-Regular, Consolas, monospace;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .trader-filter[aria-pressed="true"] .trader-filter-name { color: var(--accent-strong); }
+
+    .toggles {
+      display: flex;
+      gap: 8px 14px;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      max-width: 760px;
+    }
+    .check {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .check input { accent-color: var(--accent); }
+
+    .workspace { position: relative; min-height: 0; }
+    .graph-viewport {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      background:
+        linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px),
+        radial-gradient(circle at center, rgba(255,255,255,.014), transparent 65%);
+      background-size: 44px 44px, 44px 44px, auto;
+    }
+    .graph-viewport.dragging { cursor: grabbing; }
+    .graph-viewport *,
+    .graph-viewport *::before,
+    .graph-viewport *::after {
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .graph-viewport img {
+      -webkit-user-drag: none;
+      user-drag: none;
+    }
+
+    .world {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-origin: 0 0;
+      will-change: transform;
+      backface-visibility: hidden;
+    }
+    .bands, .nodes, .edges {
+      position: absolute;
+      inset: 0;
+    }
+    .bands { z-index: 0; pointer-events: none; contain: layout style; }
+    .edges { z-index: 1; overflow: visible; pointer-events: none; }
+    .nodes { z-index: 2; contain: layout style; }
+
+    .level-band {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      border-left: 2px solid rgba(201,180,119,.38);
+      border-right: 1px solid rgba(255,255,255,.025);
+      background: rgba(255,255,255,.012);
+    }
+    .level-band.alt { background: rgba(110,116,82,.035); }
+    .level-band.root-band {
+      border-left: 0;
+      border-right: 2px solid rgba(201,180,119,.44);
+      background: rgba(92, 99, 68, .055);
+    }
+    .band-label {
+      position: absolute;
+      left: 16px;
+      color: rgba(236, 215, 154, .19);
+      font: 900 76px/.84 ui-monospace, SFMono-Regular, Consolas, monospace;
+      letter-spacing: -.08em;
+      white-space: nowrap;
+      text-shadow: 0 1px 0 rgba(0,0,0,.28);
+    }
+
+    .edge {
+      fill: none;
+      stroke-width: 2.2;
+      opacity: .48;
+    }
+    .edge.success { stroke: var(--edge-success); marker-end: url(#arrow-success); }
+    .edge.fail { stroke: var(--edge-fail); marker-end: url(#arrow-fail); }
+    .edge.either { stroke: var(--edge-either); marker-end: url(#arrow-either); }
+    .edge.started { stroke: var(--edge-started); marker-end: url(#arrow-started); }
+    .edge.started-success { stroke: var(--edge-started-success); marker-end: url(#arrow-started-success); }
+    .edge.neutral { stroke: var(--edge-neutral); marker-end: url(#arrow-neutral); }
+    .edge.incident { opacity: .98; stroke-width: 3.8; }
+    .edge.dimmed { opacity: .08; }
+    .overview-node {
+      fill: #252a21;
+      stroke: #69705a;
+      stroke-width: 1;
+    }
+    .overview-node.collector { fill: #3c2b49; stroke: #ab82d7; }
+    .overview-node.christmas { stroke: #91b8d8; }
+    .overview-node.halloween { stroke: #d9965f; }
+    .overview-node.bear { fill: #3a2824; }
+    .overview-node.usec { fill: #24343d; }
+    .overview-node.selected {
+      stroke: var(--accent-strong);
+      stroke-width: 5;
+      opacity: 1;
+    }
+    .overview-node.dimmed { opacity: .1; }
+
+    .quest-node {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: var(--node-width);
+      height: var(--node-height);
+      contain: layout style paint;
+      content-visibility: auto;
+      contain-intrinsic-size: var(--node-width) var(--node-height);
+    }
+
+    .quest-card {
+      position: relative;
+      isolation: isolate;
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: 78px minmax(0, 1fr);
+      overflow: hidden;
+      border: 1px solid #363b32;
+      border-left: 4px solid var(--olive);
+      border-radius: var(--radius);
+      background: #121212;
+      cursor: pointer;
+      transition: border-color .1s ease, opacity .1s ease;
+    }
+    .quest-card:hover {
+      z-index: 5;
+      border-color: #7b8269;
+    }
+    .quest-card.selected {
+      border-color: var(--accent);
+      outline: 2px solid rgba(201,180,119,.34);
+      outline-offset: 1px;
+    }
+    .quest-card.collector-related { border-left-color: var(--collector); }
+    .quest-card.event-christmas { border-top-color: rgba(145,184,216,.62); }
+    .quest-card.event-halloween { border-top-color: rgba(217,150,95,.68); }
+    .quest-card.faction-bear { border-bottom-color: rgba(209,123,104,.62); }
+    .quest-card.faction-usec { border-bottom-color: rgba(105,162,193,.62); }
+    .quest-card.search-hit {
+      border-color: var(--accent-strong);
+      outline: 2px solid rgba(236,215,154,.28);
+      outline-offset: 1px;
+    }
+    .quest-card.dimmed { opacity: .18; }
+
+    .graph-viewport.interacting .quest-card,
+    .graph-viewport.interacting .edge { transition: none !important; }
+    .graph-viewport.overview-mode .nodes { display: none; }
+    .graph-viewport:not(.overview-mode) .overview-node { display: none; }
+    .graph-viewport.overview-mode .edge {
+      marker-end: none !important;
+      stroke-width: 1.35;
+      opacity: .34;
+    }
+    .graph-viewport.overview-mode .edge.incident {
+      stroke-width: 3.2;
+      opacity: .98;
+    }
+    .graph-viewport.overview-mode .edge.dimmed { opacity: .035; }
+    .graph-viewport.dragging:not(.selection-active) .edge { opacity: .26; }
+
+    .quest-art-layer {
+      position: absolute;
+      z-index: -3;
+      inset: 0;
+      overflow: hidden;
+      background: #11140f;
+      pointer-events: none;
+    }
+    .quest-art-placeholder {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: rgba(116,119,100,.38);
+      font: 900 34px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.035), transparent 54%),
+        #11140f;
+    }
+    .quest-art-image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      opacity: 1;
+      filter: none;
+    }
+    .quest-card-shade {
+      position: absolute;
+      z-index: -2;
+      inset: 0;
+      background:
+        linear-gradient(90deg,
+          rgba(0,0,0,.62) 0,
+          rgba(0,0,0,.56) 78px,
+          rgba(0,0,0,.42) 118px,
+          rgba(0,0,0,.28) 100%),
+        linear-gradient(0deg, rgba(0,0,0,.20), rgba(0,0,0,.05));
+      pointer-events: none;
+    }
+
+    .trader-pane {
+      position: relative;
+      z-index: 1;
+      min-width: 0;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      justify-items: center;
+      gap: 4px;
+      padding: 7px 6px 6px;
+      border-right: 1px solid rgba(157,161,137,.18);
+      background: rgba(0,0,0,.28);
+    }
+    .trader-portrait {
+      position: relative;
+      align-self: center;
+      display: grid;
+      place-items: center;
+      width: 56px;
+      height: 68px;
+      overflow: hidden;
+      border: 1px solid rgba(124,130,108,.72);
+      border-radius: 3px;
+      background: rgba(17,20,15,.9);
+      color: var(--muted);
+      font: 900 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .trader-portrait img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+    }
+    .trader-name {
+      width: 100%;
+      overflow: hidden;
+      color: #d0cbb8;
+      font: 800 8px/1.08 ui-monospace, SFMono-Regular, Consolas, monospace;
+      text-align: center;
+      text-overflow: ellipsis;
+      text-shadow: 0 1px 2px #000;
+      white-space: nowrap;
+    }
+    .quest-copy {
+      position: relative;
+      z-index: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 10px 10px 8px;
+    }
+    .quest-title {
+      display: -webkit-box;
+      min-height: 36px;
+      margin: 0;
+      padding-right: 29px;
+      overflow: hidden;
+      color: #f0ecdc;
+      font-size: 14px;
+      font-weight: 820;
+      line-height: 1.22;
+      letter-spacing: .002em;
+      text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,.68);
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+    .view-filter-button {
+      position: absolute;
+      z-index: 3;
+      top: 6px;
+      right: 6px;
+      width: 25px;
+      height: 25px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 1px solid #515648;
+      border-radius: 2px;
+      background: rgba(11,13,11,.86);
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .view-filter-button:hover,
+    .view-filter-button[aria-pressed="true"] {
+      border-color: var(--accent);
+      color: var(--accent-strong);
+      background: rgba(55,50,35,.94);
+    }
+    .view-filter-button svg { width: 15px; height: 15px; pointer-events: none; }
+    .quest-tags {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: auto;
+      min-height: 18px;
+      overflow: hidden;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 17px;
+      padding: 2px 5px;
+      border: 1px solid #4b5044;
+      border-radius: 2px;
+      background: rgba(8,10,8,.7);
+      color: var(--muted);
+      font: 800 8px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+      letter-spacing: .035em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .tag.collector { border-color: #79569c; color: #ceb1ec; }
+    .tag.christmas { border-color: #56728b; color: #a9cee9; }
+    .tag.halloween { border-color: #855a3b; color: #efb27f; }
+    .tag.bear { border-color: #7d493f; color: #eaa08f; }
+    .tag.usec { border-color: #3f6478; color: #90c4df; }
+    .tag.secret { border-color: #655573; color: #c0a8cf; }
+    .tag.trader-gate { border-color: #647054; color: #c2cea6; }
+    .tag.trader-rep { border-color: #506b69; color: #a8cfca; }
+
+    .hud {
+      position: absolute;
+      z-index: 20;
+      pointer-events: none;
+    }
+    .status-panel {
+      left: 14px;
+      bottom: 14px;
+      max-width: min(740px, calc(100% - 28px));
+      display: flex;
+      gap: 8px 16px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: rgba(12,14,12,.9);
+      box-shadow: 0 4px 14px rgba(0,0,0,.24);
+      color: var(--muted);
+      font: 700 10px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .status-panel strong { color: var(--text); }
+
+    .legend {
+      right: 14px;
+      bottom: 14px;
+      display: grid;
+      gap: 6px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: rgba(12,14,12,.9);
+      box-shadow: 0 4px 14px rgba(0,0,0,.24);
+      color: var(--muted);
+      font: 700 9px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .legend-title { color: var(--accent); text-transform: uppercase; letter-spacing: .1em; }
+    .legend-row { display: grid; grid-template-columns: 25px auto; gap: 7px; align-items: center; }
+    .legend-line { height: 2px; background: var(--edge-neutral); }
+    .legend-line.success { background: var(--edge-success); }
+    .legend-line.fail { background: var(--edge-fail); }
+    .legend-line.either { background: var(--edge-either); }
+    .legend-line.started { background: var(--edge-started); }
+    .legend-line.started-success { background: var(--edge-started-success); }
+
+    .load-state, .fatal-state {
+      position: absolute;
+      z-index: 30;
+      left: 50%;
+      top: 50%;
+      width: min(720px, calc(100% - 32px));
+      transform: translate(-50%, -50%);
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(18,21,17,.98);
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .load-state[hidden], .fatal-state[hidden] { display: none; }
+    .load-state h2, .fatal-state h2 { margin: 0 0 8px; }
+    .load-state p, .fatal-state p { margin: 0 0 16px; color: var(--muted); }
+    .file-grid { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 10px; text-align: left; }
+    .file-field { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
+    .file-field input { width: 100%; padding: 9px; border: 1px solid var(--line); background: #0b0d0b; color: var(--text); }
+    .fatal-state { border-color: #734c45; background: rgba(39,25,22,.98); }
+    .fatal-state pre { max-height: 360px; overflow: auto; text-align: left; white-space: pre-wrap; color: #e2b0a8; }
+
+    @media (max-width: 980px) {
+      .topbar-main { grid-template-columns: 1fr; gap: 10px; }
+      .view-controls { justify-content: flex-start; }
+      .filter-row { grid-template-columns: 1fr; }
+      .toggles { justify-content: flex-start; max-width: none; }
+      .legend { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-main">
+        <div class="brand">
+          <p class="eyebrow">Norvinsk task database</p>
+          <h1>Tarkov Quest Node Graph</h1>
+        </div>
+        <div class="search-wrap">
+          <input id="search" type="search" placeholder="Find a quest, trader, location or ID…" autocomplete="off">
+        </div>
+        <div class="view-controls">
+          <button id="zoomOut" class="btn square" type="button" title="Zoom out">−</button>
+          <button id="zoomIn" class="btn square" type="button" title="Zoom in">+</button>
+          <button id="fitGraph" class="btn primary" type="button">Fit graph</button>
+          <button id="clearSelection" class="btn" type="button">Clear focus</button>
+        </div>
+      </div>
+      <div class="filter-row">
+        <div id="traderFilters" class="trader-filters" aria-label="Trader filter"></div>
+        <div class="toggles">
+          <label class="check"><input id="showEventQuests" type="checkbox"> Show Event Quests</label>
+          <label class="check"><input id="showBearOnly" type="checkbox" checked> BEAR Only</label>
+          <label class="check"><input id="showUsecOnly" type="checkbox" checked> USEC Only</label>
+          <label class="check"><input id="collectorOnly" type="checkbox"> Show only Collector related quests</label>
+          <label class="check"><input id="includeSecret" type="checkbox" checked> Include secret quests</label>
+        </div>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <div id="viewport" class="graph-viewport overview-mode" aria-label="Quest dependency graph">
+        <div id="world" class="world">
+          <div id="bands" class="bands"></div>
+          <svg id="edges" class="edges" aria-hidden="true">
+            <defs>
+              <marker id="arrow-success" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#7da36c"/></marker>
+              <marker id="arrow-fail" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#c46f64"/></marker>
+              <marker id="arrow-either" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#d0a85e"/></marker>
+              <marker id="arrow-started" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#6d94bd"/></marker>
+              <marker id="arrow-started-success" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#6fa7a0"/></marker>
+              <marker id="arrow-neutral" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#777d70"/></marker>
+            </defs>
+          </svg>
+          <div id="nodes" class="nodes"></div>
+        </div>
+      </div>
+
+      <div id="statusPanel" class="hud status-panel"></div>
+      <div class="hud legend">
+        <div class="legend-title">Prerequisite result</div>
+        <div class="legend-row"><span class="legend-line success"></span><span>Success</span></div>
+        <div class="legend-row"><span class="legend-line fail"></span><span>Failure</span></div>
+        <div class="legend-row"><span class="legend-line either"></span><span>Success or failure</span></div>
+        <div class="legend-row"><span class="legend-line started"></span><span>Started</span></div>
+        <div class="legend-row"><span class="legend-line started-success"></span><span>Started or success</span></div>
+      </div>
+
+      <section id="loadState" class="load-state" hidden>
+        <h2>Select the quest data files</h2>
+        <p>Automatic loading can be blocked when opening the page directly as a local file. Run a local web server, or select the two JSON files manually.</p>
+        <div class="file-grid">
+          <label class="file-field">quests.json<input id="questsFile" type="file" accept="application/json,.json"></label>
+          <label class="file-field">en.json<input id="localeFile" type="file" accept="application/json,.json"></label>
+        </div>
+        <div style="margin-top:14px"><button id="loadFiles" class="btn primary" type="button">Build graph</button></div>
+      </section>
+
+      <section id="fatalState" class="fatal-state" hidden>
+        <h2>Could not build the quest graph</h2>
+        <p>The data was loaded, but graph construction failed.</p>
+        <pre id="fatalText"></pre>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    'use strict';
+
+    const TRADER_ORDER = [
+      'Prapor', 'Therapist', 'Fence', 'Skier', 'Peacekeeper', 'Mechanic',
+      'Ragman', 'Jaeger', 'Ref', 'Lightkeeper', 'BTR Driver'
+    ];
+
+    const EVENT_QUEST_SEASONS = new Map([
+      ['641dbfd7f43eda9d810d7137', 'None'],
+      ['64764abcd125ab430a14ccb5', 'None'],
+      ['647710905320c660d91c15a5', 'None'],
+      ['649567f359eab30d1b7c9585', 'None'],
+      ['649570491bb4d158bc4d0168', 'None'],
+      ['64916da7ad4e722c106f2345', 'None'],
+      ['649af47d717cb30e7e4b5e26', 'None'],
+      ['675031be899713ccad00060c', 'Christmas'],
+      ['675031d3884e1da4a90b3bc9', 'Christmas'],
+      ['6750320e23fc8fd9cc087d14', 'Christmas'],
+      ['67503247622398376d0b57cd', 'Christmas'],
+      ['655e427b64d09b4122018228', 'None'],
+      ['6603fe74e773dcf3b0099f88', 'None'],
+      ['6658a15615cbb1b2c6014d5b', 'None'],
+      ['6672ec2a2b6f3b71be794cc5', 'None'],
+      ['668bcccc167d507eb01a268b', 'None'],
+      ['66a74c628410476dd65543be', 'None'],
+      ['66e01aca214f88109006a4b5', 'None'],
+      ['66e3e2ee2136472d220bcb36', 'Halloween'],
+      ['670404a2ea1caa8f2e0be106', 'Halloween'],
+      ['67190f6c1b3f4964d90d71e9', 'Halloween'],
+      ['674647f38466ebb03408b291', 'None'],
+      ['675031e1f300496cc4104450', 'Christmas'],
+      ['675031f57775aada6b0f96a1', 'Christmas']
+    ]);
+
+    const USEC_ONLY_QUEST_IDS = new Set([
+      '6179b5eabca27a099552e052',
+      '5e383a6386f77465910ce1f3',
+      '5e4d515e86f77438b2195244',
+      '639282134ed9512be67647ed',
+      '66151401efb0539ae10875ae',
+      '6615141bfda04449120269a7'
+    ]);
+
+    const BEAR_ONLY_QUEST_IDS = new Set([
+      '6179b5b06e9dd54ac275e409',
+      '5e381b0286f77420e3417a74',
+      '5e4d4ac186f774264f758336',
+      '639136d68ba6894d155e77cf',
+      '6613f3007f6666d56807c929',
+      '6613f307fca4f2f386029409'
+    ]);
+
+    const COLLECTOR_QUEST_ID = '5c51aac186f77432ea65c552';
+
+    const NODE_W = 292;
+    const NODE_H = 116;
+    const ROOT_X = 44;
+    const ROOT_BAND_W = 370;
+    const BAND_PAD_LEFT = 38;
+    const BAND_PAD_RIGHT = 72;
+    const COL_GAP = 92;
+    const ROW_GAP = 30;
+    const TOP_PAD = 74;
+    const BOTTOM_PAD = 140;
+    const BAND_LABEL_REPEAT = 920;
+
+    const els = {
+      viewport: document.querySelector('#viewport'),
+      world: document.querySelector('#world'),
+      bands: document.querySelector('#bands'),
+      edges: document.querySelector('#edges'),
+      nodes: document.querySelector('#nodes'),
+      statusPanel: document.querySelector('#statusPanel'),
+      search: document.querySelector('#search'),
+      traderFilters: document.querySelector('#traderFilters'),
+      showEventQuests: document.querySelector('#showEventQuests'),
+      showBearOnly: document.querySelector('#showBearOnly'),
+      showUsecOnly: document.querySelector('#showUsecOnly'),
+      collectorOnly: document.querySelector('#collectorOnly'),
+      includeSecret: document.querySelector('#includeSecret'),
+      zoomOut: document.querySelector('#zoomOut'),
+      zoomIn: document.querySelector('#zoomIn'),
+      fitGraph: document.querySelector('#fitGraph'),
+      clearSelection: document.querySelector('#clearSelection'),
+      loadState: document.querySelector('#loadState'),
+      fatalState: document.querySelector('#fatalState'),
+      fatalText: document.querySelector('#fatalText'),
+      questsFile: document.querySelector('#questsFile'),
+      localeFile: document.querySelector('#localeFile'),
+      loadFiles: document.querySelector('#loadFiles')
+    };
+
+    const state = {
+      quests: [],
+      byId: new Map(),
+      edges: [],
+      outgoing: new Map(),
+      incoming: new Map(),
+      traderNames: [],
+      selectedTrader: null,
+      permanentExclusions: new Set(),
+      collectorClosure: new Set(),
+      visibleQuests: [],
+      visibleEdges: [],
+      layout: null,
+      nodeEls: new Map(),
+      overviewNodeEls: new Map(),
+      edgeEls: [],
+      selectedQuestId: null,
+      filteredQuestId: null,
+      filterContextIds: null,
+      view: { scale: 1, tx: 0, ty: 0 },
+      dragging: false,
+      dragStart: null,
+      dragMoved: false,
+      ignoreCanvasClickUntil: 0,
+      dataLoaded: false,
+      viewFrame: 0,
+      interactionTimer: 0,
+      overviewMode: true,
+      hoveredQuestId: null,
+      edgePathsByQuest: new Map(),
+      searchFrame: 0,
+      resizeTimer: 0
+    };
+
+    const el = (tag, className, text) => {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined && text !== null) node.textContent = String(text);
+      return node;
+    };
+
+    const normalizedName = value => String(value ?? '').trim();
+    const slugify = value => normalizedName(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const normalizeTargets = value => Array.isArray(value)
+      ? value.filter(v => v !== null && v !== undefined && v !== '').map(String)
+      : value === null || value === undefined || value === '' ? [] : [String(value)];
+
+    function localeValue(locales, key, fallback = '') {
+      const value = locales?.[key];
+      return typeof value === 'string' && value.trim() ? value : fallback;
+    }
+
+    function traderInitials(name) {
+      return normalizedName(name).split(/\s+/).filter(Boolean).map(part => part[0]).join('').slice(0, 3).toUpperCase();
+    }
+
+    function traderImagePath(trader) {
+      return `./traders/${slugify(trader)}.png`;
+    }
+
+    function questImagePaths(quest) {
+      if (!quest.image) return [];
+      const fileName = quest.image.split('/').pop();
+      if (!fileName) return [];
+      const dot = fileName.lastIndexOf('.');
+      const base = dot > 0 ? fileName.slice(0, dot) : fileName;
+      const ext = dot > 0 ? fileName.slice(dot + 1).toLowerCase() : '';
+      const result = [`./questicon/${fileName}`];
+      if (ext === 'jpg' || ext === 'jpeg') result.push(`./questicon/${base}.png`);
+      else if (ext === 'png') result.push(`./questicon/${base}.jpg`);
+      else result.push(`./questicon/${base}.jpg`, `./questicon/${base}.png`);
+      return result;
+    }
+
+    function makeFallbackImage(paths, alt = '') {
+      const image = el('img');
+      image.alt = alt;
+      image.loading = 'lazy';
+      image.decoding = 'async';
+      image.draggable = false;
+      image.fetchPriority = 'low';
+      const candidates = [...new Set(paths.filter(Boolean))];
+      let index = 0;
+      const next = () => {
+        if (index >= candidates.length) {
+          image.hidden = true;
+          image.removeAttribute('src');
+          return;
+        }
+        image.src = candidates[index++];
+      };
+      image.addEventListener('error', next);
+      next();
+      return image;
+    }
+
+    function rawPrerequisiteIds(rawQuest) {
+      const conditions = Array.isArray(rawQuest?.conditions?.AvailableForStart) ? rawQuest.conditions.AvailableForStart : [];
+      return conditions.filter(c => c?.conditionType === 'Quest').flatMap(c => normalizeTargets(c.target));
+    }
+
+    function getPermanentExclusions(questData) {
+      const blocked = new Set([...EVENT_QUEST_SEASONS.entries()].filter(([, season]) => season === 'None').map(([id]) => id));
+      const entries = Object.entries(questData);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const [dictionaryId, raw] of entries) {
+          const id = String(raw?._id ?? dictionaryId);
+          if (blocked.has(id)) continue;
+          if (rawPrerequisiteIds(raw).some(parentId => blocked.has(parentId))) {
+            blocked.add(id);
+            changed = true;
+          }
+        }
+      }
+      return blocked;
+    }
+
+    function directLevelFromConditions(conditions) {
+      const levels = conditions
+        .filter(c => c?.conditionType === 'Level' && ['>=', '>'].includes(c.compareMethod))
+        .map(c => Number(c.value ?? 0))
+        .filter(Number.isFinite);
+      return levels.length ? Math.max(...levels) : 0;
+    }
+
+    function directTraderRequirementsFromConditions(conditions, locales) {
+      const result = [];
+      for (const condition of conditions) {
+        if (!['TraderLoyalty', 'TraderStanding'].includes(condition?.conditionType)) continue;
+        const targetId = normalizeTargets(condition.target)[0];
+        const value = Number(condition.value);
+        if (!targetId || !Number.isFinite(value)) continue;
+        result.push({
+          traderId: targetId,
+          trader: localeValue(locales, `${targetId} Nickname`, targetId),
+          kind: condition.conditionType === 'TraderLoyalty' ? 'loyalty' : 'standing',
+          compare: normalizedName(condition.compareMethod) || '>=',
+          value
+        });
+      }
+      return mergeTraderRequirements(result);
+    }
+
+    function traderRequirementDirection(compare) {
+      if (compare === '>=' || compare === '>') return 'lower';
+      if (compare === '<=' || compare === '<') return 'upper';
+      return compare || '=';
+    }
+
+    function mergeTraderRequirements(requirements) {
+      const merged = new Map();
+      for (const requirement of requirements) {
+        const direction = traderRequirementDirection(requirement.compare);
+        const key = `${requirement.traderId}|${requirement.kind}|${direction}`;
+        const current = merged.get(key);
+        if (!current) {
+          merged.set(key, { ...requirement });
+          continue;
+        }
+        const stronger = direction === 'lower'
+          ? requirement.value > current.value || (requirement.value === current.value && requirement.compare === '>')
+          : direction === 'upper'
+            ? requirement.value < current.value || (requirement.value === current.value && requirement.compare === '<')
+            : false;
+        if (stronger) merged.set(key, { ...requirement });
+      }
+      return [...merged.values()].sort((a, b) => {
+        const ai = TRADER_ORDER.indexOf(a.trader);
+        const bi = TRADER_ORDER.indexOf(b.trader);
+        const traderOrder = (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+        return traderOrder
+          || a.trader.localeCompare(b.trader)
+          || a.kind.localeCompare(b.kind)
+          || a.compare.localeCompare(b.compare)
+          || a.value - b.value;
+      });
+    }
+
+    function formatRequirementNumber(value) {
+      return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3))).replace(/0+$/, '').replace(/\.$/, '');
+    }
+
+    function formatTraderRequirement(requirement) {
+      const value = formatRequirementNumber(requirement.value);
+      if (requirement.kind === 'loyalty') {
+        if (requirement.compare === '>=') return `${requirement.trader} LL${value}`;
+        return `${requirement.trader} LL ${requirement.compare} ${value}`;
+      }
+      return `${requirement.trader} Rep ${requirement.compare} ${value}`;
+    }
+
+    function edgeKind(statuses) {
+      const values = new Set((statuses ?? []).map(Number));
+      const hasSuccess = values.has(4);
+      const hasFail = values.has(5) || values.has(6) || values.has(7);
+      const hasStarted = values.has(2);
+      if (hasSuccess && hasFail) return 'either';
+      if (hasFail) return 'fail';
+      if (hasStarted && hasSuccess) return 'started-success';
+      if (hasStarted) return 'started';
+      if (hasSuccess) return 'success';
+      return 'neutral';
+    }
+
+    function graphLevel(questOrLevel) {
+      const value = typeof questOrLevel === 'object' ? questOrLevel?.effectiveLevel : questOrLevel;
+      return Math.max(1, Number(value) || 0);
+    }
+
+    function compareQuest(a, b) {
+      return (graphLevel(a) - graphLevel(b))
+        || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        || a.sourceIndex - b.sourceIndex;
+    }
+
+    function traderOrderIndex(trader) {
+      const index = TRADER_ORDER.indexOf(trader);
+      return index < 0 ? TRADER_ORDER.length : index;
+    }
+
+    function compareColumnQuest(a, b) {
+      const aHasTraderGate = a.effectiveTraderRequirements.length > 0 ? 1 : 0;
+      const bHasTraderGate = b.effectiveTraderRequirements.length > 0 ? 1 : 0;
+      return (aHasTraderGate - bHasTraderGate)
+        || (traderOrderIndex(a.trader) - traderOrderIndex(b.trader))
+        || a.trader.localeCompare(b.trader, undefined, { sensitivity: 'base' })
+        || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        || a.sourceIndex - b.sourceIndex;
+    }
+
+    function buildGraph(questData, locales) {
+      if (!questData || typeof questData !== 'object' || Array.isArray(questData)) throw new Error('quests.json must be an object keyed by quest ID.');
+      if (!locales || typeof locales !== 'object' || Array.isArray(locales)) throw new Error('en.json must be a flat locale object.');
+
+      state.permanentExclusions = getPermanentExclusions(questData);
+      state.quests = Object.entries(questData)
+        .filter(([dictionaryId, raw]) => !state.permanentExclusions.has(String(raw?._id ?? dictionaryId)))
+        .map(([dictionaryId, raw], sourceIndex) => {
+          const id = String(raw?._id ?? dictionaryId);
+          const traderId = String(raw?.traderId ?? 'unknown');
+          const fallbackName = normalizedName(raw?.QuestName) || id;
+          const trader = localeValue(locales, `${traderId} Nickname`, traderId);
+          const locationId = normalizedName(raw?.location);
+          const location = locationId && locationId !== 'any' ? localeValue(locales, `${locationId} Name`, locationId) : 'Any location';
+          const startConditions = Array.isArray(raw?.conditions?.AvailableForStart) ? raw.conditions.AvailableForStart : [];
+          const prerequisiteConditions = startConditions.filter(c => c?.conditionType === 'Quest');
+          const directRequirements = startConditions.filter(c => c?.conditionType !== 'Quest');
+          return {
+            id,
+            raw,
+            sourceIndex,
+            name: localeValue(locales, `${id} name`, fallbackName),
+            description: localeValue(locales, `${id} description`, ''),
+            traderId,
+            trader,
+            location,
+            type: normalizedName(raw?.type) || 'Unknown',
+            image: normalizedName(raw?.image),
+            secret: Boolean(raw?.secretQuest),
+            faction: BEAR_ONLY_QUEST_IDS.has(id) ? 'BEAR' : USEC_ONLY_QUEST_IDS.has(id) ? 'USEC' : null,
+            eventSeason: null,
+            prerequisiteConditions,
+            directRequirements,
+            directLevel: directLevelFromConditions(directRequirements),
+            directTraderRequirements: directTraderRequirementsFromConditions(directRequirements, locales),
+            effectiveTraderRequirements: [],
+            effectiveLevel: 0,
+            depth: 0,
+            collectorRelated: false
+          };
+        });
+
+      state.byId = new Map(state.quests.map(quest => [quest.id, quest]));
+      state.outgoing = new Map(state.quests.map(quest => [quest.id, []]));
+      state.incoming = new Map(state.quests.map(quest => [quest.id, []]));
+
+      const edgeMap = new Map();
+      for (const quest of state.quests) {
+        for (const condition of quest.prerequisiteConditions) {
+          for (const parentId of normalizeTargets(condition.target)) {
+            if (!state.byId.has(parentId)) continue;
+            const key = `${parentId}>${quest.id}`;
+            let edge = edgeMap.get(key);
+            if (!edge) {
+              edge = { sourceId: parentId, targetId: quest.id, statuses: new Set(), kind: 'neutral' };
+              edgeMap.set(key, edge);
+            }
+            for (const status of condition.status ?? []) edge.statuses.add(Number(status));
+          }
+        }
+      }
+
+      state.edges = [...edgeMap.values()].map(edge => ({
+        ...edge,
+        statuses: [...edge.statuses].sort((a, b) => a - b),
+        kind: edgeKind([...edge.statuses])
+      }));
+
+      for (const edge of state.edges) {
+        state.outgoing.get(edge.sourceId).push(edge);
+        state.incoming.get(edge.targetId).push(edge);
+      }
+
+      for (const quest of state.quests) {
+        state.outgoing.get(quest.id).sort((a, b) => compareQuest(state.byId.get(a.targetId), state.byId.get(b.targetId)));
+        state.incoming.get(quest.id).sort((a, b) => compareQuest(state.byId.get(a.sourceId), state.byId.get(b.sourceId)));
+      }
+
+      propagateEventSeasons();
+      calculateEffectiveLevelsAndDepth();
+      calculateEffectiveTraderRequirements();
+      calculateCollectorClosure();
+
+      const traders = new Set(state.quests.map(quest => quest.trader));
+      state.traderNames = [
+        ...TRADER_ORDER.filter(name => traders.has(name)),
+        ...[...traders].filter(name => !TRADER_ORDER.includes(name)).sort((a, b) => a.localeCompare(b))
+      ];
+      state.selectedTrader = null;
+      state.dataLoaded = true;
+      renderTraderFilters();
+      renderGraph(true);
+    }
+
+    function propagateEventSeasons() {
+      for (const quest of state.quests) {
+        const configured = EVENT_QUEST_SEASONS.get(quest.id);
+        quest.eventSeason = configured && configured !== 'None' ? configured : null;
+      }
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const quest of state.quests) {
+          if (quest.eventSeason) continue;
+          const seasons = new Set((state.incoming.get(quest.id) ?? [])
+            .map(edge => state.byId.get(edge.sourceId)?.eventSeason)
+            .filter(Boolean));
+          if (seasons.size) {
+            quest.eventSeason = [...seasons].sort().join(' / ');
+            changed = true;
+          }
+        }
+      }
+    }
+
+    function calculateEffectiveLevelsAndDepth() {
+      const indegree = new Map(state.quests.map(quest => [quest.id, state.incoming.get(quest.id).length]));
+      const queue = state.quests.filter(quest => indegree.get(quest.id) === 0).sort(compareQuest);
+      const processed = new Set();
+
+      for (const quest of state.quests) {
+        quest.effectiveLevel = quest.directLevel;
+        quest.depth = 0;
+      }
+
+      while (queue.length) {
+        const quest = queue.shift();
+        processed.add(quest.id);
+        for (const edge of state.outgoing.get(quest.id) ?? []) {
+          const child = state.byId.get(edge.targetId);
+          child.effectiveLevel = Math.max(child.effectiveLevel, quest.effectiveLevel, child.directLevel);
+          child.depth = Math.max(child.depth, quest.depth + 1);
+          indegree.set(child.id, indegree.get(child.id) - 1);
+          if (indegree.get(child.id) === 0) {
+            queue.push(child);
+            queue.sort(compareQuest);
+          }
+        }
+      }
+
+      if (processed.size !== state.quests.length) {
+        const leftovers = state.quests.filter(quest => !processed.has(quest.id));
+        for (let iteration = 0; iteration < leftovers.length + 2; iteration++) {
+          let changed = false;
+          for (const quest of leftovers) {
+            for (const edge of state.incoming.get(quest.id) ?? []) {
+              const parent = state.byId.get(edge.sourceId);
+              const nextLevel = Math.max(quest.effectiveLevel, parent.effectiveLevel, quest.directLevel);
+              const nextDepth = Math.max(quest.depth, parent.depth + 1);
+              if (nextLevel !== quest.effectiveLevel || nextDepth !== quest.depth) {
+                quest.effectiveLevel = nextLevel;
+                quest.depth = nextDepth;
+                changed = true;
+              }
+            }
+          }
+          if (!changed) break;
+        }
+      }
+    }
+
+    function calculateEffectiveTraderRequirements() {
+      const memo = new Map();
+      const collect = (questId, path = new Set()) => {
+        if (memo.has(questId)) return memo.get(questId);
+        const quest = state.byId.get(questId);
+        if (!quest) return [];
+        if (path.has(questId)) return quest.directTraderRequirements;
+        const nextPath = new Set(path).add(questId);
+        const requirements = [...quest.directTraderRequirements];
+        for (const edge of state.incoming.get(questId) ?? []) requirements.push(...collect(edge.sourceId, nextPath));
+        const merged = mergeTraderRequirements(requirements);
+        memo.set(questId, merged);
+        return merged;
+      };
+      for (const quest of state.quests) quest.effectiveTraderRequirements = collect(quest.id);
+    }
+
+    function calculateCollectorClosure() {
+      state.collectorClosure = new Set();
+      const stack = [COLLECTOR_QUEST_ID];
+      while (stack.length) {
+        const id = stack.pop();
+        if (state.collectorClosure.has(id) || !state.byId.has(id)) continue;
+        state.collectorClosure.add(id);
+        for (const edge of state.incoming.get(id) ?? []) stack.push(edge.sourceId);
+      }
+      for (const quest of state.quests) quest.collectorRelated = state.collectorClosure.has(quest.id);
+    }
+
+    function renderTraderFilters() {
+      els.traderFilters.replaceChildren();
+      const appendButton = (trader, isAll = false) => {
+        const button = el('button', 'trader-filter');
+        button.type = 'button';
+        button.dataset.trader = isAll ? '' : trader;
+        button.setAttribute('aria-pressed', String(isAll ? state.selectedTrader === null : state.selectedTrader === trader));
+        button.title = isAll ? 'Show all traders' : `Show only ${trader}`;
+
+        const icon = el('span', 'trader-filter-icon', isAll ? 'ALL' : traderInitials(trader));
+        icon.append(makeFallbackImage([traderImagePath(isAll ? 'all' : trader)], ''));
+        button.append(icon, el('span', 'trader-filter-name', isAll ? 'All' : trader));
+        button.addEventListener('click', () => {
+          state.selectedTrader = isAll ? null : trader;
+          for (const candidate of els.traderFilters.querySelectorAll('.trader-filter')) {
+            candidate.setAttribute('aria-pressed', String((candidate.dataset.trader || null) === state.selectedTrader));
+          }
+          renderGraph(true);
+        });
+        els.traderFilters.append(button);
+      };
+
+      appendButton('All', true);
+      for (const trader of state.traderNames) appendButton(trader);
+    }
+
+    function isQuestVisible(quest) {
+      if (state.filterContextIds) return state.filterContextIds.has(quest.id);
+      if (!els.showEventQuests.checked && quest.eventSeason) return false;
+      if (!els.showBearOnly.checked && quest.faction === 'BEAR') return false;
+      if (!els.showUsecOnly.checked && quest.faction === 'USEC') return false;
+      if (els.collectorOnly.checked && !quest.collectorRelated) return false;
+      if (!els.includeSecret.checked && quest.secret) return false;
+      if (state.selectedTrader && quest.trader !== state.selectedTrader) return false;
+      return true;
+    }
+
+    function computeVisibleGraph() {
+      state.filterContextIds = state.filteredQuestId ? collectGraphContext(state.filteredQuestId).nodes : null;
+      state.visibleQuests = state.quests.filter(isQuestVisible).sort(compareQuest);
+      const visibleIds = new Set(state.visibleQuests.map(quest => quest.id));
+      state.visibleEdges = state.edges.filter(edge => visibleIds.has(edge.sourceId) && visibleIds.has(edge.targetId));
+      return visibleIds;
+    }
+
+    function columnKeyFor(quest, visibleIncoming, localRankById) {
+      const level = graphLevel(quest);
+      if (!visibleIncoming.length) return `${level}:0`;
+      const sameLevelParents = visibleIncoming
+        .map(edge => state.byId.get(edge.sourceId))
+        .filter(parent => graphLevel(parent) === level && localRankById.has(parent.id));
+      const parentRank = sameLevelParents.length ? Math.max(...sameLevelParents.map(parent => localRankById.get(parent.id) + 1)) : 0;
+      const pressure = Math.floor(Math.log2(Math.max(1, visibleIncoming.length)));
+      return `${level}:${Math.max(parentRank, pressure)}`;
+    }
+
+    function buildLayout() {
+      const visibleIds = new Set(state.visibleQuests.map(quest => quest.id));
+      const incomingVisible = new Map(state.visibleQuests.map(quest => [
+        quest.id,
+        (state.incoming.get(quest.id) ?? []).filter(edge => visibleIds.has(edge.sourceId))
+      ]));
+      const outgoingVisible = new Map(state.visibleQuests.map(quest => [
+        quest.id,
+        (state.outgoing.get(quest.id) ?? []).filter(edge => visibleIds.has(edge.targetId))
+      ]));
+
+      const roots = state.visibleQuests.filter(quest => incomingVisible.get(quest.id).length === 0).sort(compareColumnQuest);
+      const topo = topologicalVisibleOrder(state.visibleQuests, incomingVisible, outgoingVisible);
+      const localRankById = new Map();
+      const columnById = new Map();
+
+      for (const quest of topo) {
+        const incoming = incomingVisible.get(quest.id);
+        const key = columnKeyFor(quest, incoming, localRankById);
+        const rank = Number(key.split(':')[1]);
+        localRankById.set(quest.id, rank);
+        columnById.set(quest.id, key);
+      }
+
+      // Cyclic leftovers should still receive a deterministic column.
+      for (const quest of state.visibleQuests) {
+        if (columnById.has(quest.id)) continue;
+        const incoming = incomingVisible.get(quest.id);
+        const pressure = Math.floor(Math.log2(Math.max(1, incoming.length)));
+        const key = `${graphLevel(quest)}:${pressure}`;
+        localRankById.set(quest.id, pressure);
+        columnById.set(quest.id, key);
+      }
+
+      const levels = [...new Set(state.visibleQuests.map(graphLevel))].sort((a, b) => a - b);
+      const maxRankByLevel = new Map(levels.map(level => [level, 0]));
+      for (const quest of state.visibleQuests) {
+        const level = graphLevel(quest);
+        const rank = localRankById.get(quest.id) ?? 0;
+        maxRankByLevel.set(level, Math.max(maxRankByLevel.get(level) ?? 0, rank));
+      }
+
+      const bands = [];
+      let cursorX = 0;
+      for (const level of levels) {
+        const columnCount = (maxRankByLevel.get(level) ?? 0) + 1;
+        const width = BAND_PAD_LEFT
+          + columnCount * NODE_W
+          + Math.max(0, columnCount - 1) * COL_GAP
+          + BAND_PAD_RIGHT;
+        bands.push({ level, left: cursorX, width, columnCount });
+        cursorX += width;
+      }
+
+      const columns = new Map();
+      for (const quest of state.visibleQuests) {
+        const key = columnById.get(quest.id);
+        if (!columns.has(key)) columns.set(key, []);
+        columns.get(key).push(quest);
+      }
+      for (const quests of columns.values()) quests.sort(compareColumnQuest);
+
+      const xByColumn = new Map();
+      for (const band of bands) {
+        const columnsStart = band.left + BAND_PAD_LEFT;
+        for (let rank = 0; rank < band.columnCount; rank++) {
+          xByColumn.set(`${band.level}:${rank}`, columnsStart + rank * (NODE_W + COL_GAP));
+        }
+      }
+
+      const columnKeys = [...columns.keys()].sort((a, b) => {
+        const [al, ar] = a.split(':').map(Number);
+        const [bl, br] = b.split(':').map(Number);
+        return al - bl || ar - br;
+      });
+
+      const positions = new Map();
+      let maxRows = 0;
+      for (const key of columnKeys) {
+        const quests = columns.get(key);
+        maxRows = Math.max(maxRows, quests.length);
+        quests.forEach((quest, index) => {
+          positions.set(quest.id, {
+            x: xByColumn.get(key),
+            y: TOP_PAD + index * (NODE_H + ROW_GAP),
+            columnKey: key
+          });
+        });
+      }
+
+      const height = Math.max(720, TOP_PAD + maxRows * (NODE_H + ROW_GAP) + BOTTOM_PAD);
+      const width = Math.max(880, cursorX + 80);
+      return { positions, bands, width, height, roots, incomingVisible, outgoingVisible, columnById };
+    }
+
+    function topologicalVisibleOrder(quests, incomingVisible, outgoingVisible) {
+      const indegree = new Map(quests.map(quest => [quest.id, incomingVisible.get(quest.id).length]));
+      const queue = quests.filter(quest => indegree.get(quest.id) === 0).sort(compareQuest);
+      const result = [];
+      while (queue.length) {
+        const quest = queue.shift();
+        result.push(quest);
+        for (const edge of outgoingVisible.get(quest.id) ?? []) {
+          indegree.set(edge.targetId, indegree.get(edge.targetId) - 1);
+          if (indegree.get(edge.targetId) === 0) {
+            queue.push(state.byId.get(edge.targetId));
+            queue.sort(compareQuest);
+          }
+        }
+      }
+      if (result.length !== quests.length) {
+        const seen = new Set(result.map(quest => quest.id));
+        result.push(...quests.filter(quest => !seen.has(quest.id)).sort(compareQuest));
+      }
+      return result;
+    }
+
+    function neighborBarycenter(questId, edgeMap, orderIndex, incoming) {
+      const edges = edgeMap.get(questId) ?? [];
+      if (!edges.length) return Number.POSITIVE_INFINITY;
+      const values = edges.map(edge => orderIndex.get(incoming ? edge.sourceId : edge.targetId)).filter(Number.isFinite);
+      if (!values.length) return Number.POSITIVE_INFINITY;
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    }
+
+    function renderGraph(fitAfter = false) {
+      if (!state.dataLoaded) return;
+      const filteredSelection = state.filteredQuestId;
+      state.selectedQuestId = null;
+      els.viewport.classList.remove('selection-active');
+      state.hoveredQuestId = null;
+      computeVisibleGraph();
+      state.layout = buildLayout();
+      renderBands();
+      renderNodes();
+      renderEdges();
+      if (filteredSelection && state.nodeEls.has(filteredSelection)) applySelectionStyles(filteredSelection);
+      updateStatus();
+      applySearch();
+      if (fitAfter) requestAnimationFrame(state.filteredQuestId ? fitGraph : showStart);
+    }
+
+    function renderBands() {
+      const { width, height, bands } = state.layout;
+      els.world.style.width = `${width}px`;
+      els.world.style.height = `${height}px`;
+      els.bands.style.width = `${width}px`;
+      els.bands.style.height = `${height}px`;
+      els.nodes.style.width = `${width}px`;
+      els.nodes.style.height = `${height}px`;
+      els.edges.setAttribute('width', width);
+      els.edges.setAttribute('height', height);
+      els.edges.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+      els.bands.replaceChildren();
+      state.layout.bands.forEach((band, index) => {
+        const classes = ['level-band'];
+        if (index % 2) classes.push('alt');
+        if (band.level === 1) classes.push('root-band');
+        const bandEl = el('div', classes.join(' '));
+        bandEl.style.left = `${band.left}px`;
+        bandEl.style.width = `${band.width}px`;
+        bandEl.style.height = `${height}px`;
+        appendRepeatedBandLabels(bandEl, formatLevel(band.level), height);
+        els.bands.append(bandEl);
+      });
+    }
+
+    function appendRepeatedBandLabels(bandEl, text, height) {
+      const label = el('span', 'band-label', text);
+      label.style.top = '18px';
+      bandEl.append(label);
+    }
+
+    function formatLevel(value) {
+      return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
+    }
+
+    function renderNodes() {
+      els.nodes.replaceChildren();
+      state.nodeEls.clear();
+      const fragment = document.createDocumentFragment();
+      for (const quest of state.visibleQuests) {
+        const position = state.layout.positions.get(quest.id);
+        if (!position) continue;
+        const node = el('div', 'quest-node');
+        node.dataset.questId = quest.id;
+        node.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+
+        const classes = ['quest-card'];
+        if (quest.collectorRelated) classes.push('collector-related');
+        if (quest.eventSeason?.toLowerCase().includes('christmas')) classes.push('event-christmas');
+        if (quest.eventSeason?.toLowerCase().includes('halloween')) classes.push('event-halloween');
+        if (quest.faction) classes.push(`faction-${quest.faction.toLowerCase()}`);
+        const card = el('article', classes.join(' '));
+        card.tabIndex = 0;
+        card.title = `${quest.name}\n${quest.trader}\n${quest.location}`;
+
+        const viewFilterButton = el('button', 'view-filter-button');
+        viewFilterButton.type = 'button';
+        viewFilterButton.dataset.filterQuest = quest.id;
+        viewFilterButton.setAttribute('aria-label', `Show only the prerequisite graph for ${quest.name}`);
+        viewFilterButton.setAttribute('aria-pressed', String(state.filteredQuestId === quest.id));
+        viewFilterButton.title = 'Show this quest, all prerequisites, and direct successors';
+        viewFilterButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.3 12s3.5-6 9.7-6 9.7 6 9.7 6-3.5 6-9.7 6-9.7-6-9.7-6Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>';
+
+        const artLayer = el('div', 'quest-art-layer');
+        artLayer.append(el('span', 'quest-art-placeholder', '?'));
+        const questImage = makeFallbackImage(questImagePaths(quest), '');
+        questImage.className = 'quest-art-image';
+        artLayer.append(questImage);
+        const shade = el('div', 'quest-card-shade');
+
+        const traderPane = el('div', 'trader-pane');
+        const traderPortrait = el('span', 'trader-portrait', traderInitials(quest.trader));
+        traderPortrait.append(makeFallbackImage([traderImagePath(quest.trader)], ''));
+        traderPane.append(traderPortrait, el('span', 'trader-name', quest.trader));
+
+        const copy = el('div', 'quest-copy');
+        copy.append(el('h2', 'quest-title', quest.name));
+
+        const tags = el('div', 'quest-tags');
+        if (quest.id === COLLECTOR_QUEST_ID) tags.append(el('span', 'tag collector', 'Collector quest'));
+        for (const requirement of quest.effectiveTraderRequirements) {
+          tags.append(el('span', `tag ${requirement.kind === 'standing' ? 'trader-rep' : 'trader-gate'}`, formatTraderRequirement(requirement)));
+        }
+        if (quest.eventSeason) {
+          const season = quest.eventSeason.toLowerCase();
+          tags.append(el('span', `tag ${season.includes('halloween') ? 'halloween' : 'christmas'}`, `${quest.eventSeason} event`));
+        }
+        if (quest.faction) tags.append(el('span', `tag ${quest.faction.toLowerCase()}`, `${quest.faction} only`));
+        if (quest.secret) tags.append(el('span', 'tag secret', 'Secret'));
+        copy.append(tags);
+
+        card.append(artLayer, shade, traderPane, copy, viewFilterButton);
+        node.append(card);
+        fragment.append(node);
+        state.nodeEls.set(quest.id, { node, card });
+      }
+      els.nodes.append(fragment);
+    }
+
+    function renderEdges() {
+      const defs = els.edges.querySelector('defs');
+      els.edges.replaceChildren(defs);
+      state.edgeEls = [];
+      state.overviewNodeEls = new Map();
+      state.edgePathsByQuest = new Map(state.visibleQuests.map(quest => [quest.id, new Set()]));
+      const fragment = document.createDocumentFragment();
+      for (const edge of state.visibleEdges) {
+        const source = state.layout.positions.get(edge.sourceId);
+        const target = state.layout.positions.get(edge.targetId);
+        if (!source || !target) continue;
+        const sx = source.x + NODE_W;
+        const sy = source.y + NODE_H / 2;
+        const tx = target.x;
+        const ty = target.y + NODE_H / 2;
+        const dx = Math.max(70, tx - sx);
+        const bend = Math.max(48, Math.min(240, dx * .42));
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M ${sx} ${sy} C ${sx + bend} ${sy}, ${tx - bend} ${ty}, ${tx} ${ty}`);
+        path.setAttribute('class', `edge ${edge.kind}`);
+        fragment.append(path);
+        state.edgeEls.push({ edge, path });
+        state.edgePathsByQuest.get(edge.sourceId)?.add(path);
+        state.edgePathsByQuest.get(edge.targetId)?.add(path);
+      }
+
+      const overview = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      overview.setAttribute('class', 'overview-nodes');
+      for (const quest of state.visibleQuests) {
+        const position = state.layout.positions.get(quest.id);
+        if (!position) continue;
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        const classes = ['overview-node'];
+        if (quest.collectorRelated) classes.push('collector');
+        if (quest.eventSeason?.toLowerCase().includes('christmas')) classes.push('christmas');
+        if (quest.eventSeason?.toLowerCase().includes('halloween')) classes.push('halloween');
+        if (quest.faction) classes.push(quest.faction.toLowerCase());
+        rect.setAttribute('class', classes.join(' '));
+        rect.setAttribute('x', position.x);
+        rect.setAttribute('y', position.y);
+        rect.setAttribute('width', NODE_W);
+        rect.setAttribute('height', NODE_H);
+        rect.setAttribute('rx', '4');
+        overview.append(rect);
+        state.overviewNodeEls.set(quest.id, rect);
+      }
+      fragment.append(overview);
+      els.edges.append(fragment);
+    }
+
+    function highlightIncident(questId, active) {
+      if (state.selectedQuestId) return;
+      if (!active && state.hoveredQuestId !== questId) return;
+      if (state.hoveredQuestId && state.hoveredQuestId !== questId) {
+        for (const path of state.edgePathsByQuest.get(state.hoveredQuestId) ?? []) path.classList.remove('incident');
+      }
+      for (const path of state.edgePathsByQuest.get(questId) ?? []) path.classList.toggle('incident', active);
+      state.hoveredQuestId = active ? questId : null;
+    }
+
+    function applySelectionStyles(questId) {
+      state.selectedQuestId = questId;
+      els.viewport.classList.add('selection-active');
+      const context = collectGraphContext(questId, new Set(state.visibleQuests.map(quest => quest.id)));
+      for (const [id, entry] of state.nodeEls) {
+        entry.card.classList.toggle('selected', id === questId);
+        entry.card.classList.toggle('dimmed', !context.nodes.has(id));
+      }
+      for (const [id, overviewNode] of state.overviewNodeEls) {
+        overviewNode.classList.toggle('selected', id === questId);
+        overviewNode.classList.toggle('dimmed', !context.nodes.has(id));
+      }
+      for (const { edge, path } of state.edgeEls) {
+        const active = context.edges.has(edge);
+        path.classList.toggle('incident', active);
+        path.classList.toggle('dimmed', !active);
+      }
+      updateStatus();
+    }
+
+    function selectQuest(questId) {
+      if (state.selectedQuestId === questId) {
+        clearSelection();
+        return;
+      }
+      applySelectionStyles(questId);
+    }
+
+    function collectGraphContext(questId, allowedIds = null) {
+      const allowed = allowedIds ?? new Set(state.quests.map(quest => quest.id));
+      const nodes = new Set();
+      const edges = new Set();
+      if (!allowed.has(questId)) return { nodes, edges };
+      nodes.add(questId);
+
+      const visitedPrerequisites = new Set([questId]);
+      const stack = [questId];
+      while (stack.length) {
+        const id = stack.pop();
+        for (const edge of state.incoming.get(id) ?? []) {
+          const prerequisiteId = edge.sourceId;
+          if (!allowed.has(prerequisiteId)) continue;
+          edges.add(edge);
+          nodes.add(prerequisiteId);
+          if (visitedPrerequisites.has(prerequisiteId)) continue;
+          visitedPrerequisites.add(prerequisiteId);
+          stack.push(prerequisiteId);
+        }
+      }
+
+      for (const edge of state.outgoing.get(questId) ?? []) {
+        if (!allowed.has(edge.targetId)) continue;
+        edges.add(edge);
+        nodes.add(edge.targetId);
+      }
+
+      return { nodes, edges };
+    }
+
+    function activateViewFilter(questId) {
+      if (!state.byId.has(questId)) return;
+
+      const currentPosition = state.layout?.positions.get(questId);
+      const preservedScale = state.view.scale;
+      const anchor = currentPosition
+        ? {
+            x: state.view.tx + (currentPosition.x + NODE_W / 2) * preservedScale,
+            y: state.view.ty + (currentPosition.y + NODE_H / 2) * preservedScale
+          }
+        : null;
+
+      state.filteredQuestId = questId;
+      state.filterContextIds = null;
+      renderGraph(false);
+
+      if (!anchor) return;
+      const filteredPosition = state.layout?.positions.get(questId);
+      if (!filteredPosition) return;
+      state.view.scale = preservedScale;
+      state.view.tx = anchor.x - (filteredPosition.x + NODE_W / 2) * preservedScale;
+      state.view.ty = anchor.y - (filteredPosition.y + NODE_H / 2) * preservedScale;
+      applyView();
+    }
+
+    function clearSelection() {
+      const hadViewFilter = Boolean(state.filteredQuestId);
+      state.selectedQuestId = null;
+      els.viewport.classList.remove('selection-active');
+      state.filteredQuestId = null;
+      state.filterContextIds = null;
+      state.hoveredQuestId = null;
+      if (hadViewFilter) {
+        renderGraph(true);
+        return;
+      }
+      for (const entry of state.nodeEls.values()) entry.card.classList.remove('selected', 'dimmed');
+      for (const overviewNode of state.overviewNodeEls.values()) overviewNode.classList.remove('selected', 'dimmed');
+      for (const { path } of state.edgeEls) path.classList.remove('incident', 'dimmed');
+      if (state.dataLoaded) updateStatus();
+    }
+
+    function updateStatus() {
+      const roots = state.layout?.roots.length ?? 0;
+      const bands = state.layout?.bands.length ?? 0;
+      const zoom = Math.round(state.view.scale * 100);
+      els.statusPanel.replaceChildren();
+      const parts = [
+        ['Quests', state.visibleQuests.length, 'quests'],
+        ['Connections', state.visibleEdges.length, 'connections'],
+        ['Starting nodes', roots, 'roots'],
+        ['Level bands', bands, 'bands'],
+        ['Zoom', `${zoom}%${state.overviewMode ? ' · overview' : ''}`, 'zoom']
+      ];
+      for (const [label, value, key] of parts) {
+        const span = el('span');
+        span.dataset.status = key;
+        span.append(document.createTextNode(`${label}: `), el('strong', '', value));
+        els.statusPanel.append(span);
+      }
+      if (state.selectedQuestId) {
+        const quest = state.byId.get(state.selectedQuestId);
+        const span = el('span');
+        span.dataset.status = 'focused';
+        span.append(document.createTextNode(state.filteredQuestId ? 'Filtered around: ' : 'Focused: '), el('strong', '', quest?.name ?? state.selectedQuestId));
+        els.statusPanel.append(span);
+      }
+    }
+
+    function updateZoomStatus() {
+      const strong = els.statusPanel.querySelector('[data-status="zoom"] strong');
+      if (strong) strong.textContent = `${Math.round(state.view.scale * 100)}%${state.overviewMode ? ' · overview' : ''}`;
+    }
+
+    function applySearch() {
+      if (!state.dataLoaded) return;
+      const query = els.search.value.trim().toLocaleLowerCase();
+      let hits = 0;
+      for (const quest of state.visibleQuests) {
+        const entry = state.nodeEls.get(quest.id);
+        if (!entry) continue;
+        const haystack = [quest.name, quest.trader, quest.location, quest.id, quest.type].join('\n').toLocaleLowerCase();
+        const match = !query || haystack.includes(query);
+        entry.card.classList.toggle('search-hit', Boolean(query && match));
+        if (query && match) hits++;
+      }
+      if (query) {
+        const searchStatus = el('span');
+        searchStatus.append(document.createTextNode('Search hits: '), el('strong', '', hits));
+        els.statusPanel.append(searchStatus);
+      }
+    }
+
+    function focusFirstSearchHit() {
+      const hit = [...state.nodeEls.entries()].find(([, entry]) => entry.card.classList.contains('search-hit'));
+      if (!hit) return;
+      focusNode(hit[0]);
+      selectQuest(hit[0]);
+    }
+
+    function focusNode(questId) {
+      const position = state.layout?.positions.get(questId);
+      if (!position) return;
+      const rect = els.viewport.getBoundingClientRect();
+      const scale = Math.max(state.view.scale, .7);
+      state.view.scale = scale;
+      state.view.tx = rect.width / 2 - (position.x + NODE_W / 2) * scale;
+      state.view.ty = rect.height / 2 - (position.y + NODE_H / 2) * scale;
+      applyView();
+    }
+
+    function markInteracting() {
+      els.viewport.classList.add('interacting');
+      clearTimeout(state.interactionTimer);
+      state.interactionTimer = setTimeout(() => els.viewport.classList.remove('interacting'), 120);
+    }
+
+    function applyView() {
+      state.view.scale = Math.max(.005, Math.min(2.2, state.view.scale));
+      if (state.viewFrame) return;
+      state.viewFrame = requestAnimationFrame(() => {
+        state.viewFrame = 0;
+        els.world.style.transform = `translate3d(${state.view.tx}px, ${state.view.ty}px, 0) scale(${state.view.scale})`;
+        const overview = state.view.scale < .42;
+        if (overview !== state.overviewMode) {
+          state.overviewMode = overview;
+          els.viewport.classList.toggle('overview-mode', overview);
+        }
+        updateZoomStatus();
+      });
+    }
+
+    function showStart() {
+      if (!state.layout) return;
+      const rect = els.viewport.getBoundingClientRect();
+      const firstBand = state.layout.bands[0];
+      const targetWidth = firstBand ? firstBand.left + Math.min(firstBand.width, 1900) : ROOT_BAND_W;
+      state.view.scale = Math.max(.36, Math.min(.72, (rect.width - 36) / Math.max(900, targetWidth)));
+      state.view.tx = 18;
+      state.view.ty = 18;
+      applyView();
+    }
+
+    function fitGraph() {
+      if (!state.layout) return;
+      const rect = els.viewport.getBoundingClientRect();
+      const padding = 34;
+      const scale = Math.min(
+        (rect.width - padding * 2) / state.layout.width,
+        (rect.height - padding * 2) / state.layout.height,
+        1
+      );
+      state.view.scale = Math.max(.005, scale);
+      state.view.tx = (rect.width - state.layout.width * state.view.scale) / 2;
+      state.view.ty = (rect.height - state.layout.height * state.view.scale) / 2;
+      applyView();
+    }
+
+    function zoomAt(factor, clientX, clientY) {
+      const rect = els.viewport.getBoundingClientRect();
+      const px = clientX - rect.left;
+      const py = clientY - rect.top;
+      const worldX = (px - state.view.tx) / state.view.scale;
+      const worldY = (py - state.view.ty) / state.view.scale;
+      state.view.scale = Math.max(.005, Math.min(2.2, state.view.scale * factor));
+      state.view.tx = px - worldX * state.view.scale;
+      state.view.ty = py - worldY * state.view.scale;
+      applyView();
+    }
+
+    function wireUi() {
+      const rerender = () => renderGraph(true);
+      els.showEventQuests.addEventListener('change', rerender);
+      els.showBearOnly.addEventListener('change', rerender);
+      els.showUsecOnly.addEventListener('change', rerender);
+      els.collectorOnly.addEventListener('change', rerender);
+      els.includeSecret.addEventListener('change', rerender);
+      els.search.addEventListener('input', () => {
+        if (state.searchFrame) cancelAnimationFrame(state.searchFrame);
+        state.searchFrame = requestAnimationFrame(() => {
+          state.searchFrame = 0;
+          applySearch();
+        });
+      });
+      els.search.addEventListener('keydown', event => {
+        if (event.key === 'Enter') focusFirstSearchHit();
+      });
+      els.fitGraph.addEventListener('click', fitGraph);
+      els.clearSelection.addEventListener('click', clearSelection);
+      els.zoomIn.addEventListener('click', () => {
+        const rect = els.viewport.getBoundingClientRect();
+        zoomAt(1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
+      });
+      els.zoomOut.addEventListener('click', () => {
+        const rect = els.viewport.getBoundingClientRect();
+        zoomAt(1 / 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
+      });
+
+      els.viewport.addEventListener('wheel', event => {
+        event.preventDefault();
+        markInteracting();
+        zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX, event.clientY);
+      }, { passive: false });
+
+      els.nodes.addEventListener('pointerover', event => {
+        const node = event.target.closest('.quest-node');
+        if (!node || node.contains(event.relatedTarget)) return;
+        highlightIncident(node.dataset.questId, true);
+      });
+      els.nodes.addEventListener('pointerout', event => {
+        const node = event.target.closest('.quest-node');
+        if (!node || node.contains(event.relatedTarget)) return;
+        highlightIncident(node.dataset.questId, false);
+      });
+      els.nodes.addEventListener('click', event => {
+        const filterButton = event.target.closest('[data-filter-quest]');
+        if (filterButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          activateViewFilter(filterButton.dataset.filterQuest);
+          return;
+        }
+        const node = event.target.closest('.quest-node');
+        if (!node) return;
+        event.stopPropagation();
+        selectQuest(node.dataset.questId);
+      });
+      els.nodes.addEventListener('keydown', event => {
+        if (event.target.closest('[data-filter-quest]')) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const node = event.target.closest('.quest-node');
+        if (!node) return;
+        event.preventDefault();
+        selectQuest(node.dataset.questId);
+      });
+
+      els.viewport.addEventListener('pointerdown', event => {
+        if (event.button !== 0 || event.target.closest('.quest-card')) return;
+        event.preventDefault();
+        document.getSelection()?.removeAllRanges();
+        state.dragging = true;
+        state.dragMoved = false;
+        markInteracting();
+        state.dragStart = { x: event.clientX, y: event.clientY, tx: state.view.tx, ty: state.view.ty };
+        els.viewport.classList.add('dragging');
+        els.viewport.setPointerCapture(event.pointerId);
+      });
+      els.viewport.addEventListener('pointermove', event => {
+        if (!state.dragging || !state.dragStart) return;
+        const dx = event.clientX - state.dragStart.x;
+        const dy = event.clientY - state.dragStart.y;
+        if (!state.dragMoved && Math.hypot(dx, dy) >= 3) state.dragMoved = true;
+        state.view.tx = state.dragStart.tx + dx;
+        state.view.ty = state.dragStart.ty + dy;
+        markInteracting();
+        applyView();
+      });
+      const endDrag = event => {
+        if (!state.dragging) return;
+        const moved = state.dragMoved;
+        state.dragging = false;
+        state.dragMoved = false;
+        state.dragStart = null;
+        if (moved) state.ignoreCanvasClickUntil = performance.now() + 160;
+        els.viewport.classList.remove('dragging');
+        if (els.viewport.hasPointerCapture(event.pointerId)) els.viewport.releasePointerCapture(event.pointerId);
+      };
+      els.viewport.addEventListener('pointerup', endDrag);
+      els.viewport.addEventListener('pointercancel', endDrag);
+      els.viewport.addEventListener('dragstart', event => event.preventDefault());
+      els.viewport.addEventListener('selectstart', event => event.preventDefault());
+      els.viewport.addEventListener('click', event => {
+        if (performance.now() < state.ignoreCanvasClickUntil) {
+          event.preventDefault();
+          return;
+        }
+        if (!event.target.closest('.quest-card')) clearSelection();
+      });
+      window.addEventListener('resize', () => {
+        clearTimeout(state.resizeTimer);
+        state.resizeTimer = setTimeout(() => state.dataLoaded && fitGraph(), 120);
+      });
+
+      els.loadFiles.addEventListener('click', async () => {
+        try {
+          const [quests, locales] = await Promise.all([
+            readSelectedJson(els.questsFile, 'quests.json'),
+            readSelectedJson(els.localeFile, 'en.json')
+          ]);
+          els.loadState.hidden = true;
+          buildGraph(quests, locales);
+        } catch (error) {
+          showFatal(error);
+        }
+      });
+    }
+
+    async function readSelectedJson(input, name) {
+      const file = input.files?.[0];
+      if (!file) throw new Error(`Select ${name}.`);
+      return JSON.parse(await file.text());
+    }
+
+    async function automaticLoad() {
+      try {
+        const [questsResponse, localeResponse] = await Promise.all([
+          fetch('./quests.json', { cache: 'no-store' }),
+          fetch('./en.json', { cache: 'no-store' })
+        ]);
+        if (!questsResponse.ok || !localeResponse.ok) throw new Error('Automatic JSON loading failed.');
+        const [quests, locales] = await Promise.all([questsResponse.json(), localeResponse.json()]);
+        buildGraph(quests, locales);
+      } catch (error) {
+        console.warn(error);
+        els.loadState.hidden = false;
+      }
+    }
+
+    function showFatal(error) {
+      console.error(error);
+      els.fatalText.textContent = error?.stack || String(error);
+      els.fatalState.hidden = false;
+    }
+
+    wireUi();
+    automaticLoad().catch(showFatal);
+  </script>
+</body>
+</html>

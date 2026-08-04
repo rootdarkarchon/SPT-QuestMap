@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+.vs/
+.vscode/
+.idea/
+artifacts/
+dist/
+*.user
+*.suo
+*.log
+reference/spt-4.0.13-sources/
+reference/test-profiles/*
+!reference/test-profiles/README.md
+config/questmap.local.json
+scripts/restart-command.local.txt

@@ -1,0 +1,34 @@
+{
+  "sanitized": true,
+  "profiles": [
+    {
+      "id": "111111111111111111111111",
+      "nickname": "Fixture USEC",
+      "side": "USEC",
+      "level": 12,
+      "quests": [
+        { "id": "aaaaaaaaaaaaaaaaaaaaaaaa", "status": "Started", "completedConditions": ["condition-a"] },
+        { "id": "bbbbbbbbbbbbbbbbbbbbbbbb", "status": "AvailableForFinish", "completedConditions": ["condition-b"] },
+        { "id": "cccccccccccccccccccccccc", "status": "FailRestartable", "completedConditions": [] }
+      ],
+      "traders": [
+        { "id": "222222222222222222222222", "unlocked": true, "loyaltyLevel": 2, "standing": 0.25 }
+      ],
+      "counters": [
+        { "conditionId": "condition-a", "questId": "aaaaaaaaaaaaaaaaaaaaaaaa", "value": 3 }
+      ]
+    },
+    {
+      "id": "333333333333333333333333",
+      "nickname": "Fixture BEAR",
+      "side": "BEAR",
+      "level": 42,
+      "quests": [
+        { "id": "dddddddddddddddddddddddd", "status": "Success", "completedConditions": [] },
+        { "id": "eeeeeeeeeeeeeeeeeeeeeeee", "status": "Fail", "excludedBy": "dddddddddddddddddddddddd", "completedConditions": [] }
+      ],
+      "traders": [],
+      "counters": []
+    }
+  ]
+}

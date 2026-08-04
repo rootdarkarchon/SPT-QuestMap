@@ -1,0 +1,16 @@
+{
+  "name": "SPT-QuestMap",
+  "targetSptVersion": "4.0.13",
+  "route": "/questmap",
+  "host": "existing SPT ASP.NET/Kestrel server",
+  "readOnly": true,
+  "automaticRefresh": false,
+  "sourcePolicy": "use matching provided sources; do not decompile installed binaries",
+  "referenceUi": "reference/existing-quest-graph/index.html",
+  "pendingUserInputs": [
+    "installed SPT root path",
+    "matching SPT 4.0.13 source tree",
+    "restart command",
+    "optional sanitized profile fixtures"
+  ]
+}

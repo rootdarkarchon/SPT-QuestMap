@@ -1,0 +1,7 @@
+{
+  "route": "/questmap",
+  "requireAuthentication": true,
+  "defaultShowAllFutureQuests": false,
+  "defaultHideFinishedAndPermanentFailures": false,
+  "enableDiagnostics": false
+}

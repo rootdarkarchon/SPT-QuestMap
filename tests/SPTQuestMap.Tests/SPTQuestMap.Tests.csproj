@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <AssemblyName>SPTQuestMap.Tests</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <SptInstallRoot Condition="'$(SptInstallRoot)' == ''">$(SPT_ROOT)</SptInstallRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="NUnit" Version="3.13.3" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.3.1" />
+    <ProjectReference Include="..\..\src\SPTQuestMap\SPTQuestMap.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Reference Include="SemanticVersioning"><HintPath>$(SptInstallRoot)\SemanticVersioning.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SPTarkov.Common"><HintPath>$(SptInstallRoot)\SPTarkov.Common.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SPTarkov.DI"><HintPath>$(SptInstallRoot)\SPTarkov.DI.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SPTarkov.Server.Core"><HintPath>$(SptInstallRoot)\SPTarkov.Server.Core.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SPTarkov.Server.Web"><HintPath>$(SptInstallRoot)\SPTarkov.Server.Web.dll</HintPath><Private>true</Private></Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Fixtures\profile-scenarios.json" Link="Fixtures\profile-scenarios.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

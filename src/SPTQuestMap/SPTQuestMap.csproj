@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>SPTQuestMap</AssemblyName>
+    <RootNamespace>SPTQuestMap</RootNamespace>
+    <OutputType>Library</OutputType>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <SptInstallRoot Condition="'$(SptInstallRoot)' == ''">$(SPT_ROOT)</SptInstallRoot>
+  </PropertyGroup>
+
+  <Target Name="ValidateSptInstallRoot" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="'$(SptInstallRoot)' == ''" Text="Set SptInstallRoot or SPT_ROOT to the SPT server directory containing SPTarkov.Server.Core.dll." />
+    <Error Condition="!Exists('$(SptInstallRoot)\SPTarkov.Server.Core.dll')" Text="SPTarkov.Server.Core.dll was not found beneath SptInstallRoot '$(SptInstallRoot)'." />
+  </Target>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Reference Include="SemanticVersioning">
+      <HintPath>$(SptInstallRoot)\SemanticVersioning.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.Common">
+      <HintPath>$(SptInstallRoot)\SPTarkov.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.DI">
+      <HintPath>$(SptInstallRoot)\SPTarkov.DI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.Server.Core">
+      <HintPath>$(SptInstallRoot)\SPTarkov.Server.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.Server.Web">
+      <HintPath>$(SptInstallRoot)\SPTarkov.Server.Web.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
