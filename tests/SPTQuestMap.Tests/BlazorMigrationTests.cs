@@ -4,6 +4,7 @@ using NUnit.Framework;
 using SPTQuestMap.Components.Pages;
 using SPTQuestMap.Presentation;
 using SPTQuestMap.Services;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 namespace SPTQuestMap.Tests;
@@ -22,6 +23,20 @@ public sealed class BlazorMigrationTests
     {
         var controllerTypes = typeof(QuestMap).Assembly.GetTypes().Where(type => typeof(ControllerBase).IsAssignableFrom(type));
         Assert.That(controllerTypes, Is.Empty);
+    }
+
+    [Test]
+    public void SptMetadataVersionMatchesAssemblyVersion()
+    {
+        var assembly = typeof(QuestMapModMetadata).Assembly;
+        var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+        var metadata = new QuestMapModMetadata();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(metadata.Version.ToString(), Is.EqualTo(informationalVersion));
+            Assert.That(assembly.GetName().Version, Is.EqualTo(System.Version.Parse($"{informationalVersion}.0")));
+        });
     }
 
     [Test]

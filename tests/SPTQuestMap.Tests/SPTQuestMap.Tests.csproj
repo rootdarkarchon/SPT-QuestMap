@@ -16,11 +16,11 @@
     <PackageReference Include="NUnit3TestAdapter" Version="4.3.1" />
     <ProjectReference Include="..\..\src\SPTQuestMap\SPTQuestMap.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <Reference Include="SemanticVersioning"><HintPath>$(SptInstallRoot)\SemanticVersioning.dll</HintPath><Private>true</Private></Reference>
-    <Reference Include="SPTarkov.Common"><HintPath>$(SptInstallRoot)\SPTarkov.Common.dll</HintPath><Private>true</Private></Reference>
-    <Reference Include="SPTarkov.DI"><HintPath>$(SptInstallRoot)\SPTarkov.DI.dll</HintPath><Private>true</Private></Reference>
-    <Reference Include="SPTarkov.Server.Core"><HintPath>$(SptInstallRoot)\SPTarkov.Server.Core.dll</HintPath><Private>true</Private></Reference>
-    <Reference Include="SPTarkov.Server.Web"><HintPath>$(SptInstallRoot)\SPTarkov.Server.Web.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SemanticVersioning"><HintPath>$(SptInstallRoot)\SPT\SemanticVersioning.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SPTarkov.Common"><HintPath>$(SptInstallRoot)\SPT\SPTarkov.Common.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SPTarkov.DI"><HintPath>$(SptInstallRoot)\SPT\SPTarkov.DI.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SPTarkov.Server.Core"><HintPath>$(SptInstallRoot)\SPT\SPTarkov.Server.Core.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SPTarkov.Server.Web"><HintPath>$(SptInstallRoot)\SPT\SPTarkov.Server.Web.dll</HintPath><Private>true</Private></Reference>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\Fixtures\profile-scenarios.json" Link="Fixtures\profile-scenarios.json" CopyToOutputDirectory="PreserveNewest" />

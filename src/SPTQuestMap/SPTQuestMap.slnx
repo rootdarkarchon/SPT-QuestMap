@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="../../tests/SPTQuestMap.Tests/SPTQuestMap.Tests.csproj" />
+  <Project Path="SPTQuestMap.csproj" />
+</Solution>
