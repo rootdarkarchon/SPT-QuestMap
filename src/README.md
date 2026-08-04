@@ -1,5 +1,5 @@
-# Source workspace
+# Source
 
-Create the SPT-QuestMap mod project here after inspecting the supplied SPT 4.0.13 source tree.
+`SPTQuestMap/` contains the net9.0 SPT server mod and its solution file. The project uses SPT 4.0.13 assemblies as external, non-copying references; they are not vendored in this repository.
 
-Do not create a speculative project file with incorrect package versions or interfaces before source inspection. A likely end result will include a server mod assembly plus web/static assets, but use the exact 4.0.13 conventions.
+QuestMap's Razor components, localization, server-side quest interpretation, and embedded Canvas/CSS assets all compile into the mod DLL.

@@ -1,9 +1,8 @@
 # Scripts
 
-These are intentionally generic starter hooks.
+- `build.ps1` verifies the installed SPT version, builds QuestMap, runs the tests, and stages a clean `dist/` directory.
+- `deploy.ps1` synchronizes a successful build into the resolved QuestMap mod directory, reports whether the DLL changed, and can run an explicitly supplied restart command.
+- `package-release.ps1` creates the tag-versioned release ZIP with the install-ready `SPT/user/mods/SPT-QuestMap/` directory structure.
+- `verify.ps1` performs a basic HTTP smoke test against `/questmap`.
 
-- `build.ps1` builds the first project/solution created under `src/`.
-- `deploy.ps1` deploys a prepared directory only after a successful build, compares DLL hashes, and optionally runs the user-provided restart command.
-- `verify.ps1` performs a basic HTTP smoke test.
-
-Codex should adapt paths and output conventions after inspecting the exact SPT 4.0.13 source and project layout. Do not weaken the build-before-deploy or DLL-change restart behavior.
+These helpers are intentionally conservative: failed builds are never deployed, deployment is limited to the resolved `SPT-QuestMap` directory, and a changed DLL always requires a server restart.

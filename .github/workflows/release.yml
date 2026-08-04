@@ -1,0 +1,112 @@
+name: Build and publish release
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build SPT-QuestMap ${{ github.ref_name }}
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      SPT_VERSION: 4.0.13
+      SPT_RELEASE_REPOSITORY: sp-tarkov/build
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET 9
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Validate release tag
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+              throw "Release tag '$env:RELEASE_TAG' is not a semantic version such as 1.1.0."
+          }
+
+          [xml]$project = Get-Content -LiteralPath 'src/SPTQuestMap/SPTQuestMap.csproj' -Raw
+          $projectVersion = @($project.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
+          if ($projectVersion.Count -ne 1 -or $projectVersion[0] -ne $env:RELEASE_TAG) {
+              throw "Tag '$env:RELEASE_TAG' does not match project version '$($projectVersion[0])'."
+          }
+
+      - name: Download official SPT build references
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $downloadDirectory = Join-Path $env:RUNNER_TEMP 'spt-download'
+          $sptInstallRoot = Join-Path $env:RUNNER_TEMP 'spt-install'
+          New-Item -ItemType Directory -Force -Path $downloadDirectory, $sptInstallRoot | Out-Null
+
+          gh release download $env:SPT_VERSION `
+              --repo $env:SPT_RELEASE_REPOSITORY `
+              --pattern "SPT-$($env:SPT_VERSION)-*.7z" `
+              --dir $downloadDirectory
+
+          $archives = @(Get-ChildItem -LiteralPath $downloadDirectory -Filter '*.7z' -File)
+          if ($archives.Count -ne 1) {
+              throw "Expected one SPT $env:SPT_VERSION archive, found $($archives.Count)."
+          }
+
+          & 7z x $archives[0].FullName "-o$sptInstallRoot" -y
+          if ($LASTEXITCODE -ne 0) {
+              throw "7-Zip failed with exit code $LASTEXITCODE."
+          }
+
+          $sptCore = Join-Path $sptInstallRoot 'SPT/SPTarkov.Server.Core.dll'
+          if (-not (Test-Path -LiteralPath $sptCore -PathType Leaf)) {
+              throw "The official archive did not contain the expected SPT/SPTarkov.Server.Core.dll."
+          }
+
+          $coreVersion = [System.Reflection.AssemblyName]::GetAssemblyName($sptCore).Version
+          if ($coreVersion.ToString() -ne '4.0.13.0') {
+              throw "Expected SPT core 4.0.13.0, found $coreVersion."
+          }
+
+          "SPT_INSTALL_ROOT=$sptInstallRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build and test
+        shell: pwsh
+        run: |
+          dotnet test 'src/SPTQuestMap/SPTQuestMap.slnx' `
+              --configuration Release `
+              "-p:SptInstallRoot=$env:SPT_INSTALL_ROOT"
+          if ($LASTEXITCODE -ne 0) {
+              throw "Build or tests failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Package install-ready archive
+        shell: pwsh
+        run: |
+          ./scripts/package-release.ps1 `
+              -Configuration Release `
+              -Version $env:RELEASE_TAG `
+              -OutputDirectory 'artifacts/release'
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $archive = "artifacts/release/SPT-QuestMap-$env:RELEASE_TAG.zip"
+          gh release create $env:RELEASE_TAG $archive `
+              --verify-tag `
+              --generate-notes `
+              --title "SPT-QuestMap $env:RELEASE_TAG"

@@ -15,8 +15,8 @@ Use the existing SPT ASP.NET/Kestrel host and its supported server-mod web integ
 ## Start here
 
 1. Read this file.
-2. Read `CODEX_HANDOFF.md`.
-3. Read the documents in `docs/`.
+2. Read `README.md` and `docs/development-status.md`.
+3. Read the relevant documents in `docs/`.
 4. Inspect `reference/existing-quest-graph/index.html` as a visual and interaction reference only.
 5. Ask the user to place matching SPT 4.0.13 sources under `reference/spt-4.0.13-sources/` if they are not already present.
 6. Inspect those sources before choosing exact APIs, interfaces, namespaces, routes, or deployment layout.
@@ -179,7 +179,7 @@ Do not create write endpoints in the first version.
 
 ## Development discipline
 
-- Maintain `STATUS.md` with the current milestone, completed work, blockers, and the next concrete step.
+- Maintain `docs/development-status.md` with the current milestone, completed work, blockers, and the next concrete step.
 - Keep commits/milestone changes reviewable.
 - Prefer tests around graph/state logic over screenshot-only validation.
 - Add fixture profiles only after sanitizing them.

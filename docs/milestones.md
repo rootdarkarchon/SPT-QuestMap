@@ -9,7 +9,7 @@ Keep these milestones reviewable. Do not turn each bullet into its own phase.
 - Identify web page, static asset, controller/API, authentication, profile, quest, event, trader, and asset integration points.
 - Create a buildable mod skeleton.
 - Serve a minimal authenticated page at `/questmap`.
-- Document build and deployment output in `STATUS.md`.
+- Document build and deployment output in `development-status.md`.
 
 Exit condition: a minimal mod builds, deploys, and serves `/questmap` on the installed server.
 

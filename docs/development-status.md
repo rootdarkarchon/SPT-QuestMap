@@ -1,4 +1,4 @@
-# Status
+# Development status
 
 ## Current milestone
 
@@ -24,7 +24,7 @@ Milestone 4 and the Blazor migration are complete. The user accepted the install
 
 ## Completed
 
-- Read `AGENTS.md`, `CODEX_HANDOFF.md`, all product/architecture/state/performance/testing/deployment documents, and inspected the static graph reference.
+- Read the original project handoff, all product/architecture/state/performance/testing/deployment documents, and inspected the static graph reference.
 - Confirmed source/runtime identity without decompiling installed binaries.
 - Resolved the exact 4.0.13 integration points above.
 - Added the exact-version net9.0 mod skeleton, `IModWebMetadata` metadata, `/questmap` MVC page, physical `wwwroot` assets, and `/questmap/api/profiles`.
@@ -164,6 +164,8 @@ Milestone 4 and the Blazor migration are complete. The user accepted the install
 - Trader unlock evaluation now uses one per-profile `TraderAvailabilityEvaluator`. Jaeger requires Introduction success, Ref requires Easy Money - Part 1 [PVE ZONE] success, and Lightkeeper directly requires Knock-Knock success; no Lightkeeper path-satisfaction boolean is threaded through blocker/state construction. This supersedes the earlier status entry that described recursive Lightkeeper-path validation as an unlock requirement; recursive ancestry remains display-only.
 - Data-service cleanup validation passes against SPT 4.0.13 with 0 warnings/errors and all 81 tests, including a direct Lightkeeper unlock regression. All 18 locale resources parse, every retained catalog key has a consumer, the renderer passes `node --check`, and staged/deployed artifacts match. DLL SHA-256 is `D647566F38F6DE5A1B90C53D7D667E35A4F5175C0BDD8B926B907B46C63C71E9`; the exact prior SPT process (PID 56764) was stopped and `SPT.Server.exe` relaunched in a normal visible console as PID 55136 without startup polling.
 - Consolidated all graph-renderer colors into semantic CSS custom properties. `QuestMapRenderer.mjs` now resolves its state, edge, card, route, marker, outline, fade, and text colors through `getComputedStyle`; a regression test rejects CSS color literals in renderer source, and the legend uses the same theme variables. CSS and renderer source moved from physical `wwwroot` into assembly resources under `Presentation/Assets`; Razor injects the stylesheet through `HeadContent` and imports an assembly-generated module data URL. Release validation passes with 0 warnings/errors, valid module syntax, and all 82 tests. The staged and deployed package contains only DLL/PDB, with stale `wwwroot` assets removed. Staged/deployed SHA-256 values match: DLL `A9A86B63D39A84F5009C3F37E54876E88556BA340C0574B4AEAA80A95EE6795A`, PDB `D6D5D6B26EBBBF4B681CA25369395990813DB9ABDDC1EDC8EE3B7BAB4DC678CD`. The changed DLL was deployed after the prior process exited and `SPT.Server.exe` was relaunched in a normal visible console as PID 49860 without startup polling. Live HTTPS verification found the 22,507-character embedded style, resolved the selected-outline theme property, rendered a 930×565 Canvas, exposed no `/SPTQuestMap` stylesheet/script requests, and restored enabled Interactive Server controls.
+- Replaced the original Codex handoff README with a public, user-facing README covering compatibility, installation, normal graph use, the localhost exposure boundary, source builds, and an explicit AI-authorship warning. Added the standard MIT license, reduced the root to public entry points plus `AGENTS.md`, and moved the detailed status, project context, and former manifest into `docs/`. Local Markdown links and JSON parsing validate cleanly; no runtime files changed, so no build or deployment was required.
+- Added a tag-triggered GitHub release pipeline. It downloads the official SPT 4.0.13 release solely for compile/test references, rejects tags that do not match the project semantic version, runs the complete net9.0 solution, packages the DLL/PDB plus MIT license beneath `SPT/user/mods/SPT-QuestMap/`, and publishes the ZIP through the matching GitHub Release. The packaging helper validates that no file escapes the mod directory; local archive inspection confirmed the requested install-root-relative layout for `1.1.0`.
 
 ## Blockers
 

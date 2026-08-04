@@ -25,6 +25,31 @@ Do not commit machine-specific paths or credentials.
    - clearly report that restart is required if no command is configured.
 7. Verify `/questmap` after restart.
 
+## Tagged GitHub releases
+
+Pushing a semantic-version tag such as `1.1.0` runs `.github/workflows/release.yml` on a Windows GitHub-hosted runner. The workflow:
+
+1. verifies that the tag exactly matches `<Version>` in `SPTQuestMap.csproj`;
+2. downloads the official `sp-tarkov/build` release archive for SPT 4.0.13;
+3. verifies `SPTarkov.Server.Core.dll` reports version `4.0.13.0`;
+4. builds the mod and runs the complete test suite against those external assemblies;
+5. creates `SPT-QuestMap-<version>.zip`; and
+6. publishes that ZIP on the matching GitHub Release.
+
+The archive contains the complete install-root-relative path:
+
+```text
+SPT/
+  user/
+    mods/
+      SPT-QuestMap/
+        LICENSE
+        SPTQuestMap.dll
+        SPTQuestMap.pdb
+```
+
+The official SPT archive is used only as a build reference on the runner and is not republished inside the QuestMap archive. The MIT license travels with the binary distribution; installation and usage documentation remain on the GitHub Release and repository README.
+
 ## Restart command
 
 The user will provide the command. Treat it as an opaque shell command and do not invent service names or process paths.
