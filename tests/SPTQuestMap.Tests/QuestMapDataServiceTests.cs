@@ -13,7 +13,7 @@ public sealed class QuestMapDataServiceTests
     public void BuildLocation_UsesSptLocaleNameForSpecificMap()
     {
         const string locationId = "56f40101d2720b2a4d8b45d6";
-        var result = QuestMapDataService.BuildLocation(locationId, new Dictionary<string, string> { [$"{locationId} Name"] = "Customs localized" }, new Dictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location>());
+        var result = QuestTemplateMapper.BuildLocation(locationId, new Dictionary<string, string> { [$"{locationId} Name"] = "Customs localized" }, new Dictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location>());
 
         Assert.Multiple(() =>
         {
@@ -27,7 +27,7 @@ public sealed class QuestMapDataServiceTests
     [Test]
     public void BuildLocation_RepresentsAnyWithoutInventingAName()
     {
-        var result = QuestMapDataService.BuildLocation("any", [], new Dictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location>());
+        var result = QuestTemplateMapper.BuildLocation("any", [], new Dictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location>());
 
         Assert.Multiple(() =>
         {
@@ -51,7 +51,7 @@ public sealed class QuestMapDataServiceTests
             },
         };
 
-        var result = QuestMapDataService.BuildLocation(
+        var result = QuestTemplateMapper.BuildLocation(
             locationId,
             [],
             new Dictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location>(StringComparer.OrdinalIgnoreCase) { [locationId] = location }
@@ -66,7 +66,7 @@ public sealed class QuestMapDataServiceTests
         const string questLocationId = "56f40101d2720b2a4d8b45d6";
         var customs = new SPTarkov.Server.Core.Models.Eft.Common.Location { Base = new LocationBase { Id = "bigmap" } };
 
-        var result = QuestMapDataService.BuildLocationLookup(
+        var result = QuestTemplateMapper.BuildLocationLookup(
             [customs],
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["bigmap"] = questLocationId }
         );
@@ -95,7 +95,7 @@ public sealed class QuestMapDataServiceTests
             ],
         };
 
-        var result = QuestMapDataService.BuildRewards(
+        var result = QuestTemplateMapper.BuildRewards(
             [reward],
             new Dictionary<string, string> { [$"{templateId} Name"] = "Localized roubles" },
             new Dictionary<MongoId, TemplateItem> { [templateId] = new() { Id = templateId, Name = "Roubles" } },
@@ -118,7 +118,7 @@ public sealed class QuestMapDataServiceTests
     [TestCase("es-mx", "es-mx")]
     public void ToBrowserLocale_NormalizesSptClientCodes(string sptCode, string expected)
     {
-        Assert.That(QuestMapDataService.ToBrowserLocale(sptCode), Is.EqualTo(expected));
+        Assert.That(QuestMapLocalizationService.ToBrowserLocale(sptCode), Is.EqualTo(expected));
     }
 
     [TestCase("ch")]
@@ -159,7 +159,7 @@ public sealed class QuestMapDataServiceTests
         {
             Assert.That(catalog["app.heading"], Is.EqualTo("QuestMap"));
             Assert.That(catalog["app.title"], Is.EqualTo("SPT QuestMap"));
-            Assert.That(catalog["profile.label"], Is.Not.EqualTo(QuestMapUiCatalog.English["profile.label"]));
+            Assert.That(catalog["profile.aria"], Is.Not.EqualTo(QuestMapUiCatalog.English["profile.aria"]));
             Assert.That(catalog["showAllFuture"], Is.Not.EqualTo(QuestMapUiCatalog.English["showAllFuture"]));
             Assert.That(untranslatedExtended, Is.Empty, $"Locale {language} must translate every gated, legend, and detail relationship label.");
         });
@@ -178,7 +178,7 @@ public sealed class QuestMapDataServiceTests
         {
             Assert.That(catalog["refresh"], Is.EqualTo("Aktualisieren"));
             Assert.That(catalog["state.Completed"], Is.EqualTo("Abgeschlossen"));
-            Assert.That(catalog["profile.label"], Is.EqualTo("Profil"));
+            Assert.That(catalog["profile.aria"], Is.EqualTo("Ausgewähltes Profil"));
         });
     }
 
@@ -189,7 +189,7 @@ public sealed class QuestMapDataServiceTests
     [TestCase(new[] { "Started", "Success", "Fail" }, "Started")]
     public void EdgeRequirementClassificationPreservesMixedStatusMeaning(string[] statuses, string expected)
     {
-        Assert.That(QuestMapDataService.ClassifyEdgeRequirement(statuses), Is.EqualTo(expected));
+        Assert.That(QuestGraphRules.ClassifyEdgeRequirement(statuses), Is.EqualTo(expected));
     }
 
     [Test]
@@ -203,8 +203,6 @@ public sealed class QuestMapDataServiceTests
             "badge.event",
             "badge.branch",
             "route.lightkeeper",
-            "chip.sptStatus",
-            "season.Halloween",
             "gates.loyaltyShort",
             "gates.reputation",
         };
@@ -232,7 +230,7 @@ public sealed class QuestMapDataServiceTests
             new("TraderStanding", "trader", "<=", -2),
         ];
 
-        var result = QuestMapDataService.MergeRequirements(input);
+        var result = QuestGraphRules.MergeRequirements(input);
 
         Assert.That(result, Has.Length.EqualTo(2));
         Assert.That(result.Single(item => item.Kind == "Level").Value, Is.EqualTo(20));
@@ -246,7 +244,7 @@ public sealed class QuestMapDataServiceTests
     [TestCase(3, 3, "=", true)]
     public void CompareMatchesSptConditionOperators(double actual, double required, string compare, bool expected)
     {
-        Assert.That(QuestMapDataService.Compare(actual, required, compare), Is.EqualTo(expected));
+        Assert.That(QuestGraphRules.Compare(actual, required, compare), Is.EqualTo(expected));
     }
 
     [Test]
@@ -257,7 +255,7 @@ public sealed class QuestMapDataServiceTests
             [new("none", "child", ["Success"], 0), new("none", "shared", ["Success"], 0), new("normal", "shared", ["Success"], 0)]
         );
 
-        var result = QuestMapDataService.BuildNoneEventExclusionSet(topology);
+        var result = QuestGraphRules.BuildNoneEventExclusionSet(topology);
 
         Assert.That(result, Does.Contain("none"));
         Assert.That(result, Does.Contain("child"));
@@ -275,7 +273,7 @@ public sealed class QuestMapDataServiceTests
             new QuestEdgeDto("middle", "darkest-hour", ["Success"], 0),
         };
 
-        var result = QuestMapDataService.PropagateSeasonalEventTypes(nodes, edges).ToDictionary(node => node.Id);
+        var result = QuestGraphRules.PropagateSeasonalEventTypes(nodes, edges).ToDictionary(node => node.Id);
 
         Assert.Multiple(() =>
         {
@@ -297,7 +295,7 @@ public sealed class QuestMapDataServiceTests
         var boundary = Set("known");
         var applicable = Set("known", "next", "deep");
 
-        var visible = QuestMapDataService.BuildDefaultVisible(known, boundary, edges, applicable);
+        var visible = QuestGraphRules.BuildDefaultVisible(known, boundary, edges, applicable);
 
         Assert.That(visible, Is.EquivalentTo(new[] { "known", "next" }));
     }
@@ -314,7 +312,7 @@ public sealed class QuestMapDataServiceTests
         var boundary = Set("fertilizers");
         var applicable = Set("fertilizers", "collector", "beyond");
 
-        var visible = QuestMapDataService.BuildDefaultVisible(known, boundary, edges, applicable);
+        var visible = QuestGraphRules.BuildDefaultVisible(known, boundary, edges, applicable);
 
         Assert.That(visible, Is.EquivalentTo(new[] { "fertilizers", "collector" }));
     }
@@ -331,7 +329,7 @@ public sealed class QuestMapDataServiceTests
         var known = Set("grenadier");
         var applicable = Set("grenadier", "test-drive-1", "test-drive-2", "test-drive-3");
 
-        var visible = QuestMapDataService.BuildDefaultVisible(known, [], edges, applicable);
+        var visible = QuestGraphRules.BuildDefaultVisible(known, [], edges, applicable);
 
         Assert.That(visible, Is.EquivalentTo(new[] { "grenadier" }));
     }
@@ -348,7 +346,7 @@ public sealed class QuestMapDataServiceTests
         var boundary = Set("active");
         var applicable = Set("active", "gated", "merge");
 
-        var visible = QuestMapDataService.BuildDefaultVisible(known, boundary, edges, applicable);
+        var visible = QuestGraphRules.BuildDefaultVisible(known, boundary, edges, applicable);
 
         Assert.That(visible, Does.Contain("merge"));
     }
@@ -363,7 +361,7 @@ public sealed class QuestMapDataServiceTests
             Condition("000000000000000000000003", 1),
         ];
 
-        var result = QuestMapDataService.OrderObjectives(conditions, []).Select(item => item.Id).ToArray();
+        var result = QuestTemplateMapper.OrderObjectives(conditions, []).Select(item => item.Id).ToArray();
 
         Assert.That(result, Is.EqualTo(new[] { "000000000000000000000002", "000000000000000000000003", "000000000000000000000001" }));
     }
@@ -374,7 +372,7 @@ public sealed class QuestMapDataServiceTests
         var parent = Condition("000000000000000000000010", 5);
         var child = Condition("000000000000000000000011", 1) with { ParentId = parent.Id.ToString() };
 
-        var result = QuestMapDataService.OrderObjectives([child, parent], []).Select(item => item.Id).ToArray();
+        var result = QuestTemplateMapper.OrderObjectives([child, parent], []).Select(item => item.Id).ToArray();
 
         Assert.That(result, Is.EqualTo(new[] { parent.Id.ToString(), child.Id.ToString() }));
     }
@@ -388,7 +386,7 @@ public sealed class QuestMapDataServiceTests
             [condition.Id.ToString()] = "Eliminate Scavs on any location",
         };
 
-        var result = QuestMapDataService.OrderObjectives([condition], locale).Single();
+        var result = QuestTemplateMapper.OrderObjectives([condition], locale).Single();
 
         Assert.That(result.Text, Is.EqualTo("Eliminate Scavs on any location"));
     }
@@ -401,7 +399,7 @@ public sealed class QuestMapDataServiceTests
     [TestCase(QuestStatusEnum.Expired, "Expired")]
     public void ExactStatusesHaveDistinctDisplayStates(QuestStatusEnum status, string expected)
     {
-        Assert.That(QuestMapDataService.Classify(Node("q", null), status, false, null, []), Is.EqualTo(expected));
+        Assert.That(QuestProfileRules.Classify(Node("q", null), status, false, null, []), Is.EqualTo(expected));
     }
 
     [Test]
@@ -409,7 +407,7 @@ public sealed class QuestMapDataServiceTests
     {
         var exclusion = new QuestExclusionDto("branch", "Success", true);
 
-        var result = QuestMapDataService.Classify(Node("q", null), QuestStatusEnum.Fail, false, exclusion, []);
+        var result = QuestProfileRules.Classify(Node("q", null), QuestStatusEnum.Fail, false, exclusion, []);
 
         Assert.That(result, Is.EqualTo("Excluded"));
     }
@@ -423,7 +421,7 @@ public sealed class QuestMapDataServiceTests
             new("Prerequisite", "prior-quest", null, null, ["Success"]),
         ];
 
-        var result = QuestMapDataService.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers);
+        var result = QuestProfileRules.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers);
 
         Assert.That(result, Is.EqualTo("TraderGated"));
     }
@@ -440,9 +438,9 @@ public sealed class QuestMapDataServiceTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(QuestMapDataService.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers), Is.EqualTo("LevelGated"));
-            Assert.That(QuestMapDataService.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers.Where(item => item.Kind != "Level").ToArray()), Is.EqualTo("TraderGated"));
-            Assert.That(QuestMapDataService.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers.Where(item => item.Kind == "Prerequisite").ToArray()), Is.EqualTo("PrerequisiteGated"));
+            Assert.That(QuestProfileRules.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers), Is.EqualTo("LevelGated"));
+            Assert.That(QuestProfileRules.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers.Where(item => item.Kind != "Level").ToArray()), Is.EqualTo("TraderGated"));
+            Assert.That(QuestProfileRules.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers.Where(item => item.Kind == "Prerequisite").ToArray()), Is.EqualTo("PrerequisiteGated"));
         });
     }
 
@@ -465,12 +463,12 @@ public sealed class QuestMapDataServiceTests
         };
         QuestEdgeDto[] edges = [new("prior-quest", quest.Id, [nameof(QuestStatusEnum.Success)], 0)];
 
-        var blockers = QuestMapDataService.GetBlockers(quest, 9, traders, [], new Dictionary<string, string>(), edges, true);
+        var blockers = QuestProfileRules.GetBlockers(quest, 9, traders, [], edges, Availability(traders, new Dictionary<string, string>()));
 
         Assert.Multiple(() =>
         {
             Assert.That(blockers.Select(blocker => blocker.Kind), Is.EqualTo(new[] { "Level", "TraderLoyalty", "Prerequisite" }));
-            Assert.That(QuestMapDataService.Classify(quest, QuestStatusEnum.Locked, false, null, blockers), Is.EqualTo("LevelGated"));
+            Assert.That(QuestProfileRules.Classify(quest, QuestStatusEnum.Locked, false, null, blockers), Is.EqualTo("LevelGated"));
         });
     }
 
@@ -479,7 +477,7 @@ public sealed class QuestMapDataServiceTests
     {
         QuestBlockerDto[] blockers = [new("TraderStanding", "trader", ">=", 0.2, [])];
 
-        var result = QuestMapDataService.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers);
+        var result = QuestProfileRules.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers);
 
         Assert.That(result, Is.EqualTo("TraderGated"));
     }
@@ -491,9 +489,9 @@ public sealed class QuestMapDataServiceTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(QuestMapDataService.Classify(Node("q", null), QuestStatusEnum.AvailableForStart, true, null, blockers), Is.EqualTo("TraderUnavailable"));
-            Assert.That(QuestMapDataService.Classify(Node("q", null), null, true, null, blockers), Is.EqualTo("TraderUnavailable"));
-            Assert.That(QuestMapDataService.IsEffectivelyVisible(true, blockers), Is.False);
+            Assert.That(QuestProfileRules.Classify(Node("q", null), QuestStatusEnum.AvailableForStart, true, null, blockers), Is.EqualTo("TraderUnavailable"));
+            Assert.That(QuestProfileRules.Classify(Node("q", null), null, true, null, blockers), Is.EqualTo("TraderUnavailable"));
+            Assert.That(QuestProfileRules.IsEffectivelyVisible(true, blockers), Is.False);
         });
     }
 
@@ -507,7 +505,7 @@ public sealed class QuestMapDataServiceTests
             new("TraderUnavailable", "trader", null, null, []),
         ];
 
-        Assert.That(QuestMapDataService.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers), Is.EqualTo("TraderUnavailable"));
+        Assert.That(QuestProfileRules.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers), Is.EqualTo("TraderUnavailable"));
     }
 
     [Test]
@@ -518,8 +516,8 @@ public sealed class QuestMapDataServiceTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(QuestMapDataService.ShouldShowInDefaultGraph(hidden), Is.False);
-            Assert.That(QuestMapDataService.ShouldShowInDefaultGraph(started), Is.True);
+            Assert.That(QuestProfileRules.ShouldShowInDefaultGraph(hidden), Is.False);
+            Assert.That(QuestProfileRules.ShouldShowInDefaultGraph(started), Is.True);
         });
     }
 
@@ -537,12 +535,35 @@ public sealed class QuestMapDataServiceTests
             ["6834145ebc1f443d7603c8a7"] = nameof(QuestStatusEnum.Success),
         };
 
+        var unavailable = Availability(traders, new Dictionary<string, string>());
+        var available = Availability(traders, completed);
+
         Assert.Multiple(() =>
         {
-            Assert.That(QuestMapDataService.TraderIsAvailable(Traders.JAEGER, traders, new Dictionary<string, string>(), false), Is.False);
-            Assert.That(QuestMapDataService.TraderIsAvailable(Traders.REF, traders, new Dictionary<string, string>(), false), Is.False);
-            Assert.That(QuestMapDataService.TraderIsAvailable(Traders.JAEGER, traders, completed, false), Is.True);
-            Assert.That(QuestMapDataService.TraderIsAvailable(Traders.REF, traders, completed, false), Is.True);
+            Assert.That(unavailable.IsAvailable(Traders.JAEGER), Is.False);
+            Assert.That(unavailable.IsAvailable(Traders.REF), Is.False);
+            Assert.That(available.IsAvailable(Traders.JAEGER), Is.True);
+            Assert.That(available.IsAvailable(Traders.REF), Is.True);
+        });
+    }
+
+    [Test]
+    public void LightkeeperAvailabilityRequiresKnockKnockSuccessDirectly()
+    {
+        var traders = new Dictionary<MongoId, TraderInfo>
+        {
+            [Traders.LIGHTHOUSEKEEPER] = new() { Unlocked = true, Disabled = false },
+        };
+        var incomplete = Availability(traders, new Dictionary<string, string>());
+        var complete = Availability(traders, new Dictionary<string, string>
+        {
+            [QuestMapQuestIds.KnockKnock] = nameof(QuestStatusEnum.Success),
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(incomplete.IsAvailable(Traders.LIGHTHOUSEKEEPER), Is.False);
+            Assert.That(complete.IsAvailable(Traders.LIGHTHOUSEKEEPER), Is.True);
         });
     }
 
@@ -557,7 +578,7 @@ public sealed class QuestMapDataServiceTests
             new("collector", "later", ["Success"], 0),
         ];
 
-        var result = QuestMapDataService.BuildPrerequisiteClosure("collector", edges, Set("root", "required", "other", "collector", "later"));
+        var result = QuestGraphRules.BuildPrerequisiteClosure("collector", edges, Set("root", "required", "other", "collector", "later"));
 
         Assert.That(result, Is.EquivalentTo(new[] { "root", "required", "other", "collector" }));
     }
@@ -572,14 +593,14 @@ public sealed class QuestMapDataServiceTests
             new("tushonka", false, 0, 2, true),
         ];
 
-        var partial = QuestMapDataService.CalculateObjectiveProgress(objectives);
+        var partial = QuestProfileRules.CalculateObjectiveProgress(objectives);
         ObjectiveProgressDto[] completedFirstStage =
         [
             objectives[0] with { Complete = true, Current = 10 },
             objectives[1],
             objectives[2],
         ];
-        var firstStageComplete = QuestMapDataService.CalculateObjectiveProgress(completedFirstStage);
+        var firstStageComplete = QuestProfileRules.CalculateObjectiveProgress(completedFirstStage);
 
         Assert.Multiple(() =>
         {
@@ -591,12 +612,12 @@ public sealed class QuestMapDataServiceTests
     [Test]
     public void ObjectiveProgressClampsOverCompletionAndHandlesNoObjectives()
     {
-        var clamped = QuestMapDataService.CalculateObjectiveProgress([new("over", false, 15, 10, true)]);
+        var clamped = QuestProfileRules.CalculateObjectiveProgress([new("over", false, 15, 10, true)]);
 
         Assert.Multiple(() =>
         {
             Assert.That(clamped, Is.EqualTo(100));
-            Assert.That(QuestMapDataService.CalculateObjectiveProgress([]), Is.Null);
+            Assert.That(QuestProfileRules.CalculateObjectiveProgress([]), Is.Null);
         });
     }
 
@@ -605,44 +626,10 @@ public sealed class QuestMapDataServiceTests
     {
         Assert.Multiple(() =>
         {
-            Assert.That(QuestMapDataService.ObjectiveIsComplete(false, 3, 3, null), Is.True);
-            Assert.That(QuestMapDataService.ObjectiveIsComplete(false, 2, 3, null), Is.False);
-            Assert.That(QuestMapDataService.ObjectiveIsComplete(false, 3, 3, ">"), Is.False);
-            Assert.That(QuestMapDataService.ObjectiveIsComplete(true, null, 3, null), Is.True);
-        });
-    }
-
-    [Test]
-    public void LightkeeperUnlockRequiresKnockKnockSuccessAndEveryPrerequisiteEdgeSatisfied()
-    {
-        var required = new[] { "fresh-start", "network-provider", "knock-knock" };
-        QuestEdgeDto[] edges =
-        [
-            new("fresh-start", "network-provider", ["Success", "Fail"], 0),
-            new("network-provider", "knock-knock", ["Success"], 0),
-        ];
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(
-                QuestMapDataService.IsQuestPathSatisfied(
-                    "knock-knock",
-                    required,
-                    edges,
-                    Statuses(("fresh-start", "Fail"), ("network-provider", "Success"), ("knock-knock", "Success")).ToDictionary(pair => pair.Key, pair => pair.Value!)
-                ),
-                Is.True
-            );
-            Assert.That(
-                QuestMapDataService.IsQuestPathSatisfied(
-                    "knock-knock",
-                    required,
-                    edges,
-                    Statuses(("fresh-start", "Success"), ("network-provider", "Started"), ("knock-knock", "Success")).ToDictionary(pair => pair.Key, pair => pair.Value!)
-                ),
-                Is.False
-            );
-            Assert.That(QuestMapDataService.IsQuestPathSatisfied("knock-knock", [], edges, new Dictionary<string, string>()), Is.False);
+            Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 3, 3, null), Is.True);
+            Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 2, 3, null), Is.False);
+            Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 3, 3, ">"), Is.False);
+            Assert.That(QuestProfileRules.ObjectiveIsComplete(true, null, 3, null), Is.True);
         });
     }
 
@@ -656,11 +643,15 @@ public sealed class QuestMapDataServiceTests
 
     private static QuestTopologyDto Topology(QuestNodeDto[] nodes, QuestEdgeDto[] edges) => new("test", nodes, edges, [], [], []);
 
+    private static TraderAvailabilityEvaluator Availability(
+        Dictionary<MongoId, TraderInfo> traders,
+        IReadOnlyDictionary<string, string> statuses
+    ) => new(traders, statuses);
+
     private static QuestStateDto State(string displayState) => new("q", null, displayState, false, false, null, [], null, [], null);
 
     private static QuestNodeDto Node(string id, string? season) => new(id, id, string.Empty, "trader", "Trader", null, string.Empty, "Any", new QuestLocationDto("any", null, true, null), season, false, [], [], [], [], []);
 
     private static HashSet<string> Set(params string[] values) => new(values, StringComparer.Ordinal);
 
-    private static Dictionary<string, string?> Statuses(params (string QuestId, string? Status)[] values) => values.ToDictionary(value => value.QuestId, value => value.Status, StringComparer.Ordinal);
 }

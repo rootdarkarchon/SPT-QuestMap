@@ -1,0 +1,45 @@
+@using System.Globalization
+
+<aside class="in-progress-panel @(State.InProgressExpanded ? "expanded" : null)" aria-label="@Localizer["inProgress.title"]">
+    <button class="in-progress-toggle" type="button" aria-expanded="@State.InProgressExpanded.ToString().ToLowerInvariant()" title="@Localizer["inProgress.title"]" @onclick="() => ExpandedChanged.InvokeAsync(!State.InProgressExpanded)">
+        <span class="in-progress-title">@Localizer["inProgress.title"]</span><span class="in-progress-chevron" aria-hidden="true">@(State.InProgressExpanded ? "‹" : "›")</span>
+    </button>
+    <div class="in-progress-content">
+        @if (State.InProgressGroups().Count == 0)
+        {
+            <p class="in-progress-empty">@Localizer["common.none"]</p>
+        }
+        @foreach (var group in State.InProgressGroups())
+        {
+            <section class="in-progress-group">
+                <div class="in-progress-trader"><img src="@(group.Trader.ImageUrl ?? "/files/trader/avatar/unknown.png")" alt=""><strong>@group.Trader.Name</strong></div>
+                @foreach (var quest in group.Quests)
+                {
+                    var percent = Math.Clamp(quest.State.ProgressPercent ?? 0, 0, 100);
+                    <button class="in-progress-quest @(quest.Node.Id == State.SelectedId ? "selected" : null)" type="button" @onclick="() => QuestSelected.InvokeAsync(quest.Node.Id)">
+                        <span class="in-progress-quest-header"><strong>@quest.Node.Name</strong><span class="in-progress-location">@LocationName(quest.Node)</span></span>
+                        <span class="in-progress-meter"><i style="width:@percent.ToString("0.##", CultureInfo.InvariantCulture)%"></i><span>@percent.ToString("0.#", NumberCulture)%</span></span>
+                        @if (State.IsCollectorRoute(quest.Node.Id) || State.IsLightkeeperRoute(quest.Node.Id))
+                        {
+                            <span class="in-progress-route" title="@RouteTitle(quest.Node.Id)">
+                                @if (State.IsCollectorRoute(quest.Node.Id)) { <i class="collector"></i> }
+                                @if (State.IsLightkeeperRoute(quest.Node.Id)) { <i class="lightkeeper"></i> }
+                            </span>
+                        }
+                    </button>
+                }
+            </section>
+        }
+    </div>
+</aside>
+
+@code {
+    [Parameter, EditorRequired] public QuestMapPageState State { get; set; } = default!;
+    [Parameter, EditorRequired] public QuestMapLocalizer Localizer { get; set; } = default!;
+    [Parameter] public EventCallback<bool> ExpandedChanged { get; set; }
+    [Parameter] public EventCallback<string> QuestSelected { get; set; }
+
+    private CultureInfo NumberCulture { get { try { return CultureInfo.GetCultureInfo(Localizer.BrowserLocale); } catch { return CultureInfo.InvariantCulture; } } }
+    private string LocationName(QuestNodeDto node) => node.Location.Any ? Localizer["location.any"] : node.Location.Name ?? node.Location.Id;
+    private string RouteTitle(string id) => string.Join(" / ", new[] { State.IsCollectorRoute(id) ? Localizer["route.collector"] : null, State.IsLightkeeperRoute(id) ? Localizer["route.lightkeeper"] : null }.Where(value => value is not null));
+}

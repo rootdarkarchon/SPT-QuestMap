@@ -1,0 +1,78 @@
+<header class="topbar">
+    <div class="primary-row">
+        <div class="brand"><span class="eyebrow">SPT 4.0.13</span><h1>@Localizer["app.heading"]</h1></div>
+        <div class="identity-controls" aria-label="@Localizer["controls.aria"]">
+            <button class="primary refresh-button" type="button" title="@Localizer["refresh"]" aria-label="@Localizer["refresh"]" disabled="@Busy" @onclick="RefreshRequested"><span aria-hidden="true">⟳</span></button>
+            <div class="profile-field @(ProfileMenuOpen ? "open" : null)">
+                <button class="profile-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="@ProfileMenuOpen.ToString().ToLowerInvariant()" aria-label="@Localizer["profile.aria"]" disabled="@(Busy || SelectedProfile is null)" @onclick="ToggleProfileMenu" @onkeydown="OnProfileKeyDown">
+                    <span class="profile-select-face" aria-hidden="true">
+                        <span class="profile-side-icon @SideClass(SelectedProfile?.Side)"></span>
+                        <strong class="profile-name">@(SelectedProfile?.Nickname ?? "—")</strong>
+                        <span class="profile-level">@(SelectedProfile?.Level.ToString() ?? "—")</span>
+                        <span class="profile-chevron">⌄</span>
+                    </span>
+                </button>
+                @if (ProfileMenuOpen)
+                {
+                    <button class="profile-dismiss-layer" type="button" tabindex="-1" aria-label="@Localizer["selection.clear"]" @onclick="CloseProfileMenu"></button>
+                    <div class="profile-menu" role="listbox" aria-label="@Localizer["profile.aria"]">
+                        @foreach (var profile in Profiles)
+                        {
+                            var selected = profile.Id == SelectedProfile?.Id;
+                            <button class="profile-option @(selected ? "selected" : null)" type="button" role="option" aria-selected="@selected.ToString().ToLowerInvariant()" title="@profile.Id" @onclick="() => SelectProfile(profile.Id)">
+                                <span class="profile-side-icon @SideClass(profile.Side)"></span>
+                                <strong class="profile-option-name">@profile.Nickname</strong>
+                                <span class="profile-option-level">@profile.Level</span>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+            <label class="field language-field"><span>@Localizer["language.label"]</span>
+                <select value="@Localizer.Language" aria-label="@Localizer["language.aria"]" disabled="@Busy" @onchange="OnLanguageChanged">
+                    @foreach (var language in Languages)
+                    {
+                        <option value="@language.Code">@language.Name</option>
+                    }
+                </select>
+            </label>
+        </div>
+    </div>
+    @ChildContent
+</header>
+
+@code {
+    [Parameter, EditorRequired] public QuestMapLocalizer Localizer { get; set; } = default!;
+    [Parameter, EditorRequired] public IReadOnlyList<ProfileSummaryDto> Profiles { get; set; } = [];
+    [Parameter] public ProfileSummaryDto? SelectedProfile { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<QuestMapLanguageDto> Languages { get; set; } = [];
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback RefreshRequested { get; set; }
+    [Parameter] public EventCallback<string> ProfileChanged { get; set; }
+    [Parameter] public EventCallback<string> LanguageChanged { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool ProfileMenuOpen { get; set; }
+
+    private void ToggleProfileMenu() => ProfileMenuOpen = !ProfileMenuOpen;
+    private void CloseProfileMenu() => ProfileMenuOpen = false;
+
+    private async Task SelectProfile(string profileId)
+    {
+        ProfileMenuOpen = false;
+        if (profileId != SelectedProfile?.Id) await ProfileChanged.InvokeAsync(profileId);
+    }
+
+    private async Task OnLanguageChanged(ChangeEventArgs args)
+    {
+        if (args.Value is string language && language != Localizer.Language) await LanguageChanged.InvokeAsync(language);
+    }
+
+    private void OnProfileKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key is "ArrowDown" or "Enter" or " ") ProfileMenuOpen = true;
+        else if (args.Key == "Escape") ProfileMenuOpen = false;
+    }
+
+    private static string SideClass(string? side) => side?.ToLowerInvariant() switch { "usec" => "usec", "bear" => "bear", _ => "unknown" };
+}

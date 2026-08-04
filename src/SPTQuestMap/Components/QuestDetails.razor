@@ -1,0 +1,177 @@
+@using System.Globalization
+
+<aside class="details" aria-label="@Localizer["details.aria"]">
+    @if (State.SelectedNode is not { } node)
+    {
+        <div class="empty-details"><span class="empty-icon">◇</span><h2>@Localizer["details.selectTitle"]</h2><p>@Localizer["details.selectHelp"]</p></div>
+    }
+    else
+    {
+        var questState = State.SelectedQuestState;
+        var traderState = State.GetTraderState(node.TraderId);
+        <div class="detail-banners">
+            <div class="detail-header">
+                @if (!string.IsNullOrWhiteSpace(node.ImageUrl)) { <img src="@node.ImageUrl" alt=""> }
+                <div class="detail-heading"><h2>@node.Name</h2></div>
+            </div>
+            <div class="location-detail">
+                <img src="@(node.Location.BannerImageUrl ?? "/files/banners/norvinskzone.png")" alt=""><strong>@LocationName(node)</strong>
+            </div>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(node.Description))
+        {
+            <RichTextBlock Value="@node.Description" Localizer="@Localizer" />
+        }
+        <section class="detail-section">
+            <h3>@Localizer["details.trader"]</h3>
+            <div class="trader-detail">
+                @if (!string.IsNullOrWhiteSpace(node.TraderImageUrl)) { <img src="@node.TraderImageUrl" alt=""> }
+                <p>@TraderSummary(node, traderState)</p>
+            </div>
+        </section>
+        @if (questState?.DisplayState is not ("Completed" or "InProgress" or "ReadyToFinish"))
+        {
+            <section class="detail-section"><h3>@Localizer["details.effectiveGates"]</h3>@RequirementList(node.EffectiveRequirements)</section>
+        }
+        @if (questState?.AvailableAfter is > 0)
+        {
+            <section class="detail-section"><h3>@Localizer["details.availableAfter"]</h3><p>@FormatAvailableAfter(questState.AvailableAfter.Value)</p></section>
+        }
+        @if (questState?.Blockers.Length > 0)
+        {
+            <section class="detail-section"><h3>@Localizer["details.currentBlockers"]</h3><ul class="plain-list">@foreach (var blocker in questState.Blockers) { <li>@BlockerText(blocker)</li> }</ul></section>
+        }
+        @if (questState?.Exclusion is { } exclusion)
+        {
+            <section class="detail-section"><h3>@Localizer["details.mutualExclusion"]</h3><p>@Localizer["exclusion.prefix"] <button class="relation-button" type="button" @onclick="() => SelectRelation(exclusion.CausedByQuestId)">@QuestName(exclusion.CausedByQuestId)</button> (@StateLabel(exclusion.CauseStatus)@(exclusion.Permanent ? $", {Localizer["exclusion.permanent"]}" : string.Empty)).</p></section>
+        }
+        @if (node.ExclusionRules.Length > 0)
+        {
+            <section class="detail-section"><h3>@Localizer["details.branchAlternatives"]</h3>@RelationList(node.ExclusionRules.Select(rule => rule.CausedByQuestId))</section>
+        }
+        <section class="detail-section"><h3>@Localizer["details.objectives"]</h3>@ObjectiveList(node, questState)</section>
+        <section class="detail-section"><h3>@Localizer["details.rewards"]</h3>@RewardList(node.Rewards)</section>
+        <section class="detail-section"><h3>@Localizer["details.prerequisites"]</h3>@RelationList(State.Incoming(node.Id).Select(item => item.Edge.SourceId))</section>
+        <section class="detail-section"><h3>@Localizer["details.successors"]</h3>@RelationList(State.Outgoing(node.Id).Select(item => item.Edge.TargetId))</section>
+    }
+</aside>
+
+@code {
+    [Parameter, EditorRequired] public QuestMapPageState State { get; set; } = default!;
+    [Parameter, EditorRequired] public QuestMapLocalizer Localizer { get; set; } = default!;
+    [Parameter] public EventCallback<string> QuestSelected { get; set; }
+
+    private CultureInfo NumberCulture { get { try { return CultureInfo.GetCultureInfo(Localizer.BrowserLocale); } catch { return CultureInfo.InvariantCulture; } } }
+    private string Number(double? value) => value is null ? "?" : value.Value.ToString("0.##", NumberCulture);
+    private string SignedNumber(double value) => value > 0 ? $"+{Number(value)}" : Number(value);
+    private string StateLabel(string value) => Localizer[$"state.{value}"];
+    private string QuestName(string? id) => id is null ? Localizer["common.unknownQuest"] : State.GetNode(id)?.Name ?? id;
+    private string TraderName(string? id) => id is null ? Localizer["common.trader"] : State.Topology?.Traders.FirstOrDefault(trader => trader.Id == id)?.Name ?? id;
+    private string LocationName(QuestNodeDto node) => node.Location.Any ? Localizer["location.any"] : node.Location.Name ?? node.Location.Id;
+
+    private string TraderSummary(QuestNodeDto node, TraderStateDto? traderState) => traderState is null
+        ? Localizer.Format("trader.noState", ("trader", node.TraderName))
+        : Localizer.Format("trader.summary", ("trader", node.TraderName), ("availability", Localizer[traderState.Available ? "trader.unlocked" : "trader.unavailable"]), ("loyalty", traderState.LoyaltyLevel?.ToString() ?? "?"), ("standing", Number(traderState.Standing)));
+
+    private string RequirementText(RequirementDto requirement)
+    {
+        if (requirement.Kind == "Level") return Localizer.Format("gates.pmcLevel", ("compare", requirement.Compare), ("value", Number(requirement.Value)));
+        var kind = Localizer[requirement.Kind == "TraderLoyalty" ? "gates.loyaltyShort" : "gates.reputationShort"];
+        return Localizer.Format("gates.reputation", ("trader", TraderName(requirement.TraderId)), ("kind", kind), ("compare", requirement.Compare), ("value", Number(requirement.Value)));
+    }
+
+    private string BlockerText(QuestBlockerDto blocker)
+    {
+        if (blocker.Kind == "Prerequisite") return Localizer.Format("blocker.prerequisite", ("quest", QuestName(blocker.SubjectId)), ("statuses", string.Join(Localizer["common.or"], blocker.RequiredStatuses.Select(StateLabel))));
+        if (blocker.Kind == "TraderUnavailable") return Localizer.Format("blocker.traderUnavailable", ("trader", TraderName(blocker.SubjectId)));
+        if (blocker.Kind == "Level") return Localizer.Format("gates.pmcLevel", ("compare", blocker.Compare), ("value", Number(blocker.RequiredValue)));
+        var kind = Localizer[blocker.Kind == "TraderLoyalty" ? "gates.loyaltyShort" : "gates.reputationShort"];
+        return Localizer.Format("gates.reputation", ("trader", TraderName(blocker.SubjectId)), ("kind", kind), ("compare", blocker.Compare), ("value", Number(blocker.RequiredValue)));
+    }
+
+    private string FormatAvailableAfter(double value) => value > 1_000_000_000
+        ? DateTimeOffset.FromUnixTimeSeconds((long)value).ToLocalTime().ToString("g", NumberCulture)
+        : Localizer.Format("time.seconds", ("value", Number(value)));
+
+    private RenderFragment RequirementList(IReadOnlyList<RequirementDto> requirements) => builder =>
+    {
+        if (requirements.Count == 0)
+        {
+            builder.OpenElement(0, "p"); builder.AddAttribute(1, "class", "muted"); builder.AddContent(2, Localizer["gates.none"]); builder.CloseElement();
+            return;
+        }
+        builder.OpenElement(3, "ul"); builder.AddAttribute(4, "class", "plain-list");
+        var sequence = 5;
+        foreach (var requirement in requirements) { builder.OpenElement(sequence++, "li"); builder.AddContent(sequence++, RequirementText(requirement)); builder.CloseElement(); }
+        builder.CloseElement();
+    };
+
+    private RenderFragment ObjectiveList(QuestNodeDto node, QuestStateDto? questState) => builder =>
+    {
+        if (node.Objectives.Length == 0) { builder.OpenElement(0, "p"); builder.AddAttribute(1, "class", "muted"); builder.AddContent(2, Localizer["objectives.none"]); builder.CloseElement(); return; }
+        var progress = (questState?.Objectives ?? []).ToDictionary(item => item.ObjectiveId, StringComparer.Ordinal);
+        builder.OpenElement(3, "ol"); builder.AddAttribute(4, "class", "objectives"); var sequence = 5;
+        foreach (var objective in node.Objectives)
+        {
+            var item = progress.GetValueOrDefault(objective.Id);
+            builder.OpenElement(sequence++, "li"); if (item?.Complete == true) builder.AddAttribute(sequence++, "class", "complete");
+            builder.OpenElement(sequence++, "span"); builder.AddAttribute(sequence++, "class", "objective-marker"); builder.AddContent(sequence++, item?.Complete == true ? "✓" : "○"); builder.CloseElement();
+            builder.OpenElement(sequence++, "div"); builder.OpenElement(sequence++, "strong"); builder.AddContent(sequence++, objective.Text.Length > 0 ? objective.Text : objective.ConditionType); builder.CloseElement();
+            var detail = item?.Current is not null && item.Required is not null ? $"{Number(item.Current)} / {Number(item.Required)}" : item?.Required is not null ? Localizer.Format("objectives.required", ("value", Number(item.Required))) : item?.ProgressKnown == true && !item.Complete ? Localizer["objectives.progressRecorded"] : null;
+            if (detail is not null) { builder.OpenElement(sequence++, "small"); builder.AddContent(sequence++, detail); builder.CloseElement(); }
+            builder.CloseElement(); builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    private RenderFragment RewardList(IReadOnlyList<QuestRewardDto> rewards) => builder =>
+    {
+        if (rewards.Count == 0) { builder.OpenElement(0, "p"); builder.AddAttribute(1, "class", "muted"); builder.AddContent(2, Localizer["common.none"]); builder.CloseElement(); return; }
+        builder.OpenElement(3, "ul"); builder.AddAttribute(4, "class", "rewards"); var sequence = 5;
+        foreach (var reward in rewards)
+        {
+            builder.OpenElement(sequence++, "li"); builder.AddAttribute(sequence++, "class", "reward-row");
+            builder.OpenElement(sequence++, "span"); builder.AddAttribute(sequence++, "class", "reward-marker"); builder.AddContent(sequence++, "◆"); builder.CloseElement();
+            builder.OpenElement(sequence++, "div"); builder.AddAttribute(sequence++, "class", "reward-body");
+            foreach (var line in RewardLines(reward)) { builder.OpenElement(sequence++, "div"); builder.AddAttribute(sequence++, "class", "reward-description rich-description"); builder.AddMarkupContent(sequence++, QuestRichTextSanitizer.Sanitize(line)); builder.CloseElement(); }
+            if (reward.Unknown) { builder.OpenElement(sequence++, "small"); builder.AddAttribute(sequence++, "class", "reward-unknown"); builder.AddContent(sequence++, Localizer["reward.unknown"]); builder.CloseElement(); }
+            builder.CloseElement(); builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    private IReadOnlyList<string> RewardLines(QuestRewardDto reward)
+    {
+        var items = reward.Items.Select(item => $"{item.Name} × {Number(item.Count)}").ToArray();
+        var value = reward.Value is null ? string.Empty : SignedNumber(reward.Value.Value);
+        var target = reward.TargetName ?? reward.TargetId ?? string.Empty;
+        return reward.Type switch
+        {
+            "Item" => items.Length > 0 ? items : [target.Length > 0 ? target : reward.Type],
+            "Experience" => [$"{Localizer["reward.experience"]} · {value}"],
+            "Skill" => [$"{Localizer["reward.skill"]} · {target} {value}"],
+            "TraderStanding" or "TraderStandingRestore" or "TraderStandingReset" => [$"{Localizer["reward.traderStanding"]} · {reward.TraderName ?? target} {value}"],
+            "TraderUnlock" => [$"{Localizer["reward.unlock"]} · {reward.TraderName ?? target}"],
+            "AssortmentUnlock" => (items.Length > 0 ? items : [target.Length > 0 ? target : reward.Type]).Select(item => $"{Localizer["reward.unlock"]} · {item}{(reward.TraderName is null ? string.Empty : $" · {reward.TraderName}")}{(reward.LoyaltyLevel is null ? string.Empty : $" LL{Number(reward.LoyaltyLevel)}")}").ToArray(),
+            "ProductionScheme" => items.Length > 0 ? items.Select(item => $"{Localizer["reward.production"]} {item}").ToArray() : [$"{Localizer["reward.production"]} {target}"],
+            "Achievement" => [$"{Localizer["reward.achievement"]} · {target}"],
+            "Pockets" => [Localizer["reward.pockets"]],
+            _ when reward.Type.StartsWith("Customization", StringComparison.Ordinal) => items.Length > 0 ? items.Select(item => $"{Localizer["reward.customization"]} · {item}").ToArray() : [$"{Localizer["reward.customization"]} · {target}"],
+            _ => [$"{reward.Type}{(target.Length > 0 ? $" · {target}" : string.Empty)}{(value.Length > 0 ? $" · {value}" : string.Empty)}"],
+        };
+    }
+
+    private RenderFragment RelationList(IEnumerable<string> values) => builder =>
+    {
+        var ids = values.Distinct(StringComparer.Ordinal).ToArray();
+        if (ids.Length == 0) { builder.OpenElement(0, "p"); builder.AddAttribute(1, "class", "muted"); builder.AddContent(2, Localizer["common.none"]); builder.CloseElement(); return; }
+        builder.OpenElement(3, "div"); builder.AddAttribute(4, "class", "relations"); var sequence = 5;
+        foreach (var id in ids)
+        {
+            builder.OpenElement(sequence++, "button"); builder.AddAttribute(sequence++, "class", "relation-button"); builder.AddAttribute(sequence++, "type", "button"); builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => SelectRelation(id))); builder.AddContent(sequence++, QuestName(id)); builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    private Task SelectRelation(string id) => QuestSelected.InvokeAsync(id);
+}

@@ -1,0 +1,14 @@
+<div class="legend" aria-label="@Localizer["legend.aria"]">
+    <strong>@Localizer["legend.states"]</strong>
+    <span><i style="--swatch:var(--qm-state-locked)"></i><span>@Localizer["state.Locked"]</span></span><span><i style="--swatch:var(--qm-state-prerequisite-gated)"></i><span>@Localizer["legend.priorGate"]</span></span>
+    <span><i style="--swatch:var(--qm-state-level-gated)"></i><span>@Localizer["legend.levelGate"]</span></span><span><i style="--swatch:var(--qm-state-trader-gated)"></i><span>@Localizer["legend.traderRequirement"]</span></span>
+    <span><i style="--swatch:var(--qm-state-trader-unavailable)"></i><span>@Localizer["state.TraderUnavailable"]</span></span><span><i class="future-key"></i><span>@Localizer["legend.futureTier"]</span></span>
+    <span><i style="--swatch:var(--qm-state-available)"></i><span>@Localizer["state.Available"]</span></span><span><i style="--swatch:var(--qm-state-in-progress)"></i><span>@Localizer["state.InProgress"]</span></span>
+    <span><i style="--swatch:var(--qm-state-ready-to-finish)"></i><span>@Localizer["state.ReadyToFinish"]</span></span><span><i style="--swatch:var(--qm-state-completed)"></i><span>@Localizer["state.Completed"]</span></span>
+    <span><i style="--swatch:var(--qm-state-failed)"></i><span>@Localizer["legend.failedExcluded"]</span></span><span><i style="--swatch:var(--qm-state-pending)"></i><span>@Localizer["state.Pending"]</span></span>
+    <span><i style="--swatch:var(--qm-route-collector)"></i><span>@Localizer["legend.collectorRoute"]</span></span><span><i style="--swatch:var(--qm-route-lightkeeper)"></i><span>@Localizer["legend.lightkeeperRoute"]</span></span>
+    <span><b class="edge-key success"></b><span>@Localizer["legend.requiresSuccess"]</span></span><span><b class="edge-key failure"></b><span>@Localizer["legend.requiresFailure"]</span></span>
+    <span><b class="edge-key started"></b><span>@Localizer["legend.requiresStarted"]</span></span><span><b class="edge-key outcome"></b><span>@Localizer["legend.requiresOutcome"]</span></span>
+</div>
+
+@code { [Parameter, EditorRequired] public QuestMapLocalizer Localizer { get; set; } = default!; }

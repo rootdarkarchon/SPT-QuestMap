@@ -1,0 +1,24 @@
+<div class="description-expander @(Expanded ? "expanded" : CanExpand ? "can-expand" : null)">
+    <div class="description-clip" style="@(!CanExpand || Expanded ? "max-height:none" : null)">
+        <div class="@Class">@((MarkupString)QuestRichTextSanitizer.Sanitize(Value))</div>
+    </div>
+    @if (CanExpand)
+    {
+        <button class="description-toggle" type="button" aria-expanded="@Expanded.ToString().ToLowerInvariant()" @onclick="Toggle">@Localizer[Expanded ? "details.collapse" : "details.expand"]</button>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public string Class { get; set; } = "description rich-description";
+    [Parameter, EditorRequired] public QuestMapLocalizer Localizer { get; set; } = default!;
+    private bool Expanded { get; set; }
+    private string? PreviousValue { get; set; }
+    private bool CanExpand => QuestRichTextSanitizer.StripMarkup(Value).Length > 520 || (Value?.Count(character => character == '\n') ?? 0) > 8;
+    protected override void OnParametersSet()
+    {
+        if (!string.Equals(PreviousValue, Value, StringComparison.Ordinal)) Expanded = false;
+        PreviousValue = Value;
+    }
+    private void Toggle() => Expanded = !Expanded;
+}

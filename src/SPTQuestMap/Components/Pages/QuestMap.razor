@@ -1,0 +1,244 @@
+@page "/questmap"
+@layout SPTQuestMap.Components.Layout.QuestMapLayout
+@implements IAsyncDisposable
+@inject QuestMapDataService DataService
+@inject IJSRuntime JavaScript
+
+<HeadContent>
+    <title>@(Localizer?["app.title"] ?? "SPT QuestMap")</title>
+    <style id="spt-questmap-styles">@((MarkupString)QuestMapEmbeddedAssets.Css)</style>
+</HeadContent>
+
+@if (Localizer is not null)
+{
+    <div class="app-shell">
+        <QuestMapHeader Localizer="@Localizer" Profiles="@Profiles" SelectedProfile="@SelectedProfile" Languages="@Bootstrap!.Languages" Busy="@Busy" RefreshRequested="RefreshAsync" ProfileChanged="ChangeProfileAsync" LanguageChanged="ChangeLanguageAsync">
+            <QuestMapFilters State="@State" Localizer="@Localizer" ShowAllFutureChanged="SetShowAllFutureAsync" ShowFinishedChanged="SetShowFinishedAsync" LevelEligibleChanged="SetLevelEligibleAsync" SearchChanged="SetSearchAsync" TraderChanged="SetTraderAsync" />
+        </QuestMapHeader>
+        <main class="workspace">
+            <section class="viewport @(State.InProgressExpanded ? "progress-panel-open" : null)" aria-label="@Localizer["graph.aria"]" @ref="ViewportElement">
+                <canvas id="graph" tabindex="0" aria-label="@Localizer["graph.canvasAria"]" @ref="CanvasElement"></canvas>
+                <InProgressDrawer State="@State" Localizer="@Localizer" ExpandedChanged="SetDrawerExpandedAsync" QuestSelected="SelectFromDrawerAsync" />
+                <div class="graph-actions" aria-label="@Localizer["graph.actionsAria"]">
+                    <button type="button" title="@Localizer["zoom.in"]" @onclick="() => ZoomAsync(1.22)">+</button><button type="button" title="@Localizer["zoom.out"]" @onclick="() => ZoomAsync(1 / 1.22)">−</button>
+                    <button type="button" @onclick="FitAsync">@Localizer["fit"]</button><button type="button" disabled="@(State.SelectedId is null || State.FocusedId == State.SelectedId)" @onclick="FocusAsync">@Localizer["focus"]</button>
+                    @if (State.FocusMode) { <button type="button" @onclick="ClearFocusAsync">@Localizer["focus.clear"]</button> }
+                    <button type="button" disabled="@(State.SelectedId is null)" @onclick="ClearSelectionAsync">@Localizer["selection.clear"]</button>
+                </div>
+                @if (Busy || !RendererReady || Profiles.Count == 0)
+                {
+                    <div class="loading-state" role="status">@(Profiles.Count == 0 ? Localizer["profiles.none"] : BusyMessage)</div>
+                }
+                @if (ErrorMessage is not null)
+                {
+                    <div class="error-state" role="alert">@ErrorMessage</div>
+                }
+                <QuestLegend Localizer="@Localizer" />
+                <div class="metrics" aria-live="polite" @ref="MetricsElement"></div>
+            </section>
+            <QuestDetails State="@State" Localizer="@Localizer" QuestSelected="SelectRelationAsync" />
+        </main>
+    </div>
+}
+
+@code {
+    private readonly QuestMapPageState State = new();
+    private QuestMapBootstrapDto? Bootstrap;
+    private QuestMapLocalizer? Localizer;
+    private IReadOnlyList<ProfileSummaryDto> Profiles = [];
+    private ProfileSummaryDto? SelectedProfile;
+    private ElementReference CanvasElement;
+    private ElementReference ViewportElement;
+    private ElementReference MetricsElement;
+    private IJSObjectReference? Module;
+    private DotNetObjectReference<QuestMap>? DotNetReference;
+    private bool RendererReady;
+    private bool Busy = true;
+    private string BusyMessage = string.Empty;
+    private string? ErrorMessage;
+
+    protected override void OnInitialized()
+    {
+        BusyMessage = "Loading quest topology and profiles…";
+        LoadSnapshots(null, null);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", QuestMapEmbeddedAssets.RendererModuleDataUrl);
+            var settings = await LoadSettingsAsync();
+            if (settings is not null)
+            {
+                LoadSnapshots(settings.Language, settings.SelectedProfileId);
+                State.ApplySettings(settings);
+                SelectedProfile = Profiles.FirstOrDefault(profile => profile.Id == State.Profile?.ProfileId);
+                StateHasChanged();
+            }
+
+            DotNetReference = Microsoft.JSInterop.DotNetObjectReference.Create(this);
+            await Module.InvokeVoidAsync("initialize", CanvasElement, ViewportElement, MetricsElement, DotNetReference, State.BuildGraphSnapshot(Localizer!));
+            RendererReady = true;
+            Busy = false;
+            BusyMessage = string.Empty;
+            await SaveSettingsAsync();
+            StateHasChanged();
+        }
+        catch (Exception exception)
+        {
+            ShowError(exception);
+            StateHasChanged();
+        }
+    }
+
+    private void LoadSnapshots(string? language, string? requestedProfileId)
+    {
+        Bootstrap = DataService.GetBootstrap(language);
+        Localizer = new QuestMapLocalizer(Bootstrap);
+        Profiles = DataService.GetProfiles(Bootstrap.Language);
+        SelectedProfile = Profiles.FirstOrDefault(profile => profile.Id == requestedProfileId) ?? Profiles.FirstOrDefault();
+        var topology = DataService.GetTopology(Bootstrap.Language);
+        var profile = SelectedProfile is null ? null : DataService.GetProfileState(SelectedProfile.Id);
+        State.SetData(topology, profile);
+        BusyMessage = Profiles.Count == 0 ? Localizer["profiles.none"] : Localizer["loading.initial"];
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (Localizer is null) return;
+        await ReloadAsync(Localizer.Language, SelectedProfile?.Id, Localizer["loading.refresh"]);
+    }
+
+    private async Task ChangeProfileAsync(string profileId)
+    {
+        if (Localizer is null) return;
+        await ReloadAsync(Localizer.Language, profileId, Localizer["loading.profile"]);
+    }
+
+    private async Task ChangeLanguageAsync(string language) => await ReloadAsync(language, SelectedProfile?.Id, Localizer?["loading.topology"] ?? string.Empty);
+
+    private async Task ReloadAsync(string? language, string? profileId, string message)
+    {
+        if (Localizer is null) return;
+        var settings = State.CaptureSettings(profileId, language ?? Localizer.Language) with { SelectedProfileId = profileId, Language = language };
+        Busy = true; BusyMessage = message; ErrorMessage = null;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            LoadSnapshots(language, profileId);
+            State.ApplySettings(settings);
+            SelectedProfile = Profiles.FirstOrDefault(profile => profile.Id == State.Profile?.ProfileId);
+            if (Module is not null) await Module.InvokeVoidAsync("refresh", State.BuildGraphSnapshot(Localizer!));
+            Busy = false; BusyMessage = string.Empty;
+            await SaveSettingsAsync();
+        }
+        catch (Exception exception) { ShowError(exception); }
+    }
+
+    private Task SetShowAllFutureAsync(bool value) => ChangeViewAsync(() => State.SetShowAllFuture(value));
+    private Task SetShowFinishedAsync(bool value) => ChangeViewAsync(() => State.SetShowFinished(value));
+    private Task SetLevelEligibleAsync(bool value) => ChangeViewAsync(() => State.SetLevelEligibleOnly(value));
+    private Task SetSearchAsync(string value) => ChangeViewAsync(() => State.SetSearch(value));
+    private Task SetTraderAsync(string value) => ChangeViewAsync(() => State.SetTraderFilter(value));
+    private Task SetDrawerExpandedAsync(bool value) => ChangeViewAsync(() => State.SetInProgressExpanded(value));
+
+    private async Task ChangeViewAsync(Action change)
+    {
+        change();
+        await SynchronizeRendererAsync();
+        await SaveSettingsAsync();
+    }
+
+    private async Task SelectFromDrawerAsync(string id)
+    {
+        if (State.FocusMode) State.ClearFocus();
+        State.SelectQuest(id);
+        await SynchronizeRendererAsync();
+        if (Module is not null) await Module.InvokeVoidAsync("centerQuest", id);
+        await SaveSettingsAsync();
+    }
+
+    private async Task SelectRelationAsync(string id)
+    {
+        State.SelectQuest(id);
+        await SynchronizeRendererAsync();
+        if (Module is not null) await Module.InvokeVoidAsync("centerQuest", id);
+        await SaveSettingsAsync();
+    }
+
+    private Task FocusAsync() => ChangeViewAsync(State.ActivateFocus);
+    private Task ClearFocusAsync() => ChangeViewAsync(State.ClearFocus);
+    private Task ClearSelectionAsync() => ChangeViewAsync(State.ClearSelection);
+    private async Task FitAsync() { if (Module is not null) await Module.InvokeVoidAsync("fitVisible"); }
+    private async Task ZoomAsync(double factor) { if (Module is not null) await Module.InvokeVoidAsync("zoom", factor); }
+
+    [JSInvokable]
+    public async Task OnQuestSelected(string? id)
+    {
+        if (id is null) State.ClearSelection(); else State.SelectQuest(id);
+        await InvokeAsync(StateHasChanged);
+        await SynchronizeRendererAsync();
+        await SaveSettingsAsync();
+    }
+
+    [JSInvokable]
+    public async Task OnQuestDoubleClicked(string id)
+    {
+        State.SelectQuest(id);
+        State.ActivateFocus();
+        await InvokeAsync(StateHasChanged);
+        await SynchronizeRendererAsync();
+        await SaveSettingsAsync();
+    }
+
+    [JSInvokable]
+    public Task OnRendererFailed(string message)
+    {
+        ErrorMessage = message;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SynchronizeRendererAsync()
+    {
+        if (Module is not null && RendererReady) await Module.InvokeVoidAsync("synchronize", State.BuildGraphUpdate());
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        if (Localizer is null) return;
+        var settings = State.CaptureSettings(SelectedProfile?.Id, Localizer.Language);
+        try { await JavaScript.InvokeVoidAsync("localStorage.setItem", QuestMapSettingsStorage.PageStorageKey, QuestMapSettingsStorage.Serialize(settings)); }
+        catch (JSException) { }
+    }
+
+    private async Task<QuestMapSettings?> LoadSettingsAsync()
+    {
+        try
+        {
+            var currentJson = await JavaScript.InvokeAsync<string?>("localStorage.getItem", QuestMapSettingsStorage.PageStorageKey);
+            var legacyJson = await JavaScript.InvokeAsync<string?>("localStorage.getItem", QuestMapSettingsStorage.LegacyStorageKey);
+            return QuestMapSettingsStorage.Deserialize(currentJson, legacyJson);
+        }
+        catch (JSException) { return null; }
+    }
+
+    private void ShowError(Exception exception)
+    {
+        ErrorMessage = exception.GetBaseException().Message;
+        Busy = false;
+        BusyMessage = string.Empty;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (Module is not null)
+        {
+            try { await Module.InvokeVoidAsync("dispose"); } catch (JSDisconnectedException) { }
+            await Module.DisposeAsync();
+        }
+        DotNetReference?.Dispose();
+    }
+
+}

@@ -1,0 +1,35 @@
+<div class="filterbar">
+    <div class="filter-tools">
+        <div class="filter-toggles">
+            <button class="filter-toggle @(State.ShowAllFuture ? "active" : null)" type="button" aria-pressed="@State.ShowAllFuture.ToString().ToLowerInvariant()" title="@Localizer["showAllFuture"]" aria-label="@Localizer["showAllFuture"]" @onclick="() => ShowAllFutureChanged.InvokeAsync(!State.ShowAllFuture)"><span aria-hidden="true">⇉</span></button>
+            <button class="filter-toggle @(State.ShowFinished ? "active" : null)" type="button" aria-pressed="@State.ShowFinished.ToString().ToLowerInvariant()" title="@Localizer["showFinished"]" aria-label="@Localizer["showFinished"]" disabled="@State.FocusMode" @onclick="() => ShowFinishedChanged.InvokeAsync(!State.ShowFinished)"><span aria-hidden="true">✓</span></button>
+            <button class="filter-toggle level-toggle @(State.LevelEligibleOnly ? "active" : null)" type="button" aria-pressed="@State.LevelEligibleOnly.ToString().ToLowerInvariant()" title="@Localizer["levelEligible"]" aria-label="@Localizer["levelEligible"]" disabled="@State.FocusMode" @onclick="() => LevelEligibleChanged.InvokeAsync(!State.LevelEligibleOnly)"><span>≤ @(State.Profile?.Level.ToString() ?? "?")</span></button>
+        </div>
+        <label class="field search-field"><span class="sr-only">@Localizer["search.label"]</span><input type="search" value="@State.Search" placeholder="@Localizer["search.placeholder"]" autocomplete="off" @oninput="OnSearchInput"></label>
+    </div>
+    <div class="filter-separator" aria-hidden="true"></div>
+    <div class="trader-options @(State.FocusMode ? "disabled" : null)" role="radiogroup" aria-label="@Localizer["trader.label"]">
+        <button class="trader-option @(State.TraderFilter.Length == 0 ? "selected" : null)" type="button" role="radio" aria-checked="@(State.TraderFilter.Length == 0 ? "true" : "false")" title="@Localizer["trader.all"]" disabled="@State.FocusMode" @onclick="() => TraderChanged.InvokeAsync(string.Empty)">
+            <img src="/files/trader/avatar/unknown.png" alt=""><span>@Localizer["trader.allShort"]</span>
+        </button>
+        @foreach (var trader in State.FilterTraders())
+        {
+            var selected = trader.Id == State.TraderFilter;
+            <button class="trader-option @(selected ? "selected" : null)" type="button" role="radio" aria-checked="@selected.ToString().ToLowerInvariant()" title="@trader.Name" disabled="@State.FocusMode" @onclick="() => TraderChanged.InvokeAsync(trader.Id)">
+                <img src="@(trader.ImageUrl ?? "/files/trader/avatar/unknown.png")" alt=""><span>@trader.Name</span>
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public QuestMapPageState State { get; set; } = default!;
+    [Parameter, EditorRequired] public QuestMapLocalizer Localizer { get; set; } = default!;
+    [Parameter] public EventCallback<bool> ShowAllFutureChanged { get; set; }
+    [Parameter] public EventCallback<bool> ShowFinishedChanged { get; set; }
+    [Parameter] public EventCallback<bool> LevelEligibleChanged { get; set; }
+    [Parameter] public EventCallback<string> SearchChanged { get; set; }
+    [Parameter] public EventCallback<string> TraderChanged { get; set; }
+
+    private Task OnSearchInput(ChangeEventArgs args) => SearchChanged.InvokeAsync(args.Value?.ToString() ?? string.Empty);
+}

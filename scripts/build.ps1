@@ -48,7 +48,6 @@ foreach ($testProject in $testProjects) {
 }
 
 $output = Join-Path $root "src/SPTQuestMap/bin/$Configuration/net9.0"
-$webRoot = Join-Path $projects[0].DirectoryName 'wwwroot'
 $dist = Join-Path $root 'dist'
 if (Test-Path -LiteralPath $dist) {
     $resolvedDist = (Resolve-Path -LiteralPath $dist).Path
@@ -60,13 +59,11 @@ if (Test-Path -LiteralPath $dist) {
     Remove-Item -LiteralPath $resolvedDist -Recurse -Force
 }
 
-New-Item -ItemType Directory -Path (Join-Path $dist 'wwwroot') -Force | Out-Null
+New-Item -ItemType Directory -Path $dist -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $output 'SPTQuestMap.dll') -Destination $dist
 if (Test-Path -LiteralPath (Join-Path $output 'SPTQuestMap.pdb')) {
     Copy-Item -LiteralPath (Join-Path $output 'SPTQuestMap.pdb') -Destination $dist
 }
-Copy-Item -Path (Join-Path $webRoot '*') -Destination (Join-Path $dist 'wwwroot') -Recurse -Force
-
 $forbiddenScripts = @(Get-ChildItem -LiteralPath $dist -Recurse -File | Where-Object { $_.Extension -in @('.js', '.ts') })
 if ($forbiddenScripts.Count -gt 0) {
     throw "SPT 4.0.13 rejects server mods containing .js or .ts files: $($forbiddenScripts.FullName -join ', ')"

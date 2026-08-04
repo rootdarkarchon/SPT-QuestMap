@@ -1,9 +1,9 @@
 using NUnit.Framework;
-using SPTQuestMap.Controllers;
+using SPTQuestMap.Services;
 
 namespace SPTQuestMap.Tests;
 
-public sealed class QuestMapControllerTests
+public sealed class QuestMapProfilePolicyTests
 {
     [TestCase("PMC", 1, true)]
     [TestCase("headless_6937e7e248ea76002adbb379", 1, false)]
@@ -11,6 +11,6 @@ public sealed class QuestMapControllerTests
     [TestCase("Uninitialized", 0, false)]
     public void ProfileDropdownEligibilityFiltersHeadlessAndLevelZeroProfiles(string nickname, int level, bool expected)
     {
-        Assert.That(QuestMapController.ShouldIncludeProfile(nickname, level), Is.EqualTo(expected));
+        Assert.That(QuestMapProfilePolicy.ShouldInclude(nickname, level), Is.EqualTo(expected));
     }
 }

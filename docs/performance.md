@@ -61,7 +61,9 @@ A hard FPS number is not required before real hardware testing, but visible stut
 
 ## Implemented Milestone 3 renderer
 
-QuestMap uses one Canvas for both nodes and edges. Static topology receives a deterministic left-to-right layered layout once per topology fingerprint. Node rectangles and edge bounds are then placed in fixed-size spatial buckets; viewport rendering and pointer hit-testing query only intersecting buckets instead of scanning the complete graph during pointer movement.
+QuestMap's Blazor page treats the graph as a browser-rendered island. `questmap-renderer.mjs` uses one Canvas for both nodes and edges; Razor components never render one component per graph node or edge. Static topology receives a deterministic left-to-right layered layout once per topology fingerprint. Node rectangles and edge bounds are then placed in fixed-size spatial buckets; viewport rendering and pointer hit-testing query only intersecting buckets instead of scanning the complete graph during pointer movement.
+
+Pointer movement, hover, pan, zoom, image decoding, hit testing, and animation frames stay entirely inside the browser module. Blazor receives only low-frequency quest click/double-click and renderer-failure callbacks. The already-loaded topology/profile snapshot crosses JS interop once at initialization and again only on explicit refresh, profile change, or language change; ordinary view updates send compact ID-only records.
 
 - Pan and zoom update only the viewport transform and schedule one animation-frame render. They do not run layout, rebuild the details panel, or scan all edges.
 - Profile refresh replaces the state/trader/objective overlay while retaining layout when the topology fingerprint is unchanged.

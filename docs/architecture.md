@@ -20,51 +20,48 @@ Profile overlay changes when:
 
 Do not recompute graph layout simply because quest statuses changed.
 
-## Likely server responsibilities
+## Server and Blazor responsibilities
 
-- integrate a mod page at `/questmap`;
-- serve static JS/CSS through the existing host;
-- expose a sanitized list of profiles;
-- expose normalized graph metadata or enough raw data for the client to normalize;
-- expose selected-profile quest/trader state;
+- expose the mod-owned Razor page at `/questmap` through SPT's existing Interactive Server host;
+- render semantic UI components and keep each browser circuit's page state isolated;
+- load the embedded Canvas module and CSS from the mod assembly without adding public static-file routes;
+- load sanitized profile summaries and normalized topology/profile snapshots directly through `QuestMapDataService`;
 - provide existing asset URLs;
 - enforce existing SPT web authentication/authorization.
 
 A single combined endpoint is acceptable for the first implementation, but avoid sending full profile JSON.
 
-## Likely browser responsibilities
+## Canvas-module responsibilities
 
 - graph layout and rendering;
-- pan/zoom and selection;
+- pan/zoom, hover, hit testing, and transient selection overlay;
 - profile/status color overlay;
-- filters and future-depth view;
-- objective details panel;
-- localStorage persistence;
-- explicit refresh.
+- image loading and caches;
+- viewport persistence;
+- low-frequency selection notifications to Blazor.
 
-Server-side layout is also acceptable if it materially improves performance or determinism, but browser viewport state must remain independent.
+Blazor/C# owns filter and future-depth semantics, the objective/details panel, explicit refresh, and durable UI settings. On initialization and explicit data changes it passes one immutable topology/profile/view snapshot to the Canvas module. Browser viewport state remains independent and does not cross the circuit during interaction.
 
-## Suggested API shape
+## Blazor-to-renderer snapshot
 
-Names are examples only:
+`QuestGraphSnapshot` contains the cached localized topology, selected profile overlay, and the small current `QuestGraphView`. It crosses JS interop only when the renderer initializes or the user explicitly refreshes/changes profile/language. Filter, focus, and selection changes send only `QuestGraphUpdate`; pointer, wheel, hover, layout, drawing, and viewport persistence never cross the Blazor circuit.
 
-```text
-GET /questmap/api/profiles
-GET /questmap/api/bootstrap?language={code}
-GET /questmap/api/topology?language={code}
-GET /questmap/api/profiles/{profileId}/state
-GET /questmap/api/runtime
-```
+The server-owned UI catalog combines selected SPT global-locale values for shared concepts, QuestMap translations for custom controls, and per-key English fallback. Language-specific topology instances share one structural version so changing locale does not invalidate pan/zoom state.
 
-Possible split:
+## Server data composition
 
-- `profiles`: sanitized profile summaries;
-- `bootstrap`: installed SPT languages, resolved selection, and browser UI catalog;
-- `topology`: cacheable quest nodes, edges, locale text, and asset URLs;
-- `state`: selected profile quest/trader/objective overlay;
-- `runtime`: event state and topology version.
+`QuestMapDataService` is the small public facade used by Razor. Its collaborators keep the two main data lifetimes explicit:
 
-The implemented bootstrap endpoint keeps QuestMap-owned strings out of the static page. Its catalog combines selected SPT global-locale values for shared concepts, QuestMap translations for custom core controls, and per-key English fallback. Language-specific topology instances share one structural version so changing locale does not invalidate pan/zoom state.
+- `QuestTopologyBuilder` caches localized, profile-independent topology and delegates quest-template normalization to `QuestTemplateMapper`;
+- `QuestProfileStateBuilder` creates the uncached selected-profile overlay;
+- `QuestGraphRules` owns topology/frontier/requirement algorithms;
+- `QuestProfileRules` owns blocker, display-state, and objective-progress rules;
+- `TraderAvailabilityEvaluator` encapsulates the selected profile's trader unlock rules, including direct completion checks for Introduction, Easy Money - Part 1 [PVE ZONE], and Knock-Knock;
+- `QuestMapLocalizationService` resolves installed SPT locales and composes the bootstrap catalog.
+
+QuestMap-owned translations live as embedded JSON resources under `Localization/Locales`. `QuestMapUiCatalog` contains only the composition policy: English fallback, selected SPT global-locale values, QuestMap overrides, and invariant product names. The English catalog contains only keys consumed by Razor or the Canvas renderer.
+
+QuestMap-owned presentation assets live under `Presentation/Assets` as embedded assembly resources. The Razor page injects the stylesheet through `HeadContent` and imports the Canvas module from an assembly-generated JavaScript data URL. SPT 4.0.13 only maps a mod's physical `wwwroot` directory; embedding both assets keeps the deployment DLL-only, avoids an extra controller/static route, and avoids SPT's legacy-mod rejection of deployed `.js` files. Renderer colors are semantic CSS custom properties read through `getComputedStyle`; JavaScript contains no color literals.
 
 ## Security
 
@@ -102,3 +99,7 @@ The UI should remain usable when:
 - objective progress cannot be computed.
 
 Show warnings in diagnostics/logs without failing the entire graph.
+
+## Blazor implementation
+
+SPT 4.0.13 discovers QuestMap's mod-owned `/questmap` Razor page natively. Semantic page UI and testable state live in Blazor/C#, while the performance-critical Canvas renderer remains a browser-side `.mjs` module. See `docs/blazor-migration.md` for the source evidence, implemented boundary, performance rationale, and verification record.

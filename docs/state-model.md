@@ -139,7 +139,7 @@ Profile-specific exclusion should include:
 
 - Collector-route quests are Collector (`5c51aac186f77432ea65c552`) plus every recursive quest prerequisite in the live topology.
 - Lightkeeper-route quests are Mechanic's Knock-Knock (`625d7005a4eb80027c4f2e09`) plus every recursive quest prerequisite in the live topology.
-- Lightkeeper is considered available only when his ordinary profile trader entry is enabled, Knock-Knock has exact status `Success`, and every recursive prerequisite edge is satisfied by one of that edge's accepted statuses. This preserves 4.0.13's legitimate `Started`/`Fail` alternatives on tutorial and branch edges. Missing route data fails closed.
+- Lightkeeper is considered available only when his ordinary profile trader entry is enabled and Knock-Knock has exact status `Success`. The recursive route remains a display marker; it is not reevaluated as a second trader-unlock condition.
 - Quests in both routes receive split Collector/Lightkeeper markers; quests in only one route receive only that route's marker.
 
 ## Future-depth frontier
