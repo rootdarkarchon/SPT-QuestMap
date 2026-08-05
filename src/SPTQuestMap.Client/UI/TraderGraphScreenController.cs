@@ -174,11 +174,13 @@ internal sealed class TraderGraphScreenController : IDisposable
         if (_disposed || !_mounted || _vanillaScrollViewport is null) return "screen-inactive";
         var selectedQuestId = _selectedQuestId;
         var projection = TraderGraphProjectionBuilder.Build(topology, layout, _trader.Id);
+        var viewportState = _graphView?.CaptureViewportState();
 
         _graphView?.Dispose();
         _topology = topology;
         _overlay = overlay;
         _graphView = TraderGraphView.Create(_vanillaScrollViewport, projection, overlay, SelectQuest);
+        if (viewportState.HasValue) _graphView.RestoreViewportState(viewportState.Value);
         PlaceGraphBehindNativeDetail();
         if (selectedQuestId is not null && topology.NodesById.ContainsKey(selectedQuestId))
         {

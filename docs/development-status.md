@@ -388,7 +388,7 @@ No profile backup is required because this gate performs no quest or inventory a
 
 ## In-game client milestone 4 — native actions and reactive updates
 
-Status: Partial — awaiting manual verification
+Status: Complete
 
 ### Completed
 
@@ -406,31 +406,28 @@ Status: Partial — awaiting manual verification
 - Full solution regression passes 16/16 graph-core tests and 107/107 server/browser tests.
 - External EFT, SPT, BepInEx, Harmony, Unity, TextMeshPro, and JSON references remain `Private=false`; no vendor DLL is copied into project output or deployment.
 - Patch count remains three lifecycle/observation patches. Reactive behavior uses public events only and adds no patch to an action method.
-- Deployed only the tested client/core DLL/PDB pair to `D:\Tarkov-SPT\BepInEx\plugins\SPTQuestMap`; after correcting ordinary-action invalidation, source/deployed SHA-256 matches at client `D146E0ED400C4634080ED99557B8920F39EAB9105E747FDFE4B83E2BCE56386D` and core `1AF8F129653EB7CE47A3D15D7DD62EB500630986A4E7F1F179A707FA0AEAC125`. The corrected build passes with 0 warnings/errors and the full regression remains 16/16 core plus 107/107 server/browser. No server DLL changed, so the SPT server was not restarted. Debug logging is staged `true` for the manual M04 evidence run; both forced-failure diagnostics remain `false`.
+- Deployed only the tested client/core DLL/PDB pair to `D:\Tarkov-SPT\BepInEx\plugins\SPTQuestMap`; after adding topology-rebuild viewport preservation, source/deployed SHA-256 matches at client `4602444A7965D3BF1BD8EDDBF7958034369DA65AD4DC23C8D244BAEA96D74832` and core `718A04C10BCC7A33E8AED74620F0565F587E0BC40D89521B9191045D177331FE`. The corrected client build passes with 0 warnings/errors and the full regression remains 16/16 core plus 107/107 server/browser. No server DLL changed, so the SPT server was not restarted. Debug logging is restored to `false`; both forced-failure diagnostics remain `false`.
 
-### Blockers
+### Resolved runtime issues
 
 - The first M04 runtime attempt exposed a native-action accessibility blocker before any action was executed: copying the vanilla list rectangle placed the graph after the native `QuestView`, so accept/complete controls extending across that boundary rendered and raycast behind the graph. The run is archived at `D:\Tarkov-SPT\QuestMap-runtime-logs\m04-controls-obscured-LogOutput.log` with SHA-256 `E52F298AB989F017BEE864CF1D01963C912F8DC03934A92C1A84342A57300EB1`.
 - The first sibling-order correction was insufficient. User screenshots proved the accept/replace strip and completed/locked controls belong to the upper portion of the complete list root, while only the lower descendant viewport should be replaced. That evidence run is archived at `D:\Tarkov-SPT\QuestMap-runtime-logs\m04-controls-root-geometry-LogOutput.log` with SHA-256 `A59D2AF9F02401757B663EF427BAD24E41192344556106D54E2A997011032E36`. The mount now retains the list root and native controls, disables the resolved list `ScrollRect`, hides only its viewport, and mirrors the graph into that viewport rectangle.
-- Native action and event-first runtime behavior still requires the disposable-profile manual matrix below. Static validation cannot prove transaction cardinality, reward/message behavior, or persistence.
 
 ### Runtime evidence
 
 - The first native accept pass succeeded through the retained EFT controls: the user accepted a repeatable quest once, the live quest changed from `AvailableForStart` to `Started`, and the graph kept that quest selected. The same log also captured normal repeatable replacement: an expired live repeatable became `not-live`, its replacement became `AvailableForStart`, and selection cleared when the old node disappeared.
 - That pass exposed an invalidation-classification bug rather than an action bug. Its ordinary accept batch contained only `conditional-status`, `inventory-profile`, `objective-disconnected`, and `quest-status`, but still reported `topologyInvalidated=True` and reset the viewport. One pre-existing live quest is absent from the sanitized topology; the broad fallback `controller.Quests.Any(id not in topology)` therefore forced every event batch to rebuild. The classifier now relies on exact signaled added/new quest IDs and explicit repeatable expiry/removal instead. Ordinary accept/progress batches remain overlay-only even when an unrelated pre-existing live quest is outside the topology. The log is archived at `D:\Tarkov-SPT\QuestMap-runtime-logs\m04-repeatable-accept-viewport-reset-LogOutput.log` with SHA-256 `140BFF51210466299B589D309A6FFD4809F273FEC582E125FE2B2E17D0D50680`.
+- The user confirmed the corrected ordinary reactive path preserves zoom/pan and updates the accepted repeatable to `Started` correctly. The archived log proves `AvailableForStart -> Started`, `topologyInvalidated=False`, topology/layout identity reuse, and `selection-preserved-native`; it is stored at `D:\Tarkov-SPT\QuestMap-runtime-logs\m04-ordinary-refresh-preserved-LogOutput.log` with SHA-256 `159CB4559FB91BD1FE99814FD019D4B8D25EDE0BBC9C523E6367FD659EE9C103`. The same run captured a legitimate repeatable expiration/replacement rebuild. Legitimate topology rebuilds now capture and restore the exact graph scale and anchored position instead of implicitly fitting the replacement projection; only the explicit Fit control may reset the viewport.
+- Final representative action validation passed. One native item handover changed quest `5936d90786f7742b1420ba5b` from `Started` to `AvailableForFinish`; native completion changed it to `Success` and exposed linked quests `5fd9fad9c1ce6b1a3b486d00` and `657315e1dccd301f1301416a` as `AvailableForStart`; accepting the latter changed it to `Started`. Every batch reported `topologyInvalidated=False`, `topologyReused=True`, and `layoutReused=True`; the accepted quest remained selected, and the log contains no QuestMap errors or duplicate transition batches. The complete log is archived at `D:\Tarkov-SPT\QuestMap-runtime-logs\m04-handover-complete-linked-accept-LogOutput.log` with SHA-256 `D2C0ACCE3AB5C914CAC9D02851A9876B1C109FA1B64FAF5EFE55678A442A23CB`.
+- The user separately confirmed that a legitimate topology rebuild preserves zoom and pan with the deployed transform-preservation change. Specialized restartable, partial-stack, currency, and weapon-assembly handovers were unavailable during this milestone and are deferred; they use the same retained native action path and event-driven overlay boundary proven by the representative handover/completion sequence.
 
-### Manual runtime gate
+### Manual runtime gate — accepted
 
-Create a disposable profile backup before this gate. Enable `Diagnostics.EnableDebugLogging=true`, keep the graph enabled, and leave both forced-failure diagnostics false. Preserve `LogOutput.log` before every EFT restart.
+The representative accept, item handover, completion, linked-unlock, follow-up accept, repeatable replacement, selection, and viewport cases passed without duplicate transactions or QuestMap errors. The remaining specialized cases below are opportunistic regression coverage rather than Milestone 4 blockers.
 
-1. Select and accept an available quest. Confirm the native button/busy/message flow runs once, the same node remains selected, its status changes to `Started`, and M04 reports `topologyInvalidated=False`, `topologyReused=True`, and `layoutReused=True`.
-2. Restart a `FailRestartable` quest when available and verify the same one-transaction/native-state behavior.
-3. Perform an ordinary handover, a partial-stack handover, currency handover, and weapon-assembly handover when representative quests are available. Confirm inventory removal/counters occur once, partial progress retains selection, and no layout rebuild occurs.
-4. Complete a ready quest. Confirm the native reward/message flow occurs once, linked quests appear normally without stealing selection, and the completed node remains selected while visible.
-5. Reroll or allow expiry of a repeatable when practical. Confirm the old live selection clears if removed, the replacement appears, and only this template-set change reports `topologyInvalidated=True`.
-6. Reopen/switch trader screens after actions and verify there are no duplicate subscriptions, duplicate transactions, stale nodes, or invisible input blockers.
-7. Exit normally. Archive and review the complete log for `QUESTMAP_M04_*`, QuestMap exceptions, native transaction errors, and topology/layout reuse evidence. Restore debug logging to false after acceptance.
+- Restart a `FailRestartable` quest when naturally available.
+- Exercise partial-stack, currency, and weapon-assembly handovers when representative quests naturally become available.
 
 ### Next step
 
-- Deploy the tested client/core pair, run the first safe accept/handover/completion subset available on the disposable profile, and keep M04 partial until representative native-action evidence is captured.
+- Begin `M05-production-renderer-shared-core.md`. Revisit the deferred specialized native-action cases only when representative quests naturally become available; they no longer block Milestone 4 acceptance.

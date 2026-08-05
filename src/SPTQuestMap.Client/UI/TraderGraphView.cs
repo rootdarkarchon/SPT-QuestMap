@@ -107,6 +107,15 @@ internal sealed class TraderGraphView : IDisposable
         }
     }
 
+    public GraphViewportState CaptureViewportState() =>
+        new(_content.localScale.x, _content.anchoredPosition);
+
+    public void RestoreViewportState(GraphViewportState state)
+    {
+        _content.localScale = new Vector3(state.Scale, state.Scale, 1f);
+        _content.anchoredPosition = state.AnchoredPosition;
+    }
+
     public void FitToVisible()
     {
         if (_projection.Nodes.Count == 0)
@@ -264,4 +273,16 @@ internal sealed class TraderGraphView : IDisposable
             ? words[0].Substring(0, Math.Min(2, words[0].Length)).ToUpperInvariant()
             : $"{char.ToUpperInvariant(words[0][0])}{char.ToUpperInvariant(words[1][0])}";
     }
+}
+
+internal readonly struct GraphViewportState
+{
+    public GraphViewportState(float scale, Vector2 anchoredPosition)
+    {
+        Scale = scale;
+        AnchoredPosition = anchoredPosition;
+    }
+
+    public float Scale { get; }
+    public Vector2 AnchoredPosition { get; }
 }
