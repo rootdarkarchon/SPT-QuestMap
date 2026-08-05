@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>SPTQuestMap</AssemblyName>
     <RootNamespace>SPTQuestMap</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <OutputType>Library</OutputType>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
