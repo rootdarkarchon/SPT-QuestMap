@@ -9,6 +9,7 @@ using HarmonyLib;
 using SPTQuestMap.Core.Layout;
 using SPTQuestMap.Core.Models;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace SPTQuestMap.Client.UI;
 
@@ -18,6 +19,8 @@ internal sealed class TraderGraphScreenController : IDisposable
         ?? throw new MissingFieldException(typeof(QuestsScreen).FullName, "_questsListView");
     private static readonly FieldInfo QuestViewField = AccessTools.Field(typeof(QuestsScreen), "_questView")
         ?? throw new MissingFieldException(typeof(QuestsScreen).FullName, "_questView");
+    private static readonly FieldInfo QuestListContainerField = AccessTools.Field(typeof(QuestsListView), "_questListContainer")
+        ?? throw new MissingFieldException(typeof(QuestsListView).FullName, "_questListContainer");
 
     private readonly QuestsScreen _screen;
     private readonly ISession _session;
@@ -27,10 +30,15 @@ internal sealed class TraderGraphScreenController : IDisposable
     private readonly ManualLogSource _log;
     private QuestsListView? _vanillaList;
     private QuestView? _nativeQuestView;
+    private ScrollRect? _vanillaScroll;
+    private RectTransform? _vanillaScrollViewport;
+    private bool _vanillaScrollWasEnabled;
+    private bool _vanillaViewportWasActive;
     private TraderGraphView? _graphView;
     private ReadonlyFutureQuestView? _futureView;
     private QuestGraphTopology? _topology;
     private QuestProfileOverlay? _overlay;
+    private string? _selectedQuestId;
     private bool _mounted;
     private bool _disposed;
 
@@ -64,23 +72,36 @@ internal sealed class TraderGraphScreenController : IDisposable
             ?? throw new InvalidOperationException("QuestsScreen._questsListView was null.");
         _nativeQuestView = (QuestView?)QuestViewField.GetValue(_screen)
             ?? throw new InvalidOperationException("QuestsScreen._questView was null.");
-        var vanillaListRect = _vanillaList.transform as RectTransform
-            ?? throw new InvalidOperationException("The vanilla quest list has no RectTransform.");
+        var questListContainer = (RectTransform?)QuestListContainerField.GetValue(_vanillaList)
+            ?? throw new InvalidOperationException("QuestsListView._questListContainer was null.");
+        _vanillaScroll = _vanillaList.GetComponentsInChildren<ScrollRect>(true)
+            .Where(scroll => ReferenceEquals(scroll.content, questListContainer) || questListContainer.IsChildOf(scroll.transform))
+            .OrderByDescending(scroll => ReferenceEquals(scroll.content, questListContainer))
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException("The vanilla quest list scroll region could not be resolved.");
+        _vanillaScrollViewport = _vanillaScroll.viewport
+            ?? throw new InvalidOperationException("The vanilla quest list ScrollRect has no viewport.");
+        if (ReferenceEquals(_vanillaScrollViewport, _vanillaList.transform))
+            throw new InvalidOperationException("Refusing to replace the complete QuestsListView root; native controls must remain active.");
+        _vanillaScrollWasEnabled = _vanillaScroll.enabled;
+        _vanillaViewportWasActive = _vanillaScrollViewport.gameObject.activeSelf;
         var nativeDetailRect = _nativeQuestView.transform as RectTransform
             ?? throw new InvalidOperationException("The native quest detail view has no RectTransform.");
         var projection = TraderGraphProjectionBuilder.Build(topology, layout, _trader.Id);
 
         _topology = topology;
         _overlay = overlay;
-        _graphView = TraderGraphView.Create(vanillaListRect, projection, overlay, SelectQuest);
+        _graphView = TraderGraphView.Create(_vanillaScrollViewport, projection, overlay, SelectQuest);
         _futureView = ReadonlyFutureQuestView.Create(nativeDetailRect);
-        _vanillaList.gameObject.SetActive(false);
+        PlaceGraphBehindNativeDetail();
+        _vanillaScroll.enabled = false;
+        _vanillaScrollViewport.gameObject.SetActive(false);
         _mounted = true;
         _log.LogInfo(
             "QUESTMAP_M03_MOUNT " +
             $"screen={_screen.GetInstanceID()}; trader={_trader.Id}; nodes={projection.Nodes.Count}; " +
             $"edges={projection.Edges.Count}; liveNodes={projection.Nodes.Count(node => overlay.QuestsById.TryGetValue(node.Id, out var state) && state.HasLiveQuest)}; " +
-            "vanillaListActive=False; nativeDetailRetained=True");
+            "vanillaListActive=True; vanillaScrollViewportActive=False; nativeControlsRetained=True; nativeDetailRetained=True");
     }
 
     public void Dispose()
@@ -98,10 +119,95 @@ internal sealed class TraderGraphScreenController : IDisposable
             UnityEngine.Object.Destroy(ownedRoot.gameObject);
         }
         if (_nativeQuestView != null) _nativeQuestView.gameObject.SetActive(true);
+        if (_vanillaScroll != null) _vanillaScroll.enabled = _vanillaScrollWasEnabled;
+        if (_vanillaScrollViewport != null) _vanillaScrollViewport.gameObject.SetActive(_vanillaViewportWasActive);
         if (_vanillaList != null) _vanillaList.gameObject.SetActive(true);
         _log.LogInfo(
             "QUESTMAP_M03_DISPOSE " +
             $"screen={(_screen == null ? 0 : _screen.GetInstanceID())}; trader={_trader.Id}; vanillaRestored=True");
+    }
+
+    public string RefreshOverlay(QuestProfileOverlay overlay)
+    {
+        if (_disposed || !_mounted || _graphView is null) return "screen-inactive";
+
+        var priorOverlay = _overlay;
+        _overlay = overlay;
+        _graphView.RefreshOverlay(overlay, _selectedQuestId);
+        if (_selectedQuestId is null) return "selection-none";
+
+        var selectedQuestId = _selectedQuestId;
+        var wasLive = priorOverlay is not null
+            && priorOverlay.QuestsById.TryGetValue(selectedQuestId, out var priorState)
+            && priorState.HasLiveQuest;
+        var liveQuest = _questController.Quests.FirstOrDefault(
+            quest => string.Equals(quest.Id, selectedQuestId, StringComparison.Ordinal));
+        if (liveQuest is not null)
+        {
+            if (!wasLive)
+            {
+                SelectQuest(selectedQuestId);
+                return "selection-promoted-to-native";
+            }
+
+            return "selection-preserved-native";
+        }
+
+        if (!wasLive) return "selection-preserved-readonly";
+
+        _selectedQuestId = null;
+        _graphView.SetSelected(null);
+        _futureView?.Hide();
+        if (_nativeQuestView is not null)
+        {
+            _nativeQuestView.Close();
+            _nativeQuestView.gameObject.SetActive(true);
+        }
+        return "selection-cleared-live-removed";
+    }
+
+    public string RebuildTopology(
+        QuestGraphTopology topology,
+        QuestGraphLayout layout,
+        QuestProfileOverlay overlay)
+    {
+        if (_disposed || !_mounted || _vanillaScrollViewport is null) return "screen-inactive";
+        var selectedQuestId = _selectedQuestId;
+        var projection = TraderGraphProjectionBuilder.Build(topology, layout, _trader.Id);
+
+        _graphView?.Dispose();
+        _topology = topology;
+        _overlay = overlay;
+        _graphView = TraderGraphView.Create(_vanillaScrollViewport, projection, overlay, SelectQuest);
+        PlaceGraphBehindNativeDetail();
+        if (selectedQuestId is not null && topology.NodesById.ContainsKey(selectedQuestId))
+        {
+            _selectedQuestId = selectedQuestId;
+            _graphView.SetSelected(selectedQuestId);
+            return "selection-preserved-topology-rebuild";
+        }
+
+        _selectedQuestId = null;
+        _futureView?.Hide();
+        if (_nativeQuestView is not null)
+        {
+            _nativeQuestView.Close();
+            _nativeQuestView.gameObject.SetActive(true);
+        }
+        return selectedQuestId is null ? "selection-none" : "selection-cleared-topology-removed";
+    }
+
+    private void PlaceGraphBehindNativeDetail()
+    {
+        if (_graphView is null || _nativeQuestView is null) return;
+        var nativeDetailTransform = _nativeQuestView.transform;
+        if (!ReferenceEquals(_graphView.Root.parent, nativeDetailTransform.parent)) return;
+
+        _graphView.Root.SetSiblingIndex(nativeDetailTransform.GetSiblingIndex());
+        _log.LogInfo(
+            "QUESTMAP_M04_GEOMETRY " +
+            $"trader={_trader.Id}; graphSibling={_graphView.Root.GetSiblingIndex()}; " +
+            $"nativeDetailSibling={nativeDetailTransform.GetSiblingIndex()}; nativeDetailOnTop=True");
     }
 
     private void SelectQuest(string questId)
@@ -112,6 +218,7 @@ internal sealed class TraderGraphScreenController : IDisposable
         try
         {
             _graphView.SetSelected(questId);
+            _selectedQuestId = questId;
             var liveQuest = _questController.Quests.FirstOrDefault(quest => string.Equals(quest.Id, questId, StringComparison.Ordinal));
             if (liveQuest is not null)
             {

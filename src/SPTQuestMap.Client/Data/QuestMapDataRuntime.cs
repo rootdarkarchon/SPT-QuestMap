@@ -1,12 +1,14 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using BepInEx.Logging;
 using EFT.InventoryLogic;
 using EFT.UI;
 using SPTQuestMap.Client.Configuration;
 using SPTQuestMap.Client.UI;
+using SPTQuestMap.Core.Models;
 using UnityEngine;
 
 namespace SPTQuestMap.Client.Data;
@@ -19,8 +21,12 @@ internal sealed class QuestMapDataRuntime : IDisposable
     private readonly QuestMapClientConfiguration _configuration;
     private readonly Dictionary<QuestsScreen, TraderGraphScreenController> _traderControllers = new();
     private AbstractQuestControllerClass? _latestQuestController;
+    private ReactiveQuestMonitor? _reactiveMonitor;
     private PendingTraderScreen? _pendingTraderScreen;
     private Coroutine? _loadCoroutine;
+    private Coroutine? _reactiveRefreshCoroutine;
+    private readonly HashSet<string> _reactiveReasons = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _reactiveQuestIds = new(StringComparer.Ordinal);
     private bool _disposed;
 
     public QuestMapDataRuntime(
@@ -37,6 +43,11 @@ internal sealed class QuestMapDataRuntime : IDisposable
     public void ObserveQuestController(AbstractQuestControllerClass questController)
     {
         if (_disposed) return;
+        if (!ReferenceEquals(_latestQuestController, questController))
+        {
+            _reactiveMonitor?.Dispose();
+            _reactiveMonitor = new ReactiveQuestMonitor(questController, RequestReactiveRefresh);
+        }
         _latestQuestController = questController;
 
         if (_adapter.Topology is not null)
@@ -63,6 +74,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         CloseTraderScreen(screen);
         _pendingTraderScreen = new PendingTraderScreen(screen, session, inventoryController, questController, trader);
         ObserveQuestController(questController);
+        _reactiveMonitor?.SetInventoryController(inventoryController);
 
         if (!_configuration.EnableTraderQuestGraph.Value)
         {
@@ -83,13 +95,24 @@ internal sealed class QuestMapDataRuntime : IDisposable
             _traderControllers.Remove(screen);
             controller.Dispose();
         }
+
+        if (_pendingTraderScreen is null && _traderControllers.Count == 0)
+        {
+            _reactiveMonitor?.SetInventoryController(null);
+        }
     }
 
     public void Dispose()
     {
         _disposed = true;
         if (_loadCoroutine is not null) _coroutineOwner.StopCoroutine(_loadCoroutine);
+        if (_reactiveRefreshCoroutine is not null) _coroutineOwner.StopCoroutine(_reactiveRefreshCoroutine);
         _loadCoroutine = null;
+        _reactiveRefreshCoroutine = null;
+        _reactiveMonitor?.Dispose();
+        _reactiveMonitor = null;
+        _reactiveReasons.Clear();
+        _reactiveQuestIds.Clear();
         _latestQuestController = null;
         _pendingTraderScreen = null;
         foreach (var controller in _traderControllers.Values) controller.Dispose();
@@ -156,6 +179,174 @@ internal sealed class QuestMapDataRuntime : IDisposable
             LogFailure(exception);
             return false;
         }
+    }
+
+    private void RequestReactiveRefresh(string reason, string? questId)
+    {
+        if (_disposed) return;
+        _reactiveReasons.Add(reason);
+        if (!string.IsNullOrWhiteSpace(questId)) _reactiveQuestIds.Add(questId!);
+        if (_reactiveRefreshCoroutine is null)
+        {
+            _reactiveRefreshCoroutine = _coroutineOwner.StartCoroutine(CoalescedReactiveRefresh());
+        }
+    }
+
+    private IEnumerator CoalescedReactiveRefresh()
+    {
+        yield return null;
+        if (_disposed)
+        {
+            CompleteReactiveRefresh();
+            yield break;
+        }
+
+        var controller = _latestQuestController;
+        var oldOverlay = _adapter.Overlay;
+        var originalTopology = _adapter.Topology;
+        var originalLayout = _adapter.Layout;
+        var reasons = _reactiveReasons.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var signaledQuestIds = _reactiveQuestIds.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        _reactiveReasons.Clear();
+        _reactiveQuestIds.Clear();
+        if (controller is null || oldOverlay is null || originalTopology is null || originalLayout is null)
+        {
+            CompleteReactiveRefresh();
+            yield break;
+        }
+
+        var topologyReloaded = RequiresTopologyReload(reasons, signaledQuestIds, originalTopology);
+        if (topologyReloaded)
+        {
+            Task topologyTask;
+            try
+            {
+                topologyTask = _adapter.LoadTopologyAsync();
+            }
+            catch (Exception exception)
+            {
+                _log.LogError($"QUESTMAP_M04_ERROR phase=topology-reload; reasons={string.Join(",", reasons)}; {exception}");
+                CompleteReactiveRefresh();
+                yield break;
+            }
+
+            while (!topologyTask.IsCompleted) yield return null;
+            if (_disposed)
+            {
+                CompleteReactiveRefresh();
+                yield break;
+            }
+            if (topologyTask.IsFaulted)
+            {
+                _log.LogError($"QUESTMAP_M04_ERROR phase=topology-reload; reasons={string.Join(",", reasons)}; {topologyTask.Exception?.GetBaseException()}");
+                CompleteReactiveRefresh();
+                yield break;
+            }
+        }
+
+        QuestProfileOverlay newOverlay;
+        try
+        {
+            newOverlay = _adapter.RefreshOverlay(controller.Quests, controller.Profile, false);
+            _reactiveMonitor?.Resync();
+        }
+        catch (Exception exception)
+        {
+            _log.LogError($"QUESTMAP_M04_ERROR phase=overlay-refresh; reasons={string.Join(",", reasons)}; {exception}");
+            CompleteReactiveRefresh();
+            yield break;
+        }
+
+        var changedQuestIds = oldOverlay.QuestsById.Keys
+            .Concat(newOverlay.QuestsById.Keys)
+            .Distinct(StringComparer.Ordinal)
+            .Where(questId => QuestStateChanged(oldOverlay, newOverlay, questId))
+            .OrderBy(questId => questId, StringComparer.Ordinal)
+            .ToArray();
+        var topology = _adapter.Topology!;
+        var layout = _adapter.Layout!;
+        var selectionConsequences = _traderControllers.Values
+            .Select(graph => topologyReloaded
+                ? graph.RebuildTopology(topology, layout, newOverlay)
+                : graph.RefreshOverlay(newOverlay))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+        if (_configuration.EnableDebugLogging.Value)
+        {
+            foreach (var questId in changedQuestIds)
+            {
+                var oldStatus = oldOverlay.QuestsById.TryGetValue(questId, out var oldState) && oldState.HasLiveQuest
+                    ? oldState.ExactStatus
+                    : "not-live";
+                var newStatus = newOverlay.QuestsById.TryGetValue(questId, out var newState) && newState.HasLiveQuest
+                    ? newState.ExactStatus
+                    : "not-live";
+                _log.LogInfo($"QUESTMAP_M04_TRANSITION quest={questId}; old={oldStatus}; new={newStatus}");
+            }
+
+            _log.LogInfo(
+                "QUESTMAP_M04_REFRESH " +
+                $"reasons={string.Join(",", reasons)}; signaledQuests={string.Join(",", signaledQuestIds)}; " +
+                $"changedQuests={changedQuestIds.Length}; topologyInvalidated={topologyReloaded}; " +
+                $"topologyReused={ReferenceEquals(originalTopology, _adapter.Topology)}; " +
+                $"layoutReused={ReferenceEquals(originalLayout, _adapter.Layout)}; " +
+                $"selection={string.Join(",", selectionConsequences)}; detail=native-owned");
+        }
+
+        CompleteReactiveRefresh();
+    }
+
+    private void CompleteReactiveRefresh()
+    {
+        _reactiveRefreshCoroutine = null;
+        if (!_disposed && _reactiveReasons.Count > 0)
+        {
+            _reactiveRefreshCoroutine = _coroutineOwner.StartCoroutine(CoalescedReactiveRefresh());
+        }
+    }
+
+    private static bool RequiresTopologyReload(
+        IReadOnlyCollection<string> reasons,
+        IReadOnlyCollection<string> signaledQuestIds,
+        QuestGraphTopology topology)
+    {
+        if (reasons.Contains("repeatable-expired")) return true;
+        if (signaledQuestIds.Any(questId => !topology.NodesById.ContainsKey(questId))) return true;
+        if (reasons.Any(reason => reason == "quest-book-removed" || reason == "quest-book-removed-range")
+            && signaledQuestIds.Any(questId =>
+                topology.NodesById.TryGetValue(questId, out var node) && node.ProfileGenerated))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool QuestStateChanged(
+        QuestProfileOverlay oldOverlay,
+        QuestProfileOverlay newOverlay,
+        string questId)
+    {
+        var hasOld = oldOverlay.QuestsById.TryGetValue(questId, out var oldState);
+        var hasNew = newOverlay.QuestsById.TryGetValue(questId, out var newState);
+        if (!hasOld || !hasNew) return true;
+        if (oldState!.HasLiveQuest != newState!.HasLiveQuest
+            || oldState.ExactStatus != newState.ExactStatus
+            || oldState.Visible != newState.Visible
+            || oldState.ExpirationTime != newState.ExpirationTime
+            || oldState.HandoverReady != newState.HandoverReady
+            || oldState.Objectives.Count != newState.Objectives.Count)
+        {
+            return true;
+        }
+
+        for (var index = 0; index < oldState.Objectives.Count; index++)
+        {
+            if (oldState.Objectives[index] != newState.Objectives[index]) return true;
+        }
+        return false;
     }
 
     private void LogFailure(Exception exception)

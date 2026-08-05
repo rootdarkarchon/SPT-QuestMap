@@ -46,7 +46,7 @@ internal sealed class QuestMapDataAdapter
             $"topologyMs={loaded.ElapsedMilliseconds:F2}; layoutMs={layoutStopwatch.Elapsed.TotalMilliseconds:F2}");
     }
 
-    public QuestProfileOverlay RefreshOverlay(IEnumerable<QuestClass> liveQuests, Profile profile)
+    public QuestProfileOverlay RefreshOverlay(IEnumerable<QuestClass> liveQuests, Profile profile, bool logDiagnostics = true)
     {
         var topology = Topology ?? throw new InvalidOperationException("QuestMap topology must be loaded before the live overlay.");
         var stopwatch = Stopwatch.StartNew();
@@ -54,10 +54,13 @@ internal sealed class QuestMapDataAdapter
         var overlay = QuestOverlayBuilder.Build(topology, snapshot);
         stopwatch.Stop();
         Overlay = overlay;
-        _log.LogInfo(
-            "QUESTMAP_M02_OVERLAY " +
-            $"liveQuests={snapshot.Quests.Count}; missingLiveQuests={overlay.MissingLiveQuestIds.Count}; " +
-            $"overlayMs={stopwatch.Elapsed.TotalMilliseconds:F2}");
+        if (logDiagnostics)
+        {
+            _log.LogInfo(
+                "QUESTMAP_M02_OVERLAY " +
+                $"liveQuests={snapshot.Quests.Count}; missingLiveQuests={overlay.MissingLiveQuestIds.Count}; " +
+                $"overlayMs={stopwatch.Elapsed.TotalMilliseconds:F2}");
+        }
         return overlay;
     }
 }

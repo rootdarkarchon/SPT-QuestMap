@@ -57,6 +57,7 @@ internal sealed class ReadonlyFutureQuestView
     public void Show(string content)
     {
         _text.text = content;
+        Root.SetAsLastSibling();
         Root.gameObject.SetActive(true);
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)_text.transform);
     }

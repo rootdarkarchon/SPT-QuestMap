@@ -400,3 +400,40 @@ QuestMap does not copy native buttons or invoke quest transports. A topology-onl
 The runtime stores at most one owned controller per `QuestsScreen`. A repeated `Show` disposes the prior controller before mounting another; a pending async topology load is canceled logically when the screen closes. Feature disable and the forced-initialization diagnostic never hide the vanilla list. Initialization failures destroy partial roots, reactivate the list and native detail, and emit structured `QUESTMAP_M03_ERROR`/`STATE` diagnostics with screen and trader context.
 
 The verified M03 list-area mount is deliberately transitional. User review requires the final trader graph to occupy the complete Tasks pane, with selected details presented in a narrower side panel comparable to the browser QuestMap. That composition belongs to Milestone 7: it requires the QuestMap-owned detail pane while continuing to delegate live actions to the native controllers. M03 must not prematurely resize or clone the native `QuestView` merely to approximate that final layout.
+
+## Milestone 4 native actions and reactive invalidation
+
+Milestone 4 retains the exact native action paths documented above. QuestMap creates no accept, restart, handover, completion, or reroll button and never calls `AcceptQuest`, `FinishQuest`, `HandoverItem`, `QuestChange`, or an `IQuestActions` transport. Selecting a live graph node continues to bind the existing `QuestClass` to the native `QuestView`, so EFT owns confirmation, busy state, eligible-item selection, server response handling, inventory/profile deltas, rewards, messages, and duplicate-submission prevention.
+
+The exact installed build-40087 metadata exposes the following public event boundary, subscribed only after the existing EFT/SPT/hash compatibility guard passes:
+
+- `QuestClass.OnStatusChanged(QuestClass, bool)` and `OnConditionChanged(QuestClass)`;
+- `ConditionProgressChecker.OnConditionChanged`, `OnReset`, and `OnDisconnect`;
+- controller `OnConditionalStatusChanged` and `OnNewQuestsAdded`;
+- quest-book `ItemAdded`, `ItemRemoved`, `ItemsAdded`, `ItemsRemoved`, `ItemUpdated`, `AllItemsRemoved`, and `OnQuestExpired`;
+- profile `OnTraderStandingChanged` and `OnTraderLoyaltyChanged`, plus per-trader availability, standing, loyalty, and sales-sum changes;
+- `InventoryController.OnProfileUpdate` while a trader screen owns that controller.
+
+One `ReactiveQuestMonitor` is owned by `QuestMapDataRuntime`. It deduplicates quest, progress-checker, trader, and inventory subscriptions by reference, resynchronizes after book/template changes, and detaches everything when the controller changes or the plugin disposes. Individual signals are coalesced for one Unity frame; there is no `Update` loop, timer, or profile poll.
+
+Invalidation remains tiered:
+
+```text
+ordinary status/objective/trader/inventory event
+    -> replace profile overlay
+    -> update existing node colors and labels in place
+    -> preserve topology, layout, graph objects, viewport, selection
+
+repeatable expiry/reroll or live template absent from topology
+    -> reload sanitized topology route
+    -> rebuild deterministic layout and current trader projection once
+    -> preserve selection if its node remains; otherwise clear it
+```
+
+Topology invalidation is driven by the exact quest ID carried by new/add events and by explicit repeatable expiry/removal signals. It must not be inferred from the existence of any live quest absent from the sanitized topology: another installed mod can contribute a stable unmatched live quest, and treating that unrelated baseline mismatch as a change would rebuild layout and reset the viewport after every ordinary action.
+
+The native detail view already owns its live subscriptions, so an ordinary overlay refresh does not close or rebind it during an action. A selected live quest remains selected through accept, partial handover, and completion. A future node that materializes becomes a native selection without stealing any other selection. If an expired/rerolled live quest disappears, selection is cleared and no stale native binding remains. Newly unlocked quests update visually but never take selection.
+
+The M04 screenshots corrected an earlier hierarchy assumption: the complete `QuestsListView` rectangle also contains the native accept/replace strip and completed/locked controls above its scrolling list. Hiding or covering that complete root makes native actions inaccessible regardless of sibling order. The controller now resolves the exact serialized `_questListContainer`, finds its owning `ScrollRect`, keeps the complete `QuestsListView` active, disables the scroll component, hides only its viewport, and mounts the graph as that viewport's replacement. Disposal restores the viewport's prior active state and the scroll component's prior enabled state. The graph is additionally kept behind the native detail whenever they share a parent. The read-only future pane calls `SetAsLastSibling` only while shown, after the native detail has been intentionally closed and hidden.
+
+With debug logging enabled, each coalesced batch emits exact old/new quest statuses and one `QUESTMAP_M04_REFRESH` record containing reasons, changed quest count, topology/layout identity, invalidation category, and selection consequence. Normal configuration does not emit event-level diagnostics.

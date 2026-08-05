@@ -13,6 +13,7 @@ internal sealed class TraderGraphView : IDisposable
     private static readonly Color SelectedNodeColor = new(0.55f, 0.42f, 0.16f, 1f);
     private readonly Dictionary<string, Image> _nodeImages = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Color> _nodeBaseColors = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TMP_Text> _nodeStateLabels = new(StringComparer.Ordinal);
     private readonly RectTransform _viewport;
     private readonly RectTransform _content;
     private readonly TraderGraphProjection _projection;
@@ -85,7 +86,20 @@ internal sealed class TraderGraphView : IDisposable
         return view;
     }
 
-    public void SetSelected(string questId)
+    public void RefreshOverlay(QuestProfileOverlay overlay, string? selectedQuestId)
+    {
+        foreach (var questId in _nodeImages.Keys)
+        {
+            var baseColor = StatusColor(questId, overlay);
+            _nodeBaseColors[questId] = baseColor;
+            _nodeImages[questId].color = string.Equals(questId, selectedQuestId, StringComparison.Ordinal)
+                ? SelectedNodeColor
+                : baseColor;
+            if (_nodeStateLabels.TryGetValue(questId, out var label)) label.text = StateLabel(questId, overlay);
+        }
+    }
+
+    public void SetSelected(string? questId)
     {
         foreach (var pair in _nodeImages)
         {
@@ -117,9 +131,14 @@ internal sealed class TraderGraphView : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        if (Root != null) UnityEngine.Object.Destroy(Root.gameObject);
+        if (Root != null)
+        {
+            Root.gameObject.SetActive(false);
+            UnityEngine.Object.Destroy(Root.gameObject);
+        }
         _nodeImages.Clear();
         _nodeBaseColors.Clear();
+        _nodeStateLabels.Clear();
     }
 
     private void BuildEdges()
@@ -181,7 +200,7 @@ internal sealed class TraderGraphView : IDisposable
             stateRect.pivot = new Vector2(0.5f, 0);
             stateRect.offsetMin = new Vector2(62, 8);
             stateRect.offsetMax = new Vector2(-10, 31);
-            UnityUiFactory.AddText(
+            _nodeStateLabels[node.Id] = UnityUiFactory.AddText(
                 stateRect.gameObject,
                 StateLabel(node.Id, overlay),
                 13,
