@@ -116,13 +116,16 @@
             var item = progress.GetValueOrDefault(objective.Id);
             builder.OpenElement(sequence++, "li"); if (item?.Complete == true) builder.AddAttribute(sequence++, "class", "complete");
             builder.OpenElement(sequence++, "span"); builder.AddAttribute(sequence++, "class", "objective-marker"); builder.AddContent(sequence++, item?.Complete == true ? "✓" : "○"); builder.CloseElement();
-            builder.OpenElement(sequence++, "div"); builder.OpenElement(sequence++, "strong"); builder.AddContent(sequence++, objective.Text.Length > 0 ? objective.Text : objective.ConditionType); builder.CloseElement();
+            builder.OpenElement(sequence++, "div"); builder.OpenElement(sequence++, "div"); builder.AddAttribute(sequence++, "class", "objective-description rich-description"); builder.AddMarkupContent(sequence++, ObjectiveMarkup(objective)); builder.CloseElement();
             var detail = item?.Current is not null && item.Required is not null ? $"{Number(item.Current)} / {Number(item.Required)}" : item?.Required is not null ? Localizer.Format("objectives.required", ("value", Number(item.Required))) : item?.ProgressKnown == true && !item.Complete ? Localizer["objectives.progressRecorded"] : null;
             if (detail is not null) { builder.OpenElement(sequence++, "small"); builder.AddContent(sequence++, detail); builder.CloseElement(); }
             builder.CloseElement(); builder.CloseElement();
         }
         builder.CloseElement();
     };
+
+    internal static string ObjectiveMarkup(ObjectiveDefinitionDto objective) =>
+        QuestRichTextSanitizer.Sanitize(objective.Text.Length > 0 ? objective.Text : objective.ConditionType);
 
     private RenderFragment RewardList(IReadOnlyList<QuestRewardDto> rewards) => builder =>
     {

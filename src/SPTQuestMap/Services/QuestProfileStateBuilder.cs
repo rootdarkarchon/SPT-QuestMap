@@ -1,7 +1,9 @@
 using SPTarkov.Server.Core.Helpers;
 using SPTarkov.Server.Core.Models.Common;
+using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Enums;
+using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Services;
 
@@ -9,14 +11,16 @@ namespace SPTQuestMap.Services;
 
 internal sealed class QuestProfileStateBuilder(
     DatabaseService databaseService,
+    LocaleService localeService,
     SaveServer saveServer,
     QuestHelper questHelper,
-    SeasonalEventService seasonalEventService
+    SeasonalEventService seasonalEventService,
+    QuestConfig questConfig
 )
 {
     private readonly object _availabilityLock = new();
 
-    internal ProfileStateDto? Build(string rawProfileId, QuestTopologyDto topology)
+    internal ProfileStateDto? Build(string rawProfileId, QuestTopologyDto topology, string language)
     {
         if (!MongoId.IsValidMongoId(rawProfileId)) return null;
 
@@ -26,6 +30,7 @@ internal sealed class QuestProfileStateBuilder(
         var pmc = saveServer.GetProfile(profileId).CharacterData?.PmcData;
         if (pmc?.Info is null) return null;
 
+        var generatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var profileQuests = (pmc.Quests ?? []).ToDictionary(quest => quest.QId.ToString(), StringComparer.Ordinal);
         var profileQuestStatuses = profileQuests.ToDictionary(
             pair => pair.Key,
@@ -127,14 +132,186 @@ internal sealed class QuestProfileStateBuilder(
             pmc.Info.Nickname ?? "Unnamed profile",
             pmc.Info.Side ?? "Unknown",
             pmc.Info.Level ?? 0,
-            DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            generatedAt,
             seasonalEventService.ChristmasEventEnabled(),
             seasonalEventService.HalloweenEventEnabled(),
             states,
             traders,
             defaultVisible.Order(StringComparer.Ordinal).ToArray(),
             applicable.Order(StringComparer.Ordinal).ToArray()
+        )
+        {
+            RepeatableQuestGroups = BuildRepeatableQuestGroups(pmc, profileQuests, language, generatedAt),
+        };
+    }
+
+    private RepeatableQuestGroupDto[] BuildRepeatableQuestGroups(
+        PmcData pmc,
+        IReadOnlyDictionary<string, QuestStatus> profileQuests,
+        string language,
+        long generatedAt
+    )
+    {
+        var locale = localeService.GetLocaleDb(language);
+        var traders = databaseService.GetTraders();
+        var items = databaseService.GetItems();
+        var locationValues = databaseService
+            .GetLocations()
+            .GetDictionary()
+            .Values
+            .Where(location => location?.Base?.Id is not null);
+        var locationsById = QuestTemplateMapper.BuildLocationLookup(locationValues, questConfig.LocationIdMap);
+
+        return (pmc.RepeatableQuests ?? [])
+            .Where(group => RepeatableQuestRules.ShouldIncludeGroup(group.Name))
+            .Select(group =>
+            {
+                var endTime = group.EndTime ?? 0;
+                var expired = endTime <= generatedAt;
+                var entries = (group.ActiveQuests ?? [])
+                    .Select(quest => BuildRepeatableQuestEntry(
+                        quest,
+                        profileQuests.GetValueOrDefault(quest.Id.ToString()),
+                        locale,
+                        traders,
+                        items,
+                        locationsById,
+                        pmc.TaskConditionCounters,
+                        expired
+                    ))
+                    .OrderBy(entry => QuestMapTraderOrder.Rank(entry.Node.TraderId))
+                    .ThenBy(entry => entry.Node.TraderName, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(entry => entry.Node.Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(entry => entry.Node.Id, StringComparer.Ordinal)
+                    .ToArray();
+                return new RepeatableQuestGroupDto(group.Name!, endTime, entries);
+            })
+            .Where(group => group.Quests.Count > 0)
+            .OrderBy(group => group.Kind == "Daily" ? 0 : 1)
+            .ToArray();
+    }
+
+    private static RepeatableQuestEntryDto BuildRepeatableQuestEntry(
+        RepeatableQuest quest,
+        QuestStatus? profileQuest,
+        Dictionary<string, string> locale,
+        IReadOnlyDictionary<MongoId, Trader> traders,
+        IReadOnlyDictionary<MongoId, TemplateItem> items,
+        IReadOnlyDictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location> locationsById,
+        Dictionary<MongoId, TaskConditionCounter>? counters,
+        bool expired
+    )
+    {
+        traders.TryGetValue(quest.TraderId, out var trader);
+        var questId = quest.Id.ToString();
+        var traderId = quest.TraderId.ToString();
+        var traderName = QuestTemplateMapper.Localize(locale, $"{traderId} Nickname", trader?.Base.Nickname ?? trader?.Base.Name ?? traderId);
+        var location = QuestTemplateMapper.BuildLocation(quest.Location, locale, locationsById);
+        var typeName = QuestTemplateMapper.Localize(locale, $"DailyQuestName/{quest.Type}", quest.Type.ToString());
+        var finishConditions = quest.Conditions?.AvailableForFinish ?? [];
+        var objectives = QuestTemplateMapper.OrderObjectives(finishConditions, locale)
+            .Select(objective => objective with
+            {
+                Text = RepeatableObjectiveText(
+                    finishConditions.First(condition => condition.Id.ToString() == objective.Id),
+                    typeName,
+                    location,
+                    locale,
+                    items
+                ),
+            })
+            .ToArray();
+        var rewards = QuestTemplateMapper.BuildRewards(
+            quest.Rewards?.GetValueOrDefault("Success") ?? [],
+            locale,
+            items,
+            traders
         );
+        var node = new QuestNodeDto(
+            questId,
+            typeName,
+            QuestTemplateMapper.Localize(locale, quest.Description, quest.Description),
+            traderId,
+            traderName,
+            QuestTemplateMapper.ToFileUrl(trader?.Base.Avatar),
+            QuestTemplateMapper.ToFileUrl(quest.Image) ?? string.Empty,
+            "Any",
+            location,
+            null,
+            false,
+            [],
+            [],
+            objectives,
+            [],
+            rewards
+        );
+
+        var exactStatus = profileQuest?.Status ?? RepeatableQuestRules.ExactStatus(quest.QuestStatus?.Status);
+        var displayState = RepeatableQuestRules.Classify(exactStatus, expired);
+        var completed = profileQuest?.CompletedConditions?.ToHashSet(StringComparer.Ordinal) ?? [];
+        var objectiveProgress = objectives.Select(objective =>
+        {
+            var counter = FindCounter(counters, objective.Id, questId);
+            var conditionRecorded = completed.Contains(objective.Id);
+            return new ObjectiveProgressDto(
+                objective.Id,
+                QuestProfileRules.ObjectiveIsComplete(conditionRecorded, counter?.Value, objective.RequiredValue, objective.Compare),
+                counter?.Value,
+                objective.RequiredValue,
+                counter is not null || conditionRecorded
+            );
+        }).ToArray();
+        var state = new QuestStateDto(
+            questId,
+            exactStatus.ToString(),
+            displayState,
+            !expired && displayState == "Available",
+            profileQuest is not null,
+            profileQuest?.AvailableAfter,
+            [],
+            null,
+            objectiveProgress,
+            displayState == "InProgress" ? QuestProfileRules.CalculateObjectiveProgress(objectiveProgress) : null
+        );
+        return new RepeatableQuestEntryDto(node, state);
+    }
+
+    private static string RepeatableObjectiveText(
+        QuestCondition condition,
+        string typeName,
+        QuestLocationDto location,
+        Dictionary<string, string> locale,
+        IReadOnlyDictionary<MongoId, TemplateItem> items
+    )
+    {
+        if (condition.ConditionType is "HandoverItem" or "FindItem")
+        {
+            var targets = QuestTemplateMapper.GetTargets(condition)
+                .Select(target =>
+                {
+                    if (!MongoId.IsValidMongoId(target)) return target;
+                    var itemId = new MongoId(target);
+                    items.TryGetValue(itemId, out var item);
+                    return QuestTemplateMapper.Localize(locale, $"{target} Name", item?.Name ?? target);
+                })
+                .ToArray();
+            if (targets.Length > 0) return $"{typeName}: {string.Join(", ", targets)}";
+        }
+
+        var counterConditions = condition.Counter?.Conditions ?? [];
+        var killTarget = counterConditions
+            .FirstOrDefault(counter => counter.ConditionType == "Kills")?
+            .Target;
+        var target = killTarget is null
+            ? null
+            : killTarget.IsList ? killTarget.List?.FirstOrDefault() : killTarget.Item;
+        if (!string.IsNullOrWhiteSpace(target))
+        {
+            return $"{typeName}: {QuestTemplateMapper.Localize(locale, $"QuestCondition/Elimination/Kill/Target/{target}", target)}";
+        }
+
+        if (!location.Any && !string.IsNullOrWhiteSpace(location.Name)) return $"{typeName}: {location.Name}";
+        return typeName;
     }
 
     private bool IsApplicable(QuestNodeDto quest, string side, HashSet<string> noneExcluded)

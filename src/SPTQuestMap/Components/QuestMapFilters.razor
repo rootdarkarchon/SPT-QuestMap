@@ -3,6 +3,9 @@
         <div class="filter-toggles">
             <button class="filter-toggle @(State.ShowAllFuture ? "active" : null)" type="button" aria-pressed="@State.ShowAllFuture.ToString().ToLowerInvariant()" title="@Localizer["showAllFuture"]" aria-label="@Localizer["showAllFuture"]" @onclick="() => ShowAllFutureChanged.InvokeAsync(!State.ShowAllFuture)"><span aria-hidden="true">⇉</span></button>
             <button class="filter-toggle @(State.ShowFinished ? "active" : null)" type="button" aria-pressed="@State.ShowFinished.ToString().ToLowerInvariant()" title="@Localizer["showFinished"]" aria-label="@Localizer["showFinished"]" disabled="@State.FocusMode" @onclick="() => ShowFinishedChanged.InvokeAsync(!State.ShowFinished)"><span aria-hidden="true">✓</span></button>
+            <button class="filter-toggle repeatable-toggle @(State.ShowRepeatables ? "active" : null)" type="button" aria-pressed="@State.ShowRepeatables.ToString().ToLowerInvariant()" title="@Localizer["showRepeatables"]" aria-label="@Localizer["showRepeatables"]" disabled="@State.FocusMode" @onclick="() => RepeatablesChanged.InvokeAsync(!State.ShowRepeatables)">
+                <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M7 2v3M17 2v3M3.5 9h17M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" /></svg>
+            </button>
             <button class="filter-toggle level-toggle @(State.LevelEligibleOnly ? "active" : null)" type="button" aria-pressed="@State.LevelEligibleOnly.ToString().ToLowerInvariant()" title="@Localizer["levelEligible"]" aria-label="@Localizer["levelEligible"]" disabled="@State.FocusMode" @onclick="() => LevelEligibleChanged.InvokeAsync(!State.LevelEligibleOnly)"><span>≤ @(State.Profile?.Level.ToString() ?? "?")</span></button>
         </div>
         <label class="field search-field"><span class="sr-only">@Localizer["search.label"]</span><input type="search" value="@State.Search" placeholder="@Localizer["search.placeholder"]" autocomplete="off" @oninput="OnSearchInput"></label>
@@ -27,6 +30,7 @@
     [Parameter, EditorRequired] public QuestMapLocalizer Localizer { get; set; } = default!;
     [Parameter] public EventCallback<bool> ShowAllFutureChanged { get; set; }
     [Parameter] public EventCallback<bool> ShowFinishedChanged { get; set; }
+    [Parameter] public EventCallback<bool> RepeatablesChanged { get; set; }
     [Parameter] public EventCallback<bool> LevelEligibleChanged { get; set; }
     [Parameter] public EventCallback<string> SearchChanged { get; set; }
     [Parameter] public EventCallback<string> TraderChanged { get; set; }

@@ -15,8 +15,12 @@ Cover pure state and graph logic with small fixtures:
 - trader-filter direct-successor context seeded only by available/active/completed quests, with finished/level filtering;
 - trader-filter selection matching unfiltered recursive-prerequisite visibility across traders;
 - trader-filter merge quests showing only direct unmet prerequisites across traders;
+- Daily/Weekly-only group inclusion with `Daily_Savage` exclusion;
+- unaccepted repeatables classified as available and elapsed groups classified as expired;
+- repeatable search, trader, and finished filtering, default-on persisted calendar visibility, plus selection/details without focused-chain activation;
 - hide-finished behavior;
 - objective dependency ordering;
+- objective rich-text parsing through the same allowlisted sanitizer as descriptions and rewards;
 - task counter mapping;
 - focused-chain closure: recursive predecessors plus direct successors only.
 
@@ -41,10 +45,11 @@ Verify:
 - refresh without viewport reset;
 - resize without viewport reset;
 - ordinary selection vs focused-chain action;
-- objective details for locked and active quests;
+- objective details and rich-text formatting for locked and active quests;
 - overview-mode highlighting;
 - hide-finished and show-all-future controls;
 - missing-image fallbacks;
+- Daily/Weekly horizontal ordering, countdown/expired labels, divider collapse, and repeatable selection;
 - keyboard/focus accessibility for major controls.
 
 ## Performance tests

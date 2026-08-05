@@ -39,6 +39,17 @@ Every relevant quest node should be able to communicate:
 - predecessor and successor relationships;
 - status required on each prerequisite edge.
 
+## Daily and weekly operational quests
+
+- Read the selected PMC profile's saved `Daily` and `Weekly` repeatable groups without invoking SPT's mutating repeatable-generation controller.
+- Exclude `Daily_Savage` quests.
+- Show every generated active-group entry, including unaccepted quests as available, accepted/in-progress quests, ready-to-finish quests, completed quests, and expired quests.
+- A group whose `endTime` has passed classifies all of its displayed entries as expired, regardless of their previous active profile status.
+- Place the Daily block followed by the Weekly block from left to right in one horizontal Canvas band above the normal dependency graph. Sort cards within each block by the established trader order.
+- Label each non-empty visible block and show its live remaining time or expired label. Draw the horizontal divider only while at least one repeatable card remains visible.
+- Apply search, trader, and finished filters. A persisted calendar toggle controls repeatable-band visibility independently and defaults to on. Omit an empty block's label, and omit the complete band/divider when both blocks are empty or the calendar toggle is off.
+- Repeatable cards are selectable and use the ordinary details panel, but have no prerequisite/successor chain and cannot enter focused-chain mode.
+
 ## Default graph scope
 
 The default view should avoid dumping the entire future graph on the user.
@@ -102,6 +113,8 @@ For active/profile-known quests, additionally show:
 - unsupported progress as unknown rather than fabricated.
 
 Objective order should follow explicit `index`, `parentId`, visibility/dependency conditions, or equivalent 4.0.13 fields. Interdependent objectives should be presented in dependency order.
+
+Localized trader objective text must use the same allowlisted HTML/Tarkov-tag parser as quest descriptions and reward text.
 
 ## State styling
 
@@ -181,6 +194,7 @@ Use browser storage with a versioned key. Persist at least:
 - focused quest ID;
 - show-all-future setting;
 - hide-finished setting;
+- Daily/Weekly visibility setting;
 - search/trader filters if present;
 - pan/zoom;
 - optional panel sizes or collapsed state.

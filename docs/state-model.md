@@ -69,6 +69,23 @@ For each quest, derive a display state from:
 
 Prefer the server's own availability decision when accessible. Use local derivation to explain *why*, not to contradict authoritative server state.
 
+### Repeatable overlay
+
+Daily and Weekly operational quests are profile-generated rather than members of the cached database topology. QuestMap reads `PmcData.RepeatableQuests` directly and never calls `RepeatableQuestController.GetClientRepeatableQuests`, because that method can expire, generate, and persist quests.
+
+For every saved `Daily` or `Weekly` active-group entry:
+
+- match its generated quest ID against `PmcData.Quests` for accepted/profile status and objective progress;
+- use the generated entry's embedded `AvailableForStart` status when no profile status exists, producing the `Available` display state;
+- map started, hand-in-ready, success, failure, restartable failure, pending, and expired statuses to the normal display-state vocabulary;
+- override the result to `Expired` when the group's `endTime` has passed;
+- normalize its generated trader, image, location, localized type/description, objectives, and success rewards into the normal node/detail DTOs;
+- exclude the `Daily_Savage` group.
+
+These nodes live in the profile overlay and do not change the topology fingerprint, dependency edges, or permanent graph layout cache.
+
+The default-on calendar filter includes these repeatable overlay nodes in the visible set. Turning it off removes only Daily/Weekly nodes and their complete band; ordinary topology quests and their filters are unchanged.
+
 ## Suggested display-state precedence
 
 A practical precedence is:

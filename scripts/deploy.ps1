@@ -19,7 +19,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 
 if (-not (Test-Path -LiteralPath $SptRoot -PathType Container)) {
-    throw "SPT root does not exist: $SptRoot"
+    throw "Tarkov install root does not exist: $SptRoot"
 }
 
 if (-not $SkipBuild) {
@@ -38,13 +38,13 @@ if ([string]::IsNullOrWhiteSpace($DeploymentSource) -or -not (Test-Path -Literal
     throw 'Deployment source was not found. Update the build to emit dist/ or artifacts/deploy/, or pass -DeploymentSource.'
 }
 
-$destination = Join-Path $SptRoot $ModRelativePath
+$destination = Join-Path $SptRoot (Join-Path 'SPT' $ModRelativePath)
 $sourceRoot = (Resolve-Path -LiteralPath $DeploymentSource).Path
 $sptRootResolved = (Resolve-Path -LiteralPath $SptRoot).Path
 $destinationFull = [System.IO.Path]::GetFullPath($destination)
 $requiredPrefix = $sptRootResolved.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
 if (-not $destinationFull.StartsWith($requiredPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-    throw "Refusing to deploy outside the configured SPT root: $destinationFull"
+    throw "Refusing to deploy outside the configured Tarkov install root: $destinationFull"
 }
 
 $sourceDlls = @(Get-ChildItem -LiteralPath $sourceRoot -Filter '*.dll' -Recurse -File)

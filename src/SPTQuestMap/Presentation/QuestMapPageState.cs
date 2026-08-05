@@ -4,14 +4,6 @@ namespace SPTQuestMap.Presentation;
 
 public sealed class QuestMapPageState
 {
-    private static readonly string[] TraderOrder =
-    [
-        "54cb50c76803fa8b248b4571", "54cb57776803fa99248b456e", "579dc571d53a0658a154fbec",
-        "58330581ace78e27b8b10cee", "5935c25fb3acc3127c3d8cd9", "5a7c2eca46aef81a7ca2145d",
-        "5ac3b934156ae10c4430e83c", "5c0647fdd443bc2504c2d371", "6617beeaa9cfa777ca915b7c",
-        "638f541a29ffd1183d187f57", "656f0f98d80a697f855d34b1",
-    ];
-
     private readonly Dictionary<string, QuestProfileUiSettings> _profileSettings = new(StringComparer.Ordinal);
     private Dictionary<string, QuestNodeDto> _nodeById = new(StringComparer.Ordinal);
     private Dictionary<string, QuestStateDto> _stateById = new(StringComparer.Ordinal);
@@ -19,11 +11,13 @@ public sealed class QuestMapPageState
     private Dictionary<string, List<IndexedQuestEdge>> _incoming = new(StringComparer.Ordinal);
     private Dictionary<string, List<IndexedQuestEdge>> _outgoing = new(StringComparer.Ordinal);
     private HashSet<string> _applicable = new(StringComparer.Ordinal);
+    private HashSet<string> _repeatableIds = new(StringComparer.Ordinal);
 
     public QuestTopologyDto? Topology { get; private set; }
     public ProfileStateDto? Profile { get; private set; }
     public bool ShowAllFuture { get; private set; }
     public bool ShowFinished { get; private set; } = true;
+    public bool ShowRepeatables { get; private set; } = true;
     public bool LevelEligibleOnly { get; private set; } = true;
     public bool InProgressExpanded { get; private set; }
     public string Search { get; private set; } = string.Empty;
@@ -36,6 +30,7 @@ public sealed class QuestMapPageState
     public HashSet<int> HighlightedEdgeIndexes { get; } = [];
     public HashSet<string>? FocusIds { get; private set; }
     public bool FocusMode => FocusedId is not null;
+    public bool CanFocusSelection => SelectedId is not null && !_repeatableIds.Contains(SelectedId);
     public QuestNodeDto? SelectedNode => SelectedId is null ? null : GetNode(SelectedId);
     public QuestStateDto? SelectedQuestState => SelectedId is null ? null : GetQuestState(SelectedId);
 
@@ -43,6 +38,7 @@ public sealed class QuestMapPageState
     {
         ShowAllFuture = settings.ShowAllFuture;
         ShowFinished = settings.ShowFinished;
+        ShowRepeatables = settings.ShowRepeatables;
         LevelEligibleOnly = settings.LevelEligibleOnly;
         InProgressExpanded = settings.InProgressExpanded;
         Search = settings.Search ?? string.Empty;
@@ -56,7 +52,10 @@ public sealed class QuestMapPageState
     public QuestMapSettings CaptureSettings(string? selectedProfileId, string language)
     {
         CaptureCurrentProfileSettings();
-        return new QuestMapSettings(selectedProfileId, language, ShowAllFuture, ShowFinished, LevelEligibleOnly, InProgressExpanded, Search, TraderFilter, new Dictionary<string, QuestProfileUiSettings>(_profileSettings, StringComparer.Ordinal));
+        return new QuestMapSettings(selectedProfileId, language, ShowAllFuture, ShowFinished, LevelEligibleOnly, InProgressExpanded, Search, TraderFilter, new Dictionary<string, QuestProfileUiSettings>(_profileSettings, StringComparer.Ordinal))
+        {
+            ShowRepeatables = ShowRepeatables,
+        };
     }
 
     public void SetData(QuestTopologyDto topology, ProfileStateDto? profile)
@@ -64,10 +63,18 @@ public sealed class QuestMapPageState
         CaptureCurrentProfileSettings();
         Topology = topology;
         Profile = profile;
-        _nodeById = topology.Quests.ToDictionary(node => node.Id, StringComparer.Ordinal);
-        _stateById = profile?.Quests.ToDictionary(state => state.QuestId, StringComparer.Ordinal) ?? new Dictionary<string, QuestStateDto>(StringComparer.Ordinal);
+        var repeatableEntries = profile?.RepeatableQuestGroups.SelectMany(group => group.Quests).ToArray() ?? [];
+        _repeatableIds = repeatableEntries.Select(entry => entry.Node.Id).ToHashSet(StringComparer.Ordinal);
+        _nodeById = topology.Quests
+            .Concat(repeatableEntries.Select(entry => entry.Node))
+            .ToDictionary(node => node.Id, StringComparer.Ordinal);
+        _stateById = (profile?.Quests ?? [])
+            .Concat(repeatableEntries.Select(entry => entry.State))
+            .ToDictionary(state => state.QuestId, StringComparer.Ordinal);
         _traderStateById = profile?.Traders.ToDictionary(state => state.TraderId, StringComparer.Ordinal) ?? new Dictionary<string, TraderStateDto>(StringComparer.Ordinal);
-        _applicable = profile?.AllApplicableQuestIds.ToHashSet(StringComparer.Ordinal) ?? [];
+        _applicable = profile?.AllApplicableQuestIds
+            .Concat(_repeatableIds)
+            .ToHashSet(StringComparer.Ordinal) ?? [];
         _incoming = GroupEdges(topology.Edges, edge => edge.TargetId);
         _outgoing = GroupEdges(topology.Edges, edge => edge.SourceId);
         RestoreCurrentProfileSettings();
@@ -76,6 +83,7 @@ public sealed class QuestMapPageState
 
     public void SetShowAllFuture(bool value) { ShowAllFuture = value; Recalculate(); }
     public void SetShowFinished(bool value) { if (!FocusMode) ShowFinished = value; Recalculate(); }
+    public void SetShowRepeatables(bool value) { if (!FocusMode) ShowRepeatables = value; Recalculate(); }
     public void SetLevelEligibleOnly(bool value) { if (!FocusMode) LevelEligibleOnly = value; Recalculate(); }
     public void SetInProgressExpanded(bool value) => InProgressExpanded = value;
     public void SetSearch(string? value) { Search = value ?? string.Empty; Recalculate(); }
@@ -105,9 +113,10 @@ public sealed class QuestMapPageState
 
     public void ActivateFocus()
     {
-        if (SelectedId is null) return;
-        FocusedId = SelectedId;
-        FocusIds = ComputeChain(SelectedId);
+        var selectedId = SelectedId;
+        if (selectedId is null || _repeatableIds.Contains(selectedId)) return;
+        FocusedId = selectedId;
+        FocusIds = ComputeChain(selectedId);
         Recalculate();
     }
 
@@ -129,8 +138,8 @@ public sealed class QuestMapPageState
     public IReadOnlyList<QuestTraderDto> FilterTraders()
     {
         if (Topology is null) return [];
-        var questTraderIds = Topology.Quests.Select(quest => quest.TraderId).ToHashSet(StringComparer.Ordinal);
-        var ranks = TraderOrder.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
+        var questTraderIds = _nodeById.Values.Select(quest => quest.TraderId).ToHashSet(StringComparer.Ordinal);
+        var ranks = QuestMapTraderOrder.Ids.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
         return Topology.Traders
             .Where(trader => questTraderIds.Contains(trader.Id))
             .OrderBy(trader => ranks.GetValueOrDefault(trader.Id, int.MaxValue))
@@ -142,7 +151,7 @@ public sealed class QuestMapPageState
     {
         if (Topology is null || Profile is null) return [];
         var traderMeta = Topology.Traders.ToDictionary(trader => trader.Id, StringComparer.Ordinal);
-        var ranks = TraderOrder.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
+        var ranks = QuestMapTraderOrder.Ids.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
         return Profile.Quests
             .Where(state => state.DisplayState == "InProgress" && _applicable.Contains(state.QuestId) && _nodeById.ContainsKey(state.QuestId))
             .Select(state => new InProgressQuest(_nodeById[state.QuestId], state))
@@ -211,6 +220,10 @@ public sealed class QuestMapPageState
         }
 
         foreach (var id in baseIds) Consider(id);
+        if (ShowRepeatables)
+        {
+            foreach (var id in _repeatableIds) Consider(id);
+        }
         foreach (var id in focusMode ? FocusIds! : PrerequisiteIds) Consider(id);
 
         if (!focusMode && trader.Length > 0)
@@ -319,7 +332,7 @@ public sealed class QuestMapPageState
 
     private string ViewportScope() => Topology is null || Profile is null
         ? string.Empty
-        : string.Join('|', Topology.Version, Profile.ProfileId, ShowAllFuture ? 1 : 0, ShowFinished ? 1 : 0, LevelEligibleOnly ? 1 : 0, TraderFilter, Search.Trim(), FocusedId ?? string.Empty, SelectedId ?? string.Empty);
+        : string.Join('|', Topology.Version, Profile.ProfileId, ShowAllFuture ? 1 : 0, ShowFinished ? 1 : 0, ShowRepeatables ? 1 : 0, LevelEligibleOnly ? 1 : 0, TraderFilter, Search.Trim(), FocusedId ?? string.Empty, SelectedId ?? string.Empty);
 
     private void CaptureCurrentProfileSettings()
     {
@@ -330,7 +343,7 @@ public sealed class QuestMapPageState
     {
         var saved = Profile is not null && _profileSettings.TryGetValue(Profile.ProfileId, out var value) ? value : null;
         SelectedId = saved?.SelectedId is { } selected && _applicable.Contains(selected) ? selected : null;
-        FocusedId = saved?.FocusedId is { } focused && _applicable.Contains(focused) ? focused : null;
+        FocusedId = saved?.FocusedId is { } focused && _applicable.Contains(focused) && !_repeatableIds.Contains(focused) ? focused : null;
         FocusIds = FocusedId is null ? null : ComputeChain(FocusedId);
     }
 
@@ -355,6 +368,7 @@ public sealed record InProgressTraderGroup(QuestTraderDto Trader, IReadOnlyList<
 public sealed record QuestProfileUiSettings(string? SelectedId, string? FocusedId);
 public sealed record QuestMapSettings(string? SelectedProfileId, string? Language, bool ShowAllFuture, bool ShowFinished, bool LevelEligibleOnly, bool InProgressExpanded, string? Search, string? TraderFilter, IReadOnlyDictionary<string, QuestProfileUiSettings>? Profiles)
 {
+    public bool ShowRepeatables { get; init; } = true;
     public static QuestMapSettings Default { get; } = new(null, null, false, true, true, false, string.Empty, string.Empty, new Dictionary<string, QuestProfileUiSettings>());
 }
 public sealed record QuestGraphView(string? ProfileId, string Language, string BrowserLocale, string[] VisibleQuestIds, string? SelectedId, string? FocusedId, string[] PrerequisiteIds, string[] SuccessorIds, int[] HighlightedEdgeIndexes, bool InProgressExpanded, string ViewportScope, IReadOnlyDictionary<string, string> Strings);

@@ -15,14 +15,14 @@ if ($projects.Count -ne 1) {
 }
 
 if ([string]::IsNullOrWhiteSpace($SptRoot) -or -not (Test-Path -LiteralPath $SptRoot -PathType Container)) {
-    throw 'Pass -SptRoot or set SPT_ROOT to the SPT server directory containing SPTarkov.Server.Core.dll.'
+    throw 'Pass -SptRoot or set SPT_ROOT to the Tarkov install directory containing the SPT subfolder.'
 }
 
 $target = $projects[0].FullName
 $sptRootFull = (Resolve-Path -LiteralPath $SptRoot).Path
-$sptCore = Join-Path $sptRootFull 'SPTarkov.Server.Core.dll'
+$sptCore = Join-Path $sptRootFull 'SPT/SPTarkov.Server.Core.dll'
 if (-not (Test-Path -LiteralPath $sptCore -PathType Leaf)) {
-    throw "SPTarkov.Server.Core.dll was not found beneath SPT root: $sptRootFull"
+    throw "SPTarkov.Server.Core.dll was not found beneath the SPT subfolder of Tarkov install root: $sptRootFull"
 }
 
 $coreVersion = [System.Reflection.AssemblyName]::GetAssemblyName($sptCore).Version

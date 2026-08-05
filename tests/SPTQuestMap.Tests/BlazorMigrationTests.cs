@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Mvc;
 using NUnit.Framework;
+using SPTQuestMap.Components;
 using SPTQuestMap.Components.Pages;
 using SPTQuestMap.Presentation;
 using SPTQuestMap.Services;
+using SPTarkov.Server.Core.Models.Enums;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
@@ -48,7 +50,12 @@ public sealed class BlazorMigrationTests
         {
             Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("--qm-state-locked"));
             Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("--qm-renderer-outline-selected"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("--qm-renderer-repeatable-divider"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".profile-dismiss-layer:hover:not(:disabled)"),
+                "The full-screen profile-menu dismiss button must override the global button hover background.");
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("getComputedStyle"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("composeRepeatableLayout"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("effectiveQuestState"));
             Assert.That(QuestMapEmbeddedAssets.RendererModuleDataUrl, Does.StartWith("data:text/javascript;base64,"));
             Assert.That(Regex.IsMatch(QuestMapEmbeddedAssets.RendererSource, colorLiteralPattern), Is.False,
                 "Renderer colors must be supplied by CSS custom properties, not JavaScript literals.");
@@ -74,7 +81,10 @@ public sealed class BlazorMigrationTests
     [Test]
     public void PageSettingsRoundTripInCSharp()
     {
-        var expected = new QuestMapSettings("profile", "en", true, false, false, true, "search", "trader", new Dictionary<string, QuestProfileUiSettings> { ["profile"] = new("quest", "focus") });
+        var expected = new QuestMapSettings("profile", "en", true, false, false, true, "search", "trader", new Dictionary<string, QuestProfileUiSettings> { ["profile"] = new("quest", "focus") })
+        {
+            ShowRepeatables = false,
+        };
 
         var actual = QuestMapSettingsStorage.Deserialize(QuestMapSettingsStorage.Serialize(expected), null);
 
@@ -85,6 +95,7 @@ public sealed class BlazorMigrationTests
             Assert.That(actual.Language, Is.EqualTo(expected.Language));
             Assert.That(actual.ShowAllFuture, Is.EqualTo(expected.ShowAllFuture));
             Assert.That(actual.ShowFinished, Is.EqualTo(expected.ShowFinished));
+            Assert.That(actual.ShowRepeatables, Is.EqualTo(expected.ShowRepeatables));
             Assert.That(actual.LevelEligibleOnly, Is.EqualTo(expected.LevelEligibleOnly));
             Assert.That(actual.InProgressExpanded, Is.EqualTo(expected.InProgressExpanded));
             Assert.That(actual.Search, Is.EqualTo(expected.Search));
@@ -105,6 +116,7 @@ public sealed class BlazorMigrationTests
             Assert.That(actual, Is.Not.Null);
             Assert.That(actual!.ShowFinished, Is.False);
             Assert.That(actual.ShowAllFuture, Is.True);
+            Assert.That(actual.ShowRepeatables, Is.True);
             Assert.That(actual.LevelEligibleOnly, Is.True);
         });
     }
@@ -278,6 +290,109 @@ public sealed class BlazorMigrationTests
     }
 
     [Test]
+    public void RepeatableQuestRulesIncludePmcDailyAndWeeklyOnly()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(RepeatableQuestRules.ShouldIncludeGroup("Daily"), Is.True);
+            Assert.That(RepeatableQuestRules.ShouldIncludeGroup("Weekly"), Is.True);
+            Assert.That(RepeatableQuestRules.ShouldIncludeGroup("Daily_Savage"), Is.False);
+            Assert.That(RepeatableQuestRules.ShouldIncludeGroup(null), Is.False);
+        });
+    }
+
+    [Test]
+    public void RepeatableQuestRulesClassifyUnacceptedAndExpiredQuests()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(RepeatableQuestRules.ExactStatus(null), Is.EqualTo(QuestStatusEnum.AvailableForStart));
+            Assert.That(RepeatableQuestRules.Classify(QuestStatusEnum.AvailableForStart, false), Is.EqualTo("Available"));
+            Assert.That(RepeatableQuestRules.Classify(QuestStatusEnum.Started, false), Is.EqualTo("InProgress"));
+            Assert.That(RepeatableQuestRules.Classify(QuestStatusEnum.AvailableForFinish, false), Is.EqualTo("ReadyToFinish"));
+            Assert.That(RepeatableQuestRules.Classify(QuestStatusEnum.Success, false), Is.EqualTo("Completed"));
+            Assert.That(RepeatableQuestRules.Classify(QuestStatusEnum.Started, true), Is.EqualTo("Expired"),
+                "The repeatable group's end time must override its previously active profile status.");
+        });
+    }
+
+    [Test]
+    public void RepeatableQuestsUseNormalSearchTraderAndFinishedFilters()
+    {
+        var state = CreateStateWithRepeatables();
+
+        Assert.That(state.VisibleIds, Is.SupersetOf(new[] { "daily-available", "daily-completed", "weekly-expired" }));
+
+        state.SetShowFinished(false);
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.VisibleIds, Does.Contain("daily-available"));
+            Assert.That(state.VisibleIds, Does.Not.Contain("daily-completed"));
+            Assert.That(state.VisibleIds, Does.Not.Contain("weekly-expired"));
+        });
+
+        state.SetShowFinished(true);
+        state.SetTraderFilter("trader-b");
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.VisibleIds, Does.Not.Contain("daily-available"));
+            Assert.That(state.VisibleIds, Does.Contain("daily-completed"));
+            Assert.That(state.VisibleIds, Does.Contain("weekly-expired"));
+        });
+
+        state.SetTraderFilter(string.Empty);
+        state.SetSearch("weekly");
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.VisibleIds, Does.Not.Contain("daily-available"));
+            Assert.That(state.VisibleIds, Does.Not.Contain("daily-completed"));
+            Assert.That(state.VisibleIds, Does.Contain("weekly-expired"));
+        });
+    }
+
+    [Test]
+    public void RepeatableVisibilityFilterDefaultsOnAndOnlyHidesRepeatables()
+    {
+        var state = CreateStateWithRepeatables();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.ShowRepeatables, Is.True);
+            Assert.That(state.VisibleIds, Does.Contain("normal"));
+            Assert.That(state.VisibleIds, Does.Contain("daily-available"));
+        });
+
+        state.SetShowRepeatables(false);
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.VisibleIds, Is.EquivalentTo(new[] { "normal" }));
+            Assert.That(state.CaptureSettings("profile", "en").ShowRepeatables, Is.False);
+        });
+
+        state.SetShowRepeatables(true);
+        Assert.That(state.VisibleIds, Is.SupersetOf(new[] { "normal", "daily-available", "daily-completed", "weekly-expired" }));
+    }
+
+    [Test]
+    public void RepeatableQuestSelectionOpensDetailsButCannotFocusAChain()
+    {
+        var state = CreateStateWithRepeatables();
+
+        Assert.That(state.SelectQuest("daily-available"), Is.True);
+        state.ActivateFocus();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.SelectedNode?.Name, Is.EqualTo("Daily Elimination"));
+            Assert.That(state.SelectedQuestState?.DisplayState, Is.EqualTo("Available"));
+            Assert.That(state.CanFocusSelection, Is.False);
+            Assert.That(state.FocusMode, Is.False);
+            Assert.That(state.PrerequisiteIds, Is.Empty);
+            Assert.That(state.SuccessorIds, Is.Empty);
+        });
+    }
+
+    [Test]
     public void InProgressDrawerDataIgnoresGraphFilters()
     {
         var state = CreateState();
@@ -309,6 +424,21 @@ public sealed class BlazorMigrationTests
     }
 
     [Test]
+    public void TraderObjectiveTextUsesTheSharedRichTextSanitizer()
+    {
+        var objective = new ObjectiveDefinitionDto("objective", "<color=#ffcc00>Eliminate <b>Scavs</b></color>", "CounterCreator", 0, null, 1, null, []);
+
+        var result = QuestDetails.ObjectiveMarkup(objective);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Does.Contain("style=\"color:#ffcc00\""));
+            Assert.That(result, Does.Contain("<strong>Scavs</strong>"));
+            Assert.That(result, Does.Not.Contain("&lt;color"));
+        });
+    }
+
+    [Test]
     public void RichTextSanitizerDropsExecutableMarkupAndUnsafeLinks()
     {
         var result = QuestRichTextSanitizer.Sanitize("<script>alert(1)</script><img src=x onerror=alert(2)><a href=javascript:alert(3) onclick=alert(4)>bad</a><a href='https://example.test'>safe</a>");
@@ -336,6 +466,35 @@ public sealed class BlazorMigrationTests
         var profile = new ProfileStateDto("profile", "PMC", "Usec", 10, 0, false, false,
             [State("a", "Completed"), State("b", "InProgress"), State("c", "LevelGated")],
             [], ["a", "b", "c"], ["a", "b", "c"]);
+        var state = new QuestMapPageState();
+        state.SetData(topology, profile);
+        return state;
+    }
+
+    private static QuestMapPageState CreateStateWithRepeatables()
+    {
+        var staticNode = Node("normal", "Normal", "trader-a");
+        var topology = new QuestTopologyDto("version", [staticNode], [],
+            [new QuestTraderDto("trader-a", "Trader A", null), new QuestTraderDto("trader-b", "Trader B", null)], [], []);
+        var dailyAvailable = Node("daily-available", "Daily Elimination", "trader-a");
+        var dailyCompleted = Node("daily-completed", "Daily Completion", "trader-b");
+        var weeklyExpired = Node("weekly-expired", "Weekly Exploration", "trader-b");
+        var profile = new ProfileStateDto("profile", "PMC", "Usec", 10, 100, false, false,
+            [State("normal", "Available")], [], ["normal"], ["normal"])
+        {
+            RepeatableQuestGroups =
+            [
+                new RepeatableQuestGroupDto("Daily", 200,
+                [
+                    new RepeatableQuestEntryDto(dailyAvailable, State("daily-available", "Available") with { InProfile = false, AuthoritativelyVisible = true }),
+                    new RepeatableQuestEntryDto(dailyCompleted, State("daily-completed", "Completed")),
+                ]),
+                new RepeatableQuestGroupDto("Weekly", 50,
+                [
+                    new RepeatableQuestEntryDto(weeklyExpired, State("weekly-expired", "Expired")),
+                ]),
+            ],
+        };
         var state = new QuestMapPageState();
         state.SetData(topology, profile);
         return state;

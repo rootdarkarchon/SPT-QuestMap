@@ -41,9 +41,13 @@ public sealed class QuestMapDataService
         );
         _profiles = new QuestProfileStateBuilder(
             databaseService,
+            localeService,
             saveServer,
             questHelper,
-            seasonalEventService
+            seasonalEventService,
+#pragma warning disable CS0618 // SPT 4.0.13 exposes config instances through ConfigServer.
+            configServer.GetConfig<QuestConfig>()
+#pragma warning restore CS0618
         );
     }
 
@@ -75,6 +79,9 @@ public sealed class QuestMapDataService
             .ToArray();
     }
 
-    public ProfileStateDto? GetProfileState(string rawProfileId) =>
-        _profiles.Build(rawProfileId, GetTopology("en"));
+    public ProfileStateDto? GetProfileState(string rawProfileId, string? requestedLanguage = null)
+    {
+        var language = _localization.ResolveLanguage(requestedLanguage);
+        return _profiles.Build(rawProfileId, GetTopology(language), language);
+    }
 }

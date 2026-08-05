@@ -42,7 +42,12 @@ public sealed record ObjectiveDefinitionDto(string Id, string Text, string Condi
 public sealed record QuestRewardDto(string Id, string Type, string? TargetId, string? TargetName, double? Value, int? LoyaltyLevel, string? TraderName, bool Unknown, bool Hidden, QuestRewardItemDto[] Items);
 public sealed record QuestRewardItemDto(string TemplateId, string Name, double Count);
 public sealed record QuestExclusionRuleDto(string CausedByQuestId, string[] RequiredStatuses);
-public sealed record ProfileStateDto(string ProfileId, string Nickname, string Side, int Level, long GeneratedAt, bool ChristmasActive, bool HalloweenActive, IReadOnlyList<QuestStateDto> Quests, IReadOnlyList<TraderStateDto> Traders, string[] DefaultVisibleQuestIds, string[] AllApplicableQuestIds);
+public sealed record ProfileStateDto(string ProfileId, string Nickname, string Side, int Level, long GeneratedAt, bool ChristmasActive, bool HalloweenActive, IReadOnlyList<QuestStateDto> Quests, IReadOnlyList<TraderStateDto> Traders, string[] DefaultVisibleQuestIds, string[] AllApplicableQuestIds)
+{
+    public IReadOnlyList<RepeatableQuestGroupDto> RepeatableQuestGroups { get; init; } = [];
+}
+public sealed record RepeatableQuestGroupDto(string Kind, long EndTime, IReadOnlyList<RepeatableQuestEntryDto> Quests);
+public sealed record RepeatableQuestEntryDto(QuestNodeDto Node, QuestStateDto State);
 public sealed record QuestStateDto(string QuestId, string? ExactStatus, string DisplayState, bool AuthoritativelyVisible, bool InProfile, double? AvailableAfter, QuestBlockerDto[] Blockers, QuestExclusionDto? Exclusion, ObjectiveProgressDto[] Objectives, double? ProgressPercent);
 public sealed record QuestBlockerDto(string Kind, string? SubjectId, string? Compare, double? RequiredValue, string[] RequiredStatuses);
 public sealed record QuestExclusionDto(string CausedByQuestId, string CauseStatus, bool Permanent);

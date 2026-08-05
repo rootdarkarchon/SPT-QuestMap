@@ -24,6 +24,7 @@ SPT-QuestMap is an independent community project. It is not affiliated with or e
 - Keeps the default graph focused on known quests plus the immediate future tier, with an option to reveal all future quests.
 - Provides search, trader, level-eligibility, and finished-quest filters.
 - Includes a persistent **Quests In Progress** drawer grouped by trader.
+- Places profile-generated Daily and Weekly operational quests in a labeled horizontal band above the dependency graph, including live remaining time and expired-state display.
 - Preserves profile choice, language, filters, selection, focus state, pan, and zoom in the browser.
 - Uses a Canvas renderer so the full graph remains practical to pan and zoom.
 - Refreshes only when you ask it to. It does not poll or modify the profile.
@@ -62,6 +63,7 @@ Your browser may warn about SPT's local TLS certificate until you trust that cer
 - Search by quest, trader, or ID, or select a trader portrait to show that trader's filtered quests plus one tier after its currently available, active, or completed quests. Successors may belong to other traders, while the finished and level-eligibility filters still apply.
 - Trader-filtered prerequisite-gated quests also show each direct prerequisite that is still unmet, even when that prerequisite belongs to another trader.
 - Open **Quests In Progress** on the left for a filter-independent progress list. Selecting an entry also selects and centers it in the graph.
+- Daily and Weekly operational quests appear above the graph in trader order. Available, accepted, ready-to-finish, completed, and expired entries use the same state styling and details panel as ordinary quests; trader, search, and finished filters also apply. A default-on calendar filter toggles the complete band. Scav dailies are intentionally excluded.
 - Press the circular refresh button after changing profile progress in-game. QuestMap never refreshes automatically.
 
 ## Local-server warning

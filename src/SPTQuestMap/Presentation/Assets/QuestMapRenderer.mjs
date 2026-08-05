@@ -2,6 +2,7 @@
 
 const VIEW_STORAGE_KEY = 'sptQuestMap.viewport.v2';
 const NODE_W = 244, NODE_H = 84, LAYER_GAP = 118, ROW_GAP = 18, LAYOUT_MARGIN = 90, GRID_SIZE = 420;
+const REPEATABLE_CARD_GAP = 22, REPEATABLE_GROUP_GAP = 72, REPEATABLE_HEADER_H = 38, REPEATABLE_DIVIDER_GAP = 38;
 const OVERVIEW_SCALE = .48, MIN_SCALE = .08, MAX_SCALE = 2.5;
 const STATE_THEME_PROPERTIES = {
   Locked:'--qm-state-locked', PrerequisiteGated:'--qm-state-prerequisite-gated', LevelGated:'--qm-state-level-gated',
@@ -23,12 +24,14 @@ const RENDER_THEME_PROPERTIES = {
   outlineHoverPredecessor:'--qm-renderer-outline-hover-predecessor', outlineHoverSuccessor:'--qm-renderer-outline-hover-successor',
   routeCollector:'--qm-route-collector', routeLightkeeper:'--qm-route-lightkeeper', routeBorder:'--qm-renderer-route-border',
   routeText:'--qm-renderer-route-text', fadeTransparent:'--qm-renderer-fade-transparent', fadeOpaque:'--qm-renderer-fade-opaque',
-  mapDivider:'--qm-renderer-map-divider'
+  mapDivider:'--qm-renderer-map-divider', repeatableDivider:'--qm-renderer-repeatable-divider',
+  repeatableTitle:'--qm-renderer-repeatable-title', repeatableTime:'--qm-renderer-repeatable-time'
 };
 
 const state = {
   canvas:null, viewport:null, metrics:null, dotnet:null, ctx:null, theme:null, resizeObserver:null, listeners:[],
-  topology:null, profile:null, nodeById:new Map(), stateById:new Map(), incoming:new Map(), outgoing:new Map(),
+  topology:null, profile:null, staticNodeById:new Map(), nodeById:new Map(), stateById:new Map(), incoming:new Map(), outgoing:new Map(),
+  repeatableGroups:[], repeatableEndById:new Map(), serverTime:0, serverTimeStarted:0, clockTimer:0,
   normalLayout:null, activeLayout:null, applicable:new Set(), visible:new Set(), collectorPath:new Set(), lightkeeperPath:new Set(),
   selectedId:null, focusedId:null, prerequisiteIds:new Set(), successorIds:new Set(), highlightedEdges:new Set(),
   hoverId:null, hoverPredecessorIds:new Set(), hoverSuccessorIds:new Set(), hoveredEdges:new Set(),
@@ -51,7 +54,7 @@ export async function refresh(snapshot,initial=false){
     const previousVersion=state.topology?.version,previousProfile=state.profile?.profileId;
     applyTopology(topology);applyProfile(profile);applyConfig(config);
     const topologyChanged=previousVersion!==topology.version;
-    if(topologyChanged||!state.normalLayout)state.normalLayout=buildLayout(new Set(state.nodeById.keys()));
+    if(topologyChanged||!state.normalLayout)state.normalLayout=buildLayout(new Set(state.staticNodeById.keys()));
     state.activeLayout=state.normalLayout;rebuildVisible(false);
     const profileChanged=previousProfile!==profile?.profileId;
     if(!restoreViewport(config.viewportScope)&&(initial||profileChanged||topologyChanged))fitVisible();else requestRender();
@@ -65,7 +68,7 @@ export function zoom(factor){if(!state.viewport)return;zoomAt(factor,state.viewp
 
 export function dispose(){
   for(const [target,type,handler,options] of state.listeners)target.removeEventListener(type,handler,options);
-  state.listeners=[];state.resizeObserver?.disconnect();state.resizeObserver=null;clearTimeout(state.detailedRenderTimer);clearTimeout(state.viewportSaveTimer);
+  state.listeners=[];state.resizeObserver?.disconnect();state.resizeObserver=null;clearTimeout(state.detailedRenderTimer);clearTimeout(state.viewportSaveTimer);clearInterval(state.clockTimer);state.clockTimer=0;
   state.canvas=null;state.viewport=null;state.metrics=null;state.dotnet=null;state.ctx=null;state.theme=null;state.framePending=false;
 }
 
@@ -77,11 +80,16 @@ function readTheme(element){
 }
 
 function applyTopology(topology){
-  state.topology=topology;state.nodeById=new Map(topology.quests.map(node=>[node.id,node]));
+  state.topology=topology;state.staticNodeById=new Map(topology.quests.map(node=>[node.id,node]));state.nodeById=new Map(state.staticNodeById);
   state.collectorPath=new Set(topology.collectorPathQuestIds||[]);state.lightkeeperPath=new Set(topology.lightkeeperPathQuestIds||[]);
   state.incoming=groupEdges(topology.edges,'targetId');state.outgoing=groupEdges(topology.edges,'sourceId');
 }
-function applyProfile(profile){state.profile=profile;state.stateById=new Map((profile?.quests||[]).map(item=>[item.questId,item]));state.applicable=new Set(profile?.allApplicableQuestIds||[]);}
+function applyProfile(profile){
+  state.profile=profile;state.nodeById=new Map(state.staticNodeById);state.stateById=new Map((profile?.quests||[]).map(item=>[item.questId,item]));state.applicable=new Set(profile?.allApplicableQuestIds||[]);
+  state.repeatableGroups=profile?.repeatableQuestGroups||[];state.repeatableEndById=new Map();
+  for(const group of state.repeatableGroups)for(const entry of group.quests||[]){state.nodeById.set(entry.node.id,entry.node);state.stateById.set(entry.state.questId,entry.state);state.applicable.add(entry.node.id);state.repeatableEndById.set(entry.node.id,group.endTime);}
+  state.serverTime=profile?.generatedAt||Math.floor(Date.now()/1000);state.serverTimeStarted=performance.now();
+}
 function applyConfig(config){
   if(config.browserLocale)state.browserLocale=config.browserLocale;if(config.strings)state.strings=config.strings;state.viewportScope=config.viewportScope||'';
   state.visible=new Set(config.visibleQuestIds||[]);state.selectedId=config.selectedId||null;state.focusedId=config.focusedId||null;
@@ -111,9 +119,19 @@ function buildGrid(items){const grid=new Map();for(const item of items){const x0
 function queryGrid(grid,rect){const result=new Set(),x0=Math.floor(rect.minX/GRID_SIZE),x1=Math.floor(rect.maxX/GRID_SIZE),y0=Math.floor(rect.minY/GRID_SIZE),y1=Math.floor(rect.maxY/GRID_SIZE);for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++)for(const id of grid.get(`${x},${y}`)||[])result.add(id);return result;}
 function rebuildVisible(preserveAnchor){
   if(!state.normalLayout)return;const matches=state.activeLayout&&state.activeLayout.positions.size===state.visible.size&&[...state.visible].every(id=>state.activeLayout.positions.has(id));
-  if(!matches){const anchor=preserveAnchor?chooseLayoutAnchor():null;state.activeLayout=buildCompactedLayout(state.visible,state.normalLayout);if(anchor)restoreAnchor(anchor.id,anchor.screen);}
+  if(!matches){const anchor=preserveAnchor?chooseLayoutAnchor():null,staticVisible=new Set([...state.visible].filter(id=>state.staticNodeById.has(id))),allStatic=staticVisible.size===state.normalLayout.positions.size&&[...staticVisible].every(id=>state.normalLayout.positions.has(id));const base=allStatic?state.normalLayout:buildCompactedLayout(staticVisible,state.normalLayout);state.activeLayout=composeRepeatableLayout(base);if(anchor)restoreAnchor(anchor.id,anchor.screen);updateClockTimer();}
   state.visibleEdgeCount=0;for(const {edge} of state.activeLayout.edgeGeometry)if(state.visible.has(edge.sourceId)&&state.visible.has(edge.targetId))state.visibleEdgeCount++;requestRender();
 }
+function composeRepeatableLayout(base){
+  const groups=state.repeatableGroups.map(group=>({kind:group.kind,endTime:group.endTime,entries:(group.quests||[]).filter(entry=>state.visible.has(entry.node.id))})).filter(group=>group.entries.length);
+  if(!groups.length)return{...base,repeatableBands:[],repeatableDivider:null};
+  const started=performance.now(),nodeY=LAYOUT_MARGIN+REPEATABLE_HEADER_H,dividerY=nodeY+NODE_H+REPEATABLE_DIVIDER_GAP,normalOffset=dividerY+52-LAYOUT_MARGIN,positions=new Map();
+  for(const [id,p] of base.positions)positions.set(id,{...p,y:p.y+normalOffset});
+  const bands=[];let x=LAYOUT_MARGIN;
+  for(const group of groups){const startX=x;for(const entry of group.entries){positions.set(entry.node.id,{x,y:nodeY,w:NODE_W,h:NODE_H});x+=NODE_W+REPEATABLE_CARD_GAP;}x-=REPEATABLE_CARD_GAP;bands.push({kind:group.kind,endTime:group.endTime,x1:startX,x2:x,y:LAYOUT_MARGIN+9});x+=REPEATABLE_GROUP_GAP;}
+  const layout=finishLayout(positions,started),baseRight=Math.max(LAYOUT_MARGIN,...[...base.positions.values()].map(p=>p.x+p.w));layout.repeatableBands=bands;layout.repeatableDivider={x1:LAYOUT_MARGIN,x2:Math.max(baseRight,bands.at(-1).x2),y:dividerY};return layout;
+}
+function updateClockTimer(){clearInterval(state.clockTimer);state.clockTimer=state.activeLayout?.repeatableBands?.length?setInterval(requestRender,1000):0;}
 function chooseLayoutAnchor(){if(!state.activeLayout||!state.visible.size)return null;for(const id of [state.selectedId,state.focusedId])if(id&&state.visible.has(id)&&state.activeLayout.positions.has(id))return{id,screen:screenPosition(id)};const cx=state.viewport.clientWidth/2,cy=state.viewport.clientHeight/2;let best=null,distance=Infinity;for(const id of state.visible){const p=state.activeLayout.positions.get(id);if(!p)continue;const x=state.view.tx+(p.x+p.w/2)*state.view.scale,y=state.view.ty+(p.y+p.h/2)*state.view.scale,d=(x-cx)**2+(y-cy)**2;if(d<distance){distance=d;best={id,screen:{x,y}};}}return best;}
 function screenPosition(id){const p=id&&state.activeLayout?.positions.get(id);return p?{x:state.view.tx+(p.x+p.w/2)*state.view.scale,y:state.view.ty+(p.y+p.h/2)*state.view.scale}:null;}
 function restoreAnchor(id,anchor){const p=id&&state.activeLayout?.positions.get(id);if(!p||!anchor)return;state.view.tx=anchor.x-(p.x+p.w/2)*state.view.scale;state.view.ty=anchor.y-(p.y+p.h/2)*state.view.scale;}
@@ -124,12 +142,20 @@ function render(){
   ctx.setTransform(state.dpr,0,0,state.dpr,0,0);ctx.fillStyle=state.theme.canvasBackground;ctx.fillRect(0,0,width,height);if(!state.activeLayout||!state.profile)return;
   const rect={minX:-state.view.tx/state.view.scale-NODE_W,minY:-state.view.ty/state.view.scale-NODE_H,maxX:(width-state.view.tx)/state.view.scale+NODE_W,maxY:(height-state.view.ty)/state.view.scale+NODE_H};
   drawGrid(width,height);ctx.setTransform(state.dpr*state.view.scale,0,0,state.dpr*state.view.scale,state.dpr*state.view.tx,state.dpr*state.view.ty);
-  const edgeIds=queryGrid(state.activeLayout.edgeGrid,rect),hasSelection=Boolean(state.selectedId),fast=state.dragging||performance.now()<state.fastRenderUntil;
-  if(!fast)for(const index of edgeIds){const g=state.activeLayout.edgeByIndex.get(index);if(!g||!state.visible.has(g.edge.sourceId)||!state.visible.has(g.edge.targetId))continue;const selected=state.highlightedEdges.has(index),hover=state.hoveredEdges.has(index),sourceState=state.stateById.get(g.edge.sourceId)?.displayState;drawEdge(g,hasSelection&&!selected&&!hover,selected||hover,isFutureQuest(state.stateById.get(g.edge.targetId))&&state.selectedId!==g.edge.targetId&&state.hoverId!==g.edge.targetId,sourceState);}
-  for(const id of queryGrid(state.activeLayout.nodeGrid,rect)){if(!state.visible.has(id))continue;const p=state.activeLayout.positions.get(id),hoverRelated=id===state.hoverId||state.hoverPredecessorIds.has(id)||state.hoverSuccessorIds.has(id),selectionRelated=id===state.selectedId||state.prerequisiteIds.has(id)||state.successorIds.has(id);drawNode(state.nodeById.get(id),state.stateById.get(id),p,hasSelection&&!selectionRelated&&!hoverRelated);}
+  drawRepeatableBands();const edgeIds=queryGrid(state.activeLayout.edgeGrid,rect),hasSelection=Boolean(state.selectedId),fast=state.dragging||performance.now()<state.fastRenderUntil;
+  if(!fast)for(const index of edgeIds){const g=state.activeLayout.edgeByIndex.get(index);if(!g||!state.visible.has(g.edge.sourceId)||!state.visible.has(g.edge.targetId))continue;const selected=state.highlightedEdges.has(index),hover=state.hoveredEdges.has(index),sourceState=effectiveQuestState(g.edge.sourceId)?.displayState;drawEdge(g,hasSelection&&!selected&&!hover,selected||hover,isFutureQuest(effectiveQuestState(g.edge.targetId))&&state.selectedId!==g.edge.targetId&&state.hoverId!==g.edge.targetId,sourceState);}
+  for(const id of queryGrid(state.activeLayout.nodeGrid,rect)){if(!state.visible.has(id))continue;const p=state.activeLayout.positions.get(id),hoverRelated=id===state.hoverId||state.hoverPredecessorIds.has(id)||state.hoverSuccessorIds.has(id),selectionRelated=id===state.selectedId||state.prerequisiteIds.has(id)||state.successorIds.has(id);drawNode(state.nodeById.get(id),effectiveQuestState(id),p,hasSelection&&!selectionRelated&&!hoverRelated);}
   state.lastRenderMs=performance.now()-started;if(!state.firstRenderMs)state.firstRenderMs=state.lastRenderMs;updateMetrics();
 }
 function drawGrid(width,height){const spacing=38*state.view.scale;if(spacing<11)return;const ctx=state.ctx;ctx.fillStyle=state.theme.gridDot;const ox=((state.view.tx%spacing)+spacing)%spacing,oy=((state.view.ty%spacing)+spacing)%spacing;for(let x=ox;x<width;x+=spacing)for(let y=oy;y<height;y+=spacing)ctx.fillRect(x,y,1,1);}
+function drawRepeatableBands(){
+  const layout=state.activeLayout;if(!layout?.repeatableBands?.length)return;const ctx=state.ctx,divider=layout.repeatableDivider;ctx.save();ctx.textAlign='center';
+  for(const band of layout.repeatableBands){const remaining=Math.floor(band.endTime-currentServerTime()),expired=remaining<=0,label=t(band.kind==='Daily'?'repeatable.daily':'repeatable.weekly'),time=expired?t('repeatable.expired'):`${formatRemaining(remaining)} ${t('repeatable.remaining')}`;ctx.fillStyle=state.theme.repeatableTitle;ctx.font='700 15px Georgia, serif';ctx.fillText(label,(band.x1+band.x2)/2,band.y);ctx.fillStyle=state.theme.repeatableTime;ctx.font='600 10px system-ui';ctx.fillText(time,(band.x1+band.x2)/2,band.y+16);}
+  if(divider){ctx.strokeStyle=state.theme.repeatableDivider;ctx.lineWidth=1.5/state.view.scale;ctx.beginPath();ctx.moveTo(divider.x1,divider.y);ctx.lineTo(divider.x2,divider.y);ctx.stroke();}ctx.restore();
+}
+function currentServerTime(){return state.serverTime+(performance.now()-state.serverTimeStarted)/1000;}
+function formatRemaining(value){const total=Math.max(0,Math.floor(value)),days=Math.floor(total/86400),hours=Math.floor(total%86400/3600),minutes=Math.floor(total%3600/60),seconds=total%60;if(days)return`${days}d ${hours}h`;if(hours)return`${hours}h ${minutes}m`;if(minutes)return`${minutes}m ${seconds}s`;return`${seconds}s`;}
+function effectiveQuestState(id){const questState=state.stateById.get(id),endTime=state.repeatableEndById.get(id);return questState&&endTime!=null&&endTime<=currentServerTime()&&questState.displayState!=='Expired'?{...questState,displayState:'Expired'}:questState;}
 function edgeRequirementKind(edge){if(edge.requirementKind)return edge.requirementKind;const values=edge.requiredStatuses||[],started=values.includes('Started'),success=values.includes('Success'),failure=values.some(value=>value.includes('Fail'));return started?'Started':success&&failure?'AnyOutcome':failure?'Failure':success?'Success':'Other';}
 function edgeColor(edge){const kind=edgeRequirementKind(edge);return kind==='Failure'?state.theme.edgeFailure:kind==='Success'?state.theme.edgeSuccess:kind==='Started'?state.theme.edgeStarted:kind==='AnyOutcome'?state.theme.edgeOutcome:state.theme.edgeOther;}
 function drawEdge(g,dimmed,highlighted,futureTarget,sourceState){const ctx=state.ctx,completed=sourceState==='Completed',active=['Available','InProgress','ReadyToFinish'].includes(sourceState);ctx.save();ctx.globalAlpha=highlighted?(completed?(futureTarget?.28:.48):(futureTarget?.38:.96)):dimmed?(active?.32:.08):completed?.20:active?.64:futureTarget?.18:.42;ctx.strokeStyle=edgeColor(g.edge);ctx.lineWidth=(highlighted?3.2:1.5)/state.view.scale;if(edgeRequirementKind(g.edge)==='Failure')ctx.setLineDash([8/state.view.scale,5/state.view.scale]);ctx.beginPath();ctx.moveTo(g.x1,g.y1);ctx.bezierCurveTo(g.c1x,g.c1y,g.c2x,g.c2y,g.x2,g.y2);ctx.stroke();const size=7/state.view.scale;ctx.setLineDash([]);ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.moveTo(g.x2,g.y2);ctx.lineTo(g.x2-size,g.y2-size*.62);ctx.lineTo(g.x2-size,g.y2+size*.62);ctx.closePath();ctx.fill();ctx.restore();}
@@ -143,7 +169,7 @@ function drawNode(node,questState,p,dimmed){
   if(node.eventSeason)badge(p.x+p.w-(completed?36:13),p.y+12,t('badge.event'),state.theme.badgeEvent);else if(node.exclusionRules?.length)badge(p.x+p.w-(completed?36:13),p.y+12,t('badge.branch'),state.theme.badgeBranch);if(isTerminalQuest(node.id))drawTerminalMarker(p);if(completed)drawCompletedMarker(p);drawNodeOutline(p,selected,prerequisite,successor,hovered,hoverPredecessor,hoverSuccessor);if(hasDirectPrerequisite(node.id))drawCenterNotch(p);ctx.restore();
 }
 function roundRect(x,y,w,h,r){state.ctx.beginPath();state.ctx.roundRect(x,y,w,h,r);}
-function isTerminalQuest(id){return!(state.outgoing.get(id)||[]).some(item=>state.applicable.has(item.edge.targetId));}
+function isTerminalQuest(id){return!state.repeatableEndById.has(id)&&!(state.outgoing.get(id)||[]).some(item=>state.applicable.has(item.edge.targetId));}
 function hasDirectPrerequisite(id){return(state.incoming.get(id)||[]).some(item=>state.applicable.has(item.edge.sourceId));}
 function drawTerminalMarker(p){const ctx=state.ctx;ctx.save();roundRect(p.x,p.y,p.w,p.h,8);ctx.clip();ctx.fillStyle=state.theme.terminal;roundRect(p.x+p.w-5,p.y+9,4,p.h-18,2);ctx.fill();ctx.restore();}
 function drawCompletedMarker(p){const ctx=state.ctx,right=p.x+p.w,top=p.y,size=38,cx=right-size/3,cy=top+size/3;ctx.save();roundRect(p.x,p.y,p.w,p.h,8);ctx.clip();ctx.fillStyle=state.theme.completed;ctx.beginPath();ctx.moveTo(right-size,top);ctx.lineTo(right,top);ctx.lineTo(right,top+size);ctx.closePath();ctx.fill();ctx.translate(cx,cy);ctx.fillStyle=state.theme.check;ctx.beginPath();ctx.moveTo(-7,0);ctx.lineTo(-4,-3);ctx.lineTo(-1,0);ctx.lineTo(6,-7);ctx.lineTo(9,-4);ctx.lineTo(-1,6);ctx.closePath();ctx.fill();ctx.restore();}

@@ -57,6 +57,9 @@
   --qm-renderer-fade-transparent: rgba(0, 0, 0, 0);
   --qm-renderer-fade-opaque: rgba(0, 0, 0, 1);
   --qm-renderer-map-divider: rgba(5, 8, 6, .9);
+  --qm-renderer-repeatable-divider: rgba(183, 162, 96, .58);
+  --qm-renderer-repeatable-title: #d8c47f;
+  --qm-renderer-repeatable-time: #aeb2a7;
 }
 
 * { box-sizing: border-box; }
@@ -95,7 +98,7 @@ h1 { margin: 0; font: 700 1.55rem/1 Georgia, serif; letter-spacing: -.02em; }
 .profile-chevron { color: #a6aa9f; font-size: 1.1rem; text-align: center; transform: translateY(-2px); }
 .profile-field.open .profile-chevron { transform: translateY(2px) rotate(180deg); }
 .profile-menu { position: absolute; z-index: 20; top: calc(100% + .4rem); left: 0; width: 100%; max-height: min(430px,70vh); padding: .3rem; overflow-y: auto; border: 1px solid #565d52; border-radius: 6px; background: rgba(18,22,19,.985); box-shadow: 0 14px 38px #000c; scrollbar-width: thin; }
-.profile-dismiss-layer { position: fixed; z-index: 19; inset: 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: default; }
+.profile-dismiss-layer, .profile-dismiss-layer:hover:not(:disabled) { position: fixed; z-index: 19; inset: 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: default; }
 .profile-menu[hidden] { display: none; }
 .profile-option { display: grid; width: 100%; height: 50px; grid-template-columns: 48px minmax(0,1fr) auto; align-items: center; gap: .65rem; padding: 0 .65rem 0 0; overflow: hidden; border-color: transparent; background: transparent; text-align: left; }
 .profile-option + .profile-option { margin-top: 2px; }
@@ -109,9 +112,10 @@ h1 { margin: 0; font: 700 1.55rem/1 Georgia, serif; letter-spacing: -.02em; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .filterbar { display: flex; align-items: stretch; gap: .75rem; min-height: 78px; padding: .45rem .75rem; overflow: hidden; }
 .filter-tools { display: grid; flex: 0 0 13.5rem; grid-template-rows: 32px 34px; gap: .35rem; }
-.filter-toggles { display: grid; grid-template-columns: 38px 38px minmax(0,1fr); gap: .35rem; }
+.filter-toggles { display: grid; grid-template-columns: 38px 38px 38px minmax(0,1fr); gap: .35rem; }
 .filter-toggle { height: 32px; padding: 0 .4rem; color: #aaaDA4; font-size: 1rem; font-weight: 800; }
 .filter-toggle.active { border-color: #dfc15e; background: #5b4b1e; color: #fff4c8; box-shadow: inset 0 -3px #e1c45e, 0 0 0 1px #76652f; }
+.repeatable-toggle svg { display: block; width: 17px; height: 17px; margin: auto; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .level-toggle { font-size: .72rem; letter-spacing: .02em; white-space: nowrap; }
 .search-field, .search-field input { width: 100%; }
 .filter-separator { flex: 0 0 1px; background: #363b35; }
@@ -214,8 +218,9 @@ h1 { margin: 0; font: 700 1.55rem/1 Georgia, serif; letter-spacing: -.02em; }
 .objectives li { display: grid; grid-template-columns: 20px 1fr; gap: .42rem; color: #d0d0c6; }
 .objectives li.complete { color: #86b590; }
 .objective-marker { padding-top: .05rem; font-size: 1rem; }
-.objectives strong, .objectives small { display: block; }
-.objectives strong { font-size: .78rem; line-height: 1.35; }
+.objective-description, .objectives small { display: block; }
+.objective-description { font-size: .78rem; font-weight: 700; line-height: 1.35; }
+.objective-description .description-paragraph { margin: 0; }
 .objectives small { margin-top: .14rem; color: #898e85; font-size: .69rem; }
 .rewards { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
 .reward-row { display: grid; grid-template-columns: 20px 1fr; gap: .42rem; color: #d8d3bd; }

@@ -13,7 +13,7 @@
 {
     <div class="app-shell">
         <QuestMapHeader Localizer="@Localizer" Profiles="@Profiles" SelectedProfile="@SelectedProfile" Languages="@Bootstrap!.Languages" Busy="@Busy" RefreshRequested="RefreshAsync" ProfileChanged="ChangeProfileAsync" LanguageChanged="ChangeLanguageAsync">
-            <QuestMapFilters State="@State" Localizer="@Localizer" ShowAllFutureChanged="SetShowAllFutureAsync" ShowFinishedChanged="SetShowFinishedAsync" LevelEligibleChanged="SetLevelEligibleAsync" SearchChanged="SetSearchAsync" TraderChanged="SetTraderAsync" />
+            <QuestMapFilters State="@State" Localizer="@Localizer" ShowAllFutureChanged="SetShowAllFutureAsync" ShowFinishedChanged="SetShowFinishedAsync" RepeatablesChanged="SetShowRepeatablesAsync" LevelEligibleChanged="SetLevelEligibleAsync" SearchChanged="SetSearchAsync" TraderChanged="SetTraderAsync" />
         </QuestMapHeader>
         <main class="workspace">
             <section class="viewport @(State.InProgressExpanded ? "progress-panel-open" : null)" aria-label="@Localizer["graph.aria"]" @ref="ViewportElement">
@@ -21,7 +21,7 @@
                 <InProgressDrawer State="@State" Localizer="@Localizer" ExpandedChanged="SetDrawerExpandedAsync" QuestSelected="SelectFromDrawerAsync" />
                 <div class="graph-actions" aria-label="@Localizer["graph.actionsAria"]">
                     <button type="button" title="@Localizer["zoom.in"]" @onclick="() => ZoomAsync(1.22)">+</button><button type="button" title="@Localizer["zoom.out"]" @onclick="() => ZoomAsync(1 / 1.22)">−</button>
-                    <button type="button" @onclick="FitAsync">@Localizer["fit"]</button><button type="button" disabled="@(State.SelectedId is null || State.FocusedId == State.SelectedId)" @onclick="FocusAsync">@Localizer["focus"]</button>
+                    <button type="button" @onclick="FitAsync">@Localizer["fit"]</button><button type="button" disabled="@(!State.CanFocusSelection || State.FocusedId == State.SelectedId)" @onclick="FocusAsync">@Localizer["focus"]</button>
                     @if (State.FocusMode) { <button type="button" @onclick="ClearFocusAsync">@Localizer["focus.clear"]</button> }
                     <button type="button" disabled="@(State.SelectedId is null)" @onclick="ClearSelectionAsync">@Localizer["selection.clear"]</button>
                 </div>
@@ -100,7 +100,7 @@
         Profiles = DataService.GetProfiles(Bootstrap.Language);
         SelectedProfile = Profiles.FirstOrDefault(profile => profile.Id == requestedProfileId) ?? Profiles.FirstOrDefault();
         var topology = DataService.GetTopology(Bootstrap.Language);
-        var profile = SelectedProfile is null ? null : DataService.GetProfileState(SelectedProfile.Id);
+        var profile = SelectedProfile is null ? null : DataService.GetProfileState(SelectedProfile.Id, Bootstrap.Language);
         State.SetData(topology, profile);
         BusyMessage = Profiles.Count == 0 ? Localizer["profiles.none"] : Localizer["loading.initial"];
     }
@@ -139,6 +139,7 @@
 
     private Task SetShowAllFutureAsync(bool value) => ChangeViewAsync(() => State.SetShowAllFuture(value));
     private Task SetShowFinishedAsync(bool value) => ChangeViewAsync(() => State.SetShowFinished(value));
+    private Task SetShowRepeatablesAsync(bool value) => ChangeViewAsync(() => State.SetShowRepeatables(value));
     private Task SetLevelEligibleAsync(bool value) => ChangeViewAsync(() => State.SetLevelEligibleOnly(value));
     private Task SetSearchAsync(string value) => ChangeViewAsync(() => State.SetSearch(value));
     private Task SetTraderAsync(string value) => ChangeViewAsync(() => State.SetTraderFilter(value));
