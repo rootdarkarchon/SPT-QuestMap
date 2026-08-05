@@ -12,6 +12,9 @@ Cover pure state and graph logic with small fixtures:
 - active/off-season event filtering;
 - `None` event-chain removal;
 - next-tier future frontier;
+- trader-filter direct-successor context seeded only by available/active/completed quests, with finished/level filtering;
+- trader-filter selection matching unfiltered recursive-prerequisite visibility across traders;
+- trader-filter merge quests showing only direct unmet prerequisites across traders;
 - hide-finished behavior;
 - objective dependency ordering;
 - task counter mapping;

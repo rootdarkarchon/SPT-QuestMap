@@ -205,13 +205,62 @@ public sealed class QuestMapPageState
             var revealFinished = focusMode || selected || PrerequisiteIds.Contains(id);
             if (!showFinished && !revealFinished && IsFinished(node, state)) return;
             if (!selected && levelOnly && state?.DisplayState == "LevelGated") return;
-            if (!selected && trader.Length > 0 && node.TraderId != trader) return;
+            if (!selected && trader.Length > 0 && node.TraderId != trader && !PrerequisiteIds.Contains(id)) return;
             if (!selected && search.Length > 0 && !$"{node.Name} {node.TraderName} {node.Id}".Contains(search, StringComparison.OrdinalIgnoreCase)) return;
             VisibleIds.Add(id);
         }
 
         foreach (var id in baseIds) Consider(id);
         foreach (var id in focusMode ? FocusIds! : PrerequisiteIds) Consider(id);
+
+        if (!focusMode && trader.Length > 0)
+        {
+            var visibleTraderQuestIds = VisibleIds
+                .Where(id => _nodeById.GetValueOrDefault(id)?.TraderId == trader
+                    && _stateById.GetValueOrDefault(id)?.DisplayState is "Available" or "InProgress" or "ReadyToFinish" or "Completed")
+                .ToArray();
+
+            foreach (var sourceId in visibleTraderQuestIds)
+            {
+                foreach (var item in Outgoing(sourceId))
+                {
+                    var targetId = item.Edge.TargetId;
+                    if (!_applicable.Contains(targetId)
+                        || !_nodeById.ContainsKey(targetId))
+                    {
+                        continue;
+                    }
+
+                    var target = _nodeById[targetId];
+                    var state = _stateById.GetValueOrDefault(targetId);
+                    var selected = targetId == SelectedId;
+                    var revealFinished = selected || PrerequisiteIds.Contains(targetId);
+                    if (!showFinished && !revealFinished && IsFinished(target, state)) continue;
+                    if (!selected && levelOnly && state?.DisplayState == "LevelGated") continue;
+
+                    VisibleIds.Add(targetId);
+                }
+            }
+
+            var visibleBlockedQuestIds = VisibleIds
+                .Where(id => _stateById.GetValueOrDefault(id)?.Blockers.Any(blocker => blocker.Kind == "Prerequisite") == true)
+                .ToArray();
+
+            foreach (var blockedQuestId in visibleBlockedQuestIds)
+            {
+                var state = _stateById[blockedQuestId];
+                foreach (var blocker in state.Blockers.Where(blocker => blocker.Kind == "Prerequisite" && blocker.SubjectId is not null))
+                {
+                    var prerequisiteId = blocker.SubjectId!;
+                    if (_applicable.Contains(prerequisiteId)
+                        && _nodeById.ContainsKey(prerequisiteId)
+                        && Incoming(blockedQuestId).Any(item => item.Edge.SourceId == prerequisiteId))
+                    {
+                        VisibleIds.Add(prerequisiteId);
+                    }
+                }
+            }
+        }
     }
 
     private void UpdateSelectionHighlight()

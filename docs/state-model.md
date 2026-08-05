@@ -153,3 +153,9 @@ The 4.0.13 implementation uses this deterministic algorithm:
 - show-all mode = every applicable quest.
 
 Only the direct successor is added at a merge point; its other prerequisite quests are not pulled into view unless they are already known. This keeps Collector visible as the direct successor of a completed prerequisite such as Fertilizers without recursively expanding Collector's remaining prerequisite chains. Unit tests cover one-tier chains, completed predecessors, level-gated chains, and merge successors.
+
+When a trader filter is active, QuestMap first applies the configured future-depth, finished, level, search, and trader filters normally. Of the surviving selected-trader quests, only those in `Available`, `InProgress`, `ReadyToFinish`, or `Completed` state form the current boundary. QuestMap adds every applicable direct successor of that boundary, regardless of the successor's trader or gate state. Prerequisite-gated and otherwise locked visible quests do not seed another tier. Added successors still obey the configured finished and level-eligibility filters, and the expansion never recurses.
+
+Selecting a quest while the trader filter is active uses the same selection semantics as the unfiltered graph. The selected quest's recursive prerequisite chain remains visible across trader boundaries, while successor highlighting remains direct-only. Search, finished, and level-eligibility handling remain identical to unfiltered selection.
+
+For every quest already visible under a trader filter, prerequisite blockers from the profile overlay contribute their direct subject quests even when those quests belong to another trader. Because blockers contain only unmet status requirements, satisfied incoming edges at merge quests do not add their predecessors. This blocker-context pass uses a snapshot of the visible set and therefore does not recursively expand an added prerequisite's own blockers.

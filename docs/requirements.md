@@ -76,6 +76,10 @@ Ordinary node selection:
 - displays the objective/detail panel;
 - does not change graph membership.
 
+Trader filtering must not change ordinary selection semantics or truncate the selected quest's recursive prerequisite chain when prerequisites belong to other traders.
+
+Outside selection, a trader-filtered quest with unmet prerequisite blockers must show those direct blocking predecessors across trader boundaries. Satisfied predecessors at a multi-prerequisite merge are not added solely for context, and this incoming expansion is not recursive.
+
 Focused-chain action:
 
 - filters and compacts to the selected quest;

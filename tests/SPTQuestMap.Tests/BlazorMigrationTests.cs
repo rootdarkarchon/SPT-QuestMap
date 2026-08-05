@@ -140,6 +140,144 @@ public sealed class BlazorMigrationTests
     }
 
     [Test]
+    public void TraderFilterIncludesDirectSuccessorsOnlyFromCurrentBoundary()
+    {
+        var nodes = new[]
+        {
+            Node("visible", "Visible", "trader-a"),
+            Node("direct", "Direct", "trader-b"),
+            Node("deep", "Deep", "trader-c"),
+            Node("other-gate", "Other gate", "trader-b"),
+            Node("same-trader", "Same trader", "trader-a"),
+            Node("level-gated", "Level gated", "trader-b"),
+            Node("finished", "Finished", "trader-b"),
+            Node("gated-source", "Visible gated source", "trader-a"),
+            Node("gated-child", "Gated child", "trader-b"),
+            Node("filtered-source", "Filtered source", "trader-a"),
+            Node("filtered-child", "Filtered child", "trader-b"),
+        };
+        var topology = new QuestTopologyDto("version", nodes,
+            [
+                new QuestEdgeDto("visible", "direct", ["Success"], 0),
+                new QuestEdgeDto("direct", "deep", ["Success"], 0),
+                new QuestEdgeDto("visible", "other-gate", ["Success"], 0),
+                new QuestEdgeDto("visible", "same-trader", ["Success"], 0),
+                new QuestEdgeDto("visible", "level-gated", ["Success"], 0),
+                new QuestEdgeDto("visible", "finished", ["Success"], 0),
+                new QuestEdgeDto("gated-source", "gated-child", ["Success"], 0),
+                new QuestEdgeDto("filtered-source", "filtered-child", ["Success"], 0),
+            ],
+            [
+                new QuestTraderDto("trader-a", "Trader A", null),
+                new QuestTraderDto("trader-b", "Trader B", null),
+                new QuestTraderDto("trader-c", "Trader C", null),
+            ], [], []);
+        var profile = new ProfileStateDto("profile", "PMC", "Usec", 10, 0, false, false,
+            [
+                State("visible", "InProgress"),
+                State("direct", "PrerequisiteGated"),
+                State("deep", "PrerequisiteGated"),
+                State("other-gate", "TraderGated"),
+                State("same-trader", "Locked"),
+                State("level-gated", "LevelGated"),
+                State("finished", "Completed"),
+                State("gated-source", "PrerequisiteGated"),
+                State("gated-child", "Locked"),
+                State("filtered-source", "Completed"),
+                State("filtered-child", "PrerequisiteGated"),
+            ],
+            [], ["visible", "direct", "deep", "other-gate", "level-gated", "finished", "gated-source", "gated-child", "filtered-source", "filtered-child"], nodes.Select(node => node.Id).ToArray());
+        var state = new QuestMapPageState();
+        state.SetData(topology, profile);
+
+        state.ApplySettings(new QuestMapSettings("profile", "en", false, false, true, false, "Visible", "trader-a", new Dictionary<string, QuestProfileUiSettings>()));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.VisibleIds, Does.Contain("visible"));
+            Assert.That(state.VisibleIds, Does.Contain("direct"), "A direct prerequisite-gated successor should provide cross-trader context.");
+            Assert.That(state.VisibleIds, Does.Contain("other-gate"), "A direct successor should be included regardless of its gate state.");
+            Assert.That(state.VisibleIds, Does.Contain("same-trader"), "A direct successor outside the normal future scope should still form part of the contextual tier.");
+            Assert.That(state.VisibleIds, Does.Not.Contain("deep"), "Cross-trader context must stop after one successor tier.");
+            Assert.That(state.VisibleIds, Does.Not.Contain("level-gated"), "Direct successors must still obey the level-eligibility filter.");
+            Assert.That(state.VisibleIds, Does.Not.Contain("finished"), "Direct successors must still obey the finished filter.");
+            Assert.That(state.VisibleIds, Does.Contain("gated-source"), "The selected trader's prerequisite-gated quest remains normally visible.");
+            Assert.That(state.VisibleIds, Does.Not.Contain("gated-child"), "A prerequisite-gated quest must not seed the contextual successor tier.");
+            Assert.That(state.VisibleIds, Does.Not.Contain("filtered-source"));
+            Assert.That(state.VisibleIds, Does.Not.Contain("filtered-child"), "A successor must derive from a quest that survived the other configured filters.");
+        });
+    }
+
+    [Test]
+    public void TraderFilterSelectionMatchesUnfilteredPrerequisiteVisibilityAcrossTraders()
+    {
+        var unfiltered = CreateState();
+        unfiltered.ApplySettings(new QuestMapSettings("profile", "en", false, false, true, false, string.Empty, string.Empty, new Dictionary<string, QuestProfileUiSettings>()));
+        unfiltered.SelectQuest("c");
+
+        var traderFiltered = CreateState();
+        traderFiltered.ApplySettings(new QuestMapSettings("profile", "en", false, false, true, false, string.Empty, "trader-b", new Dictionary<string, QuestProfileUiSettings>()));
+        traderFiltered.SelectQuest("c");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(traderFiltered.PrerequisiteIds, Is.EquivalentTo(unfiltered.PrerequisiteIds));
+            Assert.That(traderFiltered.SuccessorIds, Is.EquivalentTo(unfiltered.SuccessorIds));
+            Assert.That(traderFiltered.VisibleIds, Is.EquivalentTo(unfiltered.VisibleIds),
+                "The trader filter must not truncate the selected quest's recursive prerequisite chain.");
+        });
+    }
+
+    [Test]
+    public void TraderFilterShowsOnlyDirectUnmetPrerequisitesAcrossTraders()
+    {
+        var nodes = new[]
+        {
+            Node("target", "Target", "trader-a"),
+            Node("satisfied", "Satisfied", "trader-b"),
+            Node("blocking", "Blocking", "trader-b"),
+            Node("ancestor", "Ancestor", "trader-c"),
+        };
+        var topology = new QuestTopologyDto("version", nodes,
+            [
+                new QuestEdgeDto("satisfied", "target", ["Success"], 0),
+                new QuestEdgeDto("blocking", "target", ["Success"], 0),
+                new QuestEdgeDto("ancestor", "blocking", ["Success"], 0),
+            ],
+            [
+                new QuestTraderDto("trader-a", "Trader A", null),
+                new QuestTraderDto("trader-b", "Trader B", null),
+                new QuestTraderDto("trader-c", "Trader C", null),
+            ], [], []);
+        var profile = new ProfileStateDto("profile", "PMC", "Usec", 10, 0, false, false,
+            [
+                State("target", "PrerequisiteGated") with
+                {
+                    Blockers = [new QuestBlockerDto("Prerequisite", "blocking", null, null, ["Success"])],
+                },
+                State("satisfied", "Completed"),
+                State("blocking", "PrerequisiteGated") with
+                {
+                    Blockers = [new QuestBlockerDto("Prerequisite", "ancestor", null, null, ["Success"])],
+                },
+                State("ancestor", "Available"),
+            ],
+            [], nodes.Select(node => node.Id).ToArray(), nodes.Select(node => node.Id).ToArray());
+        var state = new QuestMapPageState();
+        state.SetData(topology, profile);
+
+        state.ApplySettings(new QuestMapSettings("profile", "en", false, false, false, false, string.Empty, "trader-a", new Dictionary<string, QuestProfileUiSettings>()));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.VisibleIds, Does.Contain("target"));
+            Assert.That(state.VisibleIds, Does.Contain("blocking"), "The direct prerequisite that still blocks a visible merge quest must cross the trader filter.");
+            Assert.That(state.VisibleIds, Does.Not.Contain("satisfied"), "A satisfied incoming prerequisite must not be added as a blocker.");
+            Assert.That(state.VisibleIds, Does.Not.Contain("ancestor"), "Unmet-prerequisite context must remain direct rather than recursively expanding.");
+        });
+    }
+
+    [Test]
     public void InProgressDrawerDataIgnoresGraphFilters()
     {
         var state = CreateState();
