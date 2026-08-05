@@ -131,3 +131,11 @@ Milestone 3 is complete when:
 - feature disable/failure restores vanilla behavior.
 
 When complete, proceed to `M04-native-actions-reactive-updates.md`.
+
+## Implementation status
+
+Status: **Complete**.
+
+The trader projection, runtime graph, batched edges, interaction controls, exact native live-detail bridge, topology-only read-only detail pane, duplicate-mount cleanup, feature-disable path, and forced-failure path are implemented. Static validation passes 16 graph-core tests and 107 merged server/browser tests; the exact client build has zero warnings/errors. The complete manual runtime matrix passes: normal graph lifecycle and selection, cursor-centered zoom and curved-edge review, feature-disabled vanilla behavior, and deliberate initialization-failure restoration.
+
+The first corrected visual pass accepted the vertical-slice lifecycle but identified center-biased zoom and ambiguous shared edge trunks. Cursor-anchored zoom and stable-port Bézier routing are now implemented for an M03 retest. The requested full-pane graph plus narrow selection-driven detail sidebar is recorded as a mandatory Milestone 7 composition because it depends on the custom detail pane; M03 continues to preserve the native detail pane by design.

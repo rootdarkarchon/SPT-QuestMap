@@ -3,6 +3,7 @@ using HarmonyLib;
 using EFT.UI;
 using SPTQuestMap.Client.Compatibility;
 using SPTQuestMap.Client.Configuration;
+using SPTQuestMap.Client.Data;
 
 namespace SPTQuestMap.Client.Patches;
 
@@ -21,41 +22,63 @@ internal sealed class PatchRegistration : IDisposable
     public PatchRegistrationResult Register(
         CompatibilityReport compatibility,
         QuestMapClientConfiguration configuration,
-        Action<AbstractQuestControllerClass> observeQuestController)
+        QuestMapDataRuntime dataRuntime)
     {
         if (!compatibility.IsCompatible)
         {
             return new PatchRegistrationResult(false, true, "incompatible environment");
         }
 
-        if (configuration.AnyReplacementFeatureRequested)
+        if (configuration.EnableGlobalTasksGraph.Value || configuration.EnableCustomQuestDetails.Value)
         {
             return new PatchRegistrationResult(
                 false,
                 true,
-                "replacement feature requested before its UI milestone is available");
+                "a post-Milestone-3 replacement feature was requested before its UI milestone is available");
         }
 
         _harmony = new Harmony(_harmonyId);
-        QuestDataLifecyclePatch.Configure(observeQuestController);
-        var postfix = new HarmonyMethod(typeof(QuestDataLifecyclePatch), nameof(QuestDataLifecyclePatch.Postfix));
+        QuestDataLifecyclePatch.Configure(dataRuntime.ObserveQuestController);
+        TraderGraphLifecyclePatch.Configure(dataRuntime);
         foreach (var target in compatibility.PatchTargets.ResolvedMethods)
         {
-            if (target.Name != nameof(QuestsScreen.Show) || (target.DeclaringType != typeof(QuestsScreen) && target.DeclaringType != typeof(TasksScreen)))
+            if (target.DeclaringType == typeof(QuestsScreen) && target.Name == nameof(QuestsScreen.Show))
             {
+                _harmony.Patch(
+                    target,
+                    postfix: new HarmonyMethod(typeof(TraderGraphLifecyclePatch), nameof(TraderGraphLifecyclePatch.ShowPostfix)));
+                InstalledPatchCount++;
                 continue;
             }
 
-            _harmony.Patch(target, postfix: postfix);
-            InstalledPatchCount++;
+            if (target.DeclaringType == typeof(QuestsScreen) && target.Name == nameof(QuestsScreen.Close))
+            {
+                _harmony.Patch(
+                    target,
+                    prefix: new HarmonyMethod(typeof(TraderGraphLifecyclePatch), nameof(TraderGraphLifecyclePatch.ClosePrefix)));
+                InstalledPatchCount++;
+                continue;
+            }
+
+            if (target.DeclaringType == typeof(TasksScreen) && target.Name == nameof(TasksScreen.Show))
+            {
+                _harmony.Patch(
+                    target,
+                    postfix: new HarmonyMethod(typeof(QuestDataLifecyclePatch), nameof(QuestDataLifecyclePatch.Postfix)));
+                InstalledPatchCount++;
+            }
         }
 
-        return new PatchRegistrationResult(true, false, "compatible read-only Milestone 2 data hooks active; replacement features disabled");
+        var mode = configuration.EnableTraderQuestGraph.Value
+            ? "Milestone 3 trader graph enabled"
+            : "Milestone 3 trader graph disabled; read-only data hooks active";
+        return new PatchRegistrationResult(true, false, mode);
     }
 
     public void Dispose()
     {
         QuestDataLifecyclePatch.Configure(null);
+        TraderGraphLifecyclePatch.Configure(null);
         _harmony?.UnpatchSelf();
         _harmony = null;
         InstalledPatchCount = 0;

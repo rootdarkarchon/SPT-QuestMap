@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-The server/Blazor Milestone 4 migration and difference-first profile comparison 1.3.0 are complete, release-validated, deployed, and accepted as the current web baseline. In-game client Milestones 0, 1, and 2 are also **Complete**: the read-only complete-topology transport, pure graph core, deterministic layout, live-overlay capture boundary, and observation-only lifecycle integration passed static and in-game runtime validation. In-game Milestone 3 is next and must preserve the accepted 1.3.0 server/web functionality.
+The server/Blazor Milestone 4 migration and difference-first profile comparison 1.3.0 are complete and remain the accepted web baseline. In-game client Milestones 0 through 3 are **Complete**. In-game Milestone 4 is next: verify native quest actions and reactive graph updates without introducing a second transaction path.
 
 ## SPT 4.0.13 integration audit
 
@@ -315,4 +315,73 @@ Status: Complete
 
 ### Next step
 
-- Begin Milestone 3, retaining the accepted 1.3.0 server/web baseline and read-only topology/overlay boundary while keeping native quest details/actions intact.
+- Begin in-game Milestone 4 using `M04-native-actions-reactive-updates.md`.
+
+## In-game client milestone 3 — trader graph vertical slice
+
+Status: Complete
+
+### Completed
+
+- Added a pure trader projection over the M02 topology/layout boundary. It retains only nodes owned by the selected trader, renders only edges whose endpoints are both visible, compacts gaps between retained global ranks, and leaves external prerequisites in the topology for details.
+- Replaced the trader `QuestsScreen` list area through a narrow postfix after vanilla `Show`. The graph mirrors the verified `_questsListView` rectangle beneath `MainArea/Center`; `_questView` stays separate and native.
+- Added runtime-created quest nodes with name, trader-initial fallback, basic exact-status styling, selected styling, click selection, drag panning, wheel zoom, fit-to-visible, and a safe empty state. All prerequisite edges are emitted by one batched `MaskableGraphic`; there is no GameObject per edge.
+- Added the live detail bridge using the exact `QuestView.Show(ISession, InventoryController, AbstractQuestControllerClass, QuestClass, TraderClass)` signature. Each selection closes the previous native binding first, marks the existing live quest viewed, and reuses EFT's native detail/actions without constructing a second transaction path.
+- Added a separate read-only future detail pane for topology-only quests. It shows status, description, effective requirements, ordered objectives, and prerequisite/successor IDs, exposes no action controls, and never creates or injects a `QuestClass`.
+- Added duplicate-mount prevention and owned cleanup. `QuestsScreen.Close` disposes graph/future roots before vanilla close; repeated `Show` replaces any prior controller. Feature disable, forced initialization failure, topology failure, and mount exceptions retain or restore the vanilla list.
+- Kept the accepted server/browser 1.3.0 implementation and M02 read-only route/adapter unchanged. The live quest book remains an enumerable input only.
+
+### Verification
+
+- Exact client build: `dotnet build .\src\SPTQuestMap.Client\SPTQuestMap.Client.csproj -c Release -p:EftInstallRoot="D:\Tarkov-SPT" -m:1` passes with 0 warnings and 0 errors.
+- Combined regression: `dotnet test .\src\SPTQuestMap\SPTQuestMap.slnx -c Release -p:SptInstallRoot="D:\Tarkov-SPT" -p:EftInstallRoot="D:\Tarkov-SPT" -m:1` passes 16/16 graph-core tests and 107/107 merged server/browser tests.
+- Added a projection regression proving trader-only node filtering, internal-edge filtering, and compact retained ranks.
+- Deployed the tested client/core pair to `D:\Tarkov-SPT\BepInEx\plugins\SPTQuestMap`; the directory contains only the two project DLL/PDB pairs. Source/deployed hashes match: client DLL `1439C6322F9EB01CB4613AA8349532D9706121CE3AF27CED78D3FE8D6CEE439A`, core DLL `6BE7A39F4B0085654A71723D9244FD464B169E6CBB7BEDB6FBD8A4BDC061C573`.
+- Deployed the merged 1.3.0 server DLL through the guarded workflow. Source/deployed SHA-256 matches at `DD2690BD3FF14A2077B762EEFFE9B847F2E9CA5748B685AD6B3DC06E43CA56E0`; the exact prior `SPT.Server.exe` was stopped and `D:\Tarkov-SPT\SPT\SPT.Server.exe` was relaunched as PID 15884 without readiness polling.
+- The first manual-run configuration is staged with `EnableTraderQuestGraph=true`, `ForceCompatibilityFailure=false`, and `ForceTraderGraphInitializationFailure=false`.
+- First manual run: every trader mount reached the M03 controller but failed before hiding the vanilla list because Unity returned null when `TextMeshProUGUI` was added to a GameObject already containing an `Image`. Structured fallback consistently reported `active=False`, `safelyDisabled=True`, and `vanillaRestored=True`, and the user observed usable vanilla screens. The log is archived at `D:\Tarkov-SPT\QuestMap-runtime-logs\m03-first-no-graph-LogOutput.log` with SHA-256 `CCA2FF1A61C0044FB27E7C7DA3B7E601C525A7587FEE89702AF2E480DE9A6366`.
+- Corrected the runtime UI factory so a label receives its own stretched child whenever the requested host already owns a Unity `Graphic`. This respects Unity UI's one-Graphic-per-GameObject constraint for node badges and buttons while leaving plain text roots unchanged.
+- The corrected exact client build again passes with 0 warnings/errors and was redeployed without a server restart. Corrected client DLL source/deployed SHA-256 matches at `F29956D01B484B1BB34BED77EE243C9213738F6AC0D910BB5F3D5AA1F6F067A2`; the core DLL is unchanged.
+- Corrected main runtime pass: exact guard and all four targets passed with three M03 patches installed. The client loaded 562 nodes/736 edges with zero missing references or unsupported conditions, preserved the live quest book at `295 -> 295`, and mounted 12 trader graphs spanning 15-105 nodes and 5-102 internal edges. It recorded 31 selections across both native live details and action-free read-only future details, 11 explicit screen disposals/restorations during trader switching/reopening, and zero `QUESTMAP_M02_ERROR`, `QUESTMAP_M03_ERROR`, QuestMap exception, or patch failure. The log is archived at `D:\Tarkov-SPT\QuestMap-runtime-logs\m03-corrected-main-LogOutput.log` with SHA-256 `3A53C0CCB97A81E6A50CCB006A0603FEFEC9A07E4637DF4F7FCB2B49212B7B4E`.
+- User review found two interaction/readability issues in the vertical slice. Wheel zoom mixed viewport-pivot coordinates with the graph's top-left anchor, so it visually zoomed around the canvas center; it now converts the pointer into the content anchor space and preserves the graph point under the cursor. Orthogonal edges also shared long trunks; the single batched edge mesh now assigns stable per-node ports, draws segmented cubic Bézier curves, separates backward/cyclic edges onto deterministic upper lanes, and adds endpoint arrows. Advanced crossing minimization and layout routing remain Milestone 5 scope.
+- The post-feedback exact client build passes with 0 warnings/errors; regression remains 16/16 core and 107/107 server/browser tests. The client-only correction was deployed without restarting the unchanged server. Client DLL source/deployed SHA-256 matches at `D0D1BBA696C1C6DD7704A76E2C4151D8ACF09C3B9BC19A2233FE4DCAA2A7B350`.
+- Focused runtime review accepted cursor-centered zoom and the curved, port-separated connection presentation. The run mounted four graphs, recorded 24 native/future selections and three explicit restorations, preserved the quest book at `295 -> 295`, and contained zero M02/M03 errors. The log is archived at `D:\Tarkov-SPT\QuestMap-runtime-logs\m03-zoom-curves-accepted-LogOutput.log` with SHA-256 `B0676A74FD5D7346F8AA0480D54910FFCB847930C273C536BAEB057FC4943EB2`.
+- User review also established a required final architecture: the trader graph should occupy the complete Tasks pane and selected quest details should appear in a narrower side panel, matching the browser QuestMap's balance. This is intentionally deferred to Milestone 7 because M03's proof boundary retains the untouched native `QuestView`; the full-pane design depends on the QuestMap-owned detail pane and verified native-action-controller reuse.
+- Feature-disabled runtime pass: the exact compatibility guard remained active with three lifecycle patches installed, `traderGraph=False`, and opening a trader emitted `QUESTMAP_M03_STATE ... active=False; safelyDisabled=True; reason=feature disabled; vanillaRestored=True`. The user confirmed the screen remained fully vanilla and usable. No graph mount, selection, or M03 error occurred. The log is archived at `D:\Tarkov-SPT\QuestMap-runtime-logs\m03-feature-disabled-LogOutput.log` with SHA-256 `0A602A27ADC47DFB5763968F4E808DFEA680DEA2E922335C67A657BFB25E5C3B`.
+- Forced-initialization-failure runtime pass: exact compatibility and all four targets remained valid, the graph feature was enabled, and the deliberate initialization exception emitted `QUESTMAP_M03_ERROR` followed by `active=False`, `safelyDisabled=True`, `reason=graph initialization failed`, and `vanillaRestored=True`. The user confirmed the restored vanilla trader list remained usable. The log is archived at `D:\Tarkov-SPT\QuestMap-runtime-logs\m03-forced-init-failure-LogOutput.log` with SHA-256 `6ED1E627B908F2FF068836DACD04A794FB9A0A409F60F4CD64C9B80814D1D27B`.
+- Manual tests: the corrected main graph/lifecycle, cursor-zoom/curved-edge, feature-disabled, and forced-initialization-failure runs all pass. The diagnostic was restored to `false`; the graph remains enabled for normal use. Milestone 3 is accepted.
+
+### Known limitations
+
+- This milestone uses runtime-created UI and one GameObject per visible node. Pooling, production edge styling, persistence, and measured full-graph performance remain Milestone 5 scope.
+- The narrow graph viewport is an accepted M03 proof-of-concept constraint, not the intended final composition. Milestone 7 must expand the graph across the complete trader Tasks pane and replace the permanently wide native detail area with a narrower selection-driven QuestMap side panel while preserving native action controllers.
+- Native action behavior is retained but must not be exercised for M03 acceptance; action and reactive update verification belongs to Milestone 4.
+- The future detail pane intentionally exposes no actions and does not replace the native detail pane for a live quest.
+
+### Source-sensitive targets
+
+- Postfix: `EFT.UI.QuestsScreen.Show(ISession, EFT.InventoryLogic.InventoryController, AbstractQuestControllerClass, TraderClass)`.
+- Prefix: `EFT.UI.QuestsScreen.Close()`.
+- Serialized fields: `QuestsScreen._questsListView`, `QuestsScreen._questView`.
+- Native bridge: `QuestView.Close()`, `QuestClass.IsViewed`, and `QuestView.Show(ISession, InventoryController, AbstractQuestControllerClass, QuestClass, TraderClass)`.
+- Mount geometry: a sibling of `MainArea/Center/QuestList` mirroring the vanilla list `RectTransform`; native `MainArea/Center/QuestView` remains separate.
+
+### Manual runtime gate
+
+No profile backup is required because this gate performs no quest or inventory action. Do not click accept, restart, reroll, handover, or complete.
+
+1. Enable `Features.EnableTraderQuestGraph = true`; leave both forced-failure settings false. Start EFT and preserve this run's log before another EFT restart.
+2. Open several traders, including one with many quests and one with few or no quests. Confirm only that trader's nodes appear, edges connect only visible endpoints, node selection styling works, drag/wheel/fit work, and empty state is safe.
+3. Select at least one live quest. Confirm the existing native detail pane updates, retains its native buttons, and `QUESTMAP_M03_SELECT ... detail=native` appears once per click without exceptions.
+4. Select at least one `Locked future · read-only` node. Confirm the separate detail pane includes requirements/objectives/related IDs and has no action controls.
+5. Reopen/close the same trader Tasks tab repeatedly, switch traders repeatedly, and use close/back. Confirm there are no duplicate graph roots, duplicate selection reactions, invisible blockers, or broken navigation.
+6. In a separate run, set `EnableTraderQuestGraph = false`. Confirm the trader screen is vanilla and `QUESTMAP_M03_STATE ... reason=feature disabled; vanillaRestored=True` is logged.
+7. In another separate run, enable the graph and set `Diagnostics.ForceTraderGraphInitializationFailure = true`. Confirm the vanilla list remains usable and the log contains `QUESTMAP_M03_ERROR` followed by `active=False`, `safelyDisabled=True`, and `vanillaRestored=True`. Restore the setting to false afterward.
+
+### Blockers
+
+- None for Milestone 3.
+
+### Next step
+
+- Begin `M04-native-actions-reactive-updates.md` while preserving the native action-controller boundary proven by M03.

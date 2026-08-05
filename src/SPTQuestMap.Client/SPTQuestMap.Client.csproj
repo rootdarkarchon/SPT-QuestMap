@@ -30,6 +30,14 @@
            Text="Required Unity assembly is missing: $(ManagedRoot)\UnityEngine.dll" />
     <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.CoreModule.dll')"
            Text="Required Unity assembly is missing: $(ManagedRoot)\UnityEngine.CoreModule.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.UI.dll')"
+           Text="Required Unity UI assembly is missing: $(ManagedRoot)\UnityEngine.UI.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.UIModule.dll')"
+           Text="Required Unity UI module is missing: $(ManagedRoot)\UnityEngine.UIModule.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\Unity.TextMeshPro.dll')"
+           Text="Required TextMeshPro assembly is missing: $(ManagedRoot)\Unity.TextMeshPro.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.TextRenderingModule.dll')"
+           Text="Required Unity text rendering module is missing: $(ManagedRoot)\UnityEngine.TextRenderingModule.dll" />
     <Error Condition="!Exists('$(BepInExCoreRoot)\BepInEx.dll')"
            Text="Required BepInEx assembly is missing: $(BepInExCoreRoot)\BepInEx.dll" />
     <Error Condition="!Exists('$(BepInExCoreRoot)\0Harmony.dll')"
@@ -72,6 +80,22 @@
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>$(ManagedRoot)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(ManagedRoot)\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(ManagedRoot)\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(ManagedRoot)\Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(ManagedRoot)\UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

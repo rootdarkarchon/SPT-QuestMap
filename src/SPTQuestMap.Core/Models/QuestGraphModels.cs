@@ -189,3 +189,11 @@ public sealed record QuestGraphLayout(
     IReadOnlyDictionary<string, QuestNodePosition> NodesById,
     double Width,
     double Height);
+
+public sealed record TraderGraphProjection(
+    string TraderId,
+    IReadOnlyList<QuestGraphNode> Nodes,
+    IReadOnlyList<QuestGraphEdge> Edges,
+    IReadOnlyDictionary<string, QuestNodePosition> NodesById,
+    double Width,
+    double Height);

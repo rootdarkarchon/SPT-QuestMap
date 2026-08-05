@@ -9,13 +9,15 @@ internal sealed class QuestMapClientConfiguration
         ConfigEntry<bool> enableGlobalTasksGraph,
         ConfigEntry<bool> enableCustomQuestDetails,
         ConfigEntry<bool> enableDebugLogging,
-        ConfigEntry<bool> forceCompatibilityFailure)
+        ConfigEntry<bool> forceCompatibilityFailure,
+        ConfigEntry<bool> forceTraderGraphInitializationFailure)
     {
         EnableTraderQuestGraph = enableTraderQuestGraph;
         EnableGlobalTasksGraph = enableGlobalTasksGraph;
         EnableCustomQuestDetails = enableCustomQuestDetails;
         EnableDebugLogging = enableDebugLogging;
         ForceCompatibilityFailure = forceCompatibilityFailure;
+        ForceTraderGraphInitializationFailure = forceTraderGraphInitializationFailure;
     }
 
     public ConfigEntry<bool> EnableTraderQuestGraph { get; }
@@ -28,10 +30,7 @@ internal sealed class QuestMapClientConfiguration
 
     public ConfigEntry<bool> ForceCompatibilityFailure { get; }
 
-    public bool AnyReplacementFeatureRequested =>
-        EnableTraderQuestGraph.Value
-        || EnableGlobalTasksGraph.Value
-        || EnableCustomQuestDetails.Value;
+    public ConfigEntry<bool> ForceTraderGraphInitializationFailure { get; }
 
     public static QuestMapClientConfiguration Bind(ConfigFile config)
     {
@@ -40,7 +39,7 @@ internal sealed class QuestMapClientConfiguration
                 "Features",
                 "EnableTraderQuestGraph",
                 false,
-                "Reserved for the trader Tasks graph. Milestone 1 remains inert."),
+                "Replace each trader's vanilla quest list with the Milestone 3 QuestMap graph."),
             config.Bind(
                 "Features",
                 "EnableGlobalTasksGraph",
@@ -60,6 +59,11 @@ internal sealed class QuestMapClientConfiguration
                 "Diagnostics",
                 "ForceCompatibilityFailure",
                 false,
-                "Force the startup guard to fail so safe-disable behavior can be tested without modifying game files."));
+                "Force the startup guard to fail so safe-disable behavior can be tested without modifying game files."),
+            config.Bind(
+                "Diagnostics",
+                "ForceTraderGraphInitializationFailure",
+                false,
+                "Force the trader graph mount to fail before the vanilla list is hidden, for fallback testing."));
     }
 }

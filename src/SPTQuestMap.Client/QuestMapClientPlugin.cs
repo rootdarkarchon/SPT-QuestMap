@@ -22,9 +22,9 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
     {
         var configuration = QuestMapClientConfiguration.Bind(Config);
         var compatibility = CompatibilityValidator.Validate(configuration.ForceCompatibilityFailure.Value);
-        _dataRuntime = new QuestMapDataRuntime(this, Logger);
+        _dataRuntime = new QuestMapDataRuntime(this, Logger, configuration);
         _patchRegistration = new PatchRegistration(PluginGuid);
-        var registration = _patchRegistration.Register(compatibility, configuration, _dataRuntime.ObserveQuestController);
+        var registration = _patchRegistration.Register(compatibility, configuration, _dataRuntime);
         var assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? PluginVersion;
 
         StartupDiagnostics.Log(Logger, assemblyVersion, configuration, compatibility, registration);

@@ -166,6 +166,35 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
+    public void TraderProjection_CompactsRanksAndKeepsOnlyInternalEdges()
+    {
+        var topology = QuestTopologyNormalizer.Normalize(Feed(
+            [
+                Node("p0", "Prapor", "Any"),
+                Node("therapist", "Therapist", "Any"),
+                Node("p2", "Prapor", "Any"),
+                Node("p3", "Prapor", "Any"),
+            ],
+            [
+                Edge("p0", "therapist", "Success"),
+                Edge("therapist", "p2", "Success"),
+                Edge("p2", "p3", "Success"),
+            ]));
+        var layout = DeterministicGraphLayout.Build(topology);
+
+        var projection = TraderGraphProjectionBuilder.Build(topology, layout, "prapor");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(projection.Nodes.Select(node => node.Id), Is.EqualTo(new[] { "p0", "p2", "p3" }));
+            Assert.That(projection.Edges.Select(edge => (edge.SourceId, edge.TargetId)), Is.EqualTo(new[] { ("p2", "p3") }));
+            Assert.That(projection.NodesById["p0"].X, Is.EqualTo(0));
+            Assert.That(projection.NodesById["p2"].X, Is.EqualTo(DeterministicGraphLayout.NodeWidth + DeterministicGraphLayout.LayerGap));
+            Assert.That(projection.NodesById["p3"].X, Is.EqualTo(2 * (DeterministicGraphLayout.NodeWidth + DeterministicGraphLayout.LayerGap)));
+        });
+    }
+
+    [Test]
     public void OverlayRefresh_DoesNotReplaceTopologyOrLayout()
     {
         var topology = QuestTopologyNormalizer.Normalize(Feed([Node("a", "Prapor", "Any")], []));
