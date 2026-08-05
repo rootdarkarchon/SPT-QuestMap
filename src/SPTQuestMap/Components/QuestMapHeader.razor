@@ -3,9 +3,11 @@
         <div class="brand"><span class="eyebrow">SPT 4.0.13</span><h1>@Localizer["app.heading"]</h1></div>
         <div class="identity-controls" aria-label="@Localizer["controls.aria"]">
             <button class="primary refresh-button" type="button" title="@Localizer["refresh"]" aria-label="@Localizer["refresh"]" disabled="@Busy" @onclick="RefreshRequested"><span aria-hidden="true">⟳</span></button>
-            <div class="profile-field @(ProfileMenuOpen ? "open" : null)">
-                <button class="profile-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="@ProfileMenuOpen.ToString().ToLowerInvariant()" aria-label="@Localizer["profile.aria"]" disabled="@(Busy || SelectedProfile is null)" @onclick="ToggleProfileMenu" @onkeydown="OnProfileKeyDown">
+            <button class="compare-toggle @(CompareMode ? "active" : null)" type="button" aria-pressed="@CompareMode.ToString().ToLowerInvariant()" title="@Localizer[CompareMode ? "compare.exit" : "compare.toggle"]" aria-label="@Localizer[CompareMode ? "compare.exit" : "compare.toggle"]" disabled="@(Busy || Profiles.Count < 2)" @onclick="() => CompareModeChanged.InvokeAsync(!CompareMode)"><span aria-hidden="true">⇄</span></button>
+            <div class="profile-field @(CompareMode ? "compare-profile" : null) @(ProfileMenuOpen ? "open" : null)">
+                <button class="profile-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="@ProfileMenuOpen.ToString().ToLowerInvariant()" aria-label="@(CompareMode ? Localizer["compare.profileA"] : Localizer["profile.aria"])" disabled="@(Busy || SelectedProfile is null)" @onclick="ToggleProfileMenu" @onkeydown="OnProfileKeyDown">
                     <span class="profile-select-face" aria-hidden="true">
+                        @if (CompareMode) { <span class="profile-slot primary-slot">A</span> }
                         <span class="profile-side-icon @SideClass(SelectedProfile?.Side)"></span>
                         <strong class="profile-name">@(SelectedProfile?.Nickname ?? "—")</strong>
                         <span class="profile-level">@(SelectedProfile?.Level.ToString() ?? "—")</span>
@@ -16,7 +18,7 @@
                 {
                     <button class="profile-dismiss-layer" type="button" tabindex="-1" aria-label="@Localizer["selection.clear"]" @onclick="CloseProfileMenu"></button>
                     <div class="profile-menu" role="listbox" aria-label="@Localizer["profile.aria"]">
-                        @foreach (var profile in Profiles)
+                        @foreach (var profile in Profiles.Where(profile => !CompareMode || profile.Id != SelectedComparisonProfile?.Id))
                         {
                             var selected = profile.Id == SelectedProfile?.Id;
                             <button class="profile-option @(selected ? "selected" : null)" type="button" role="option" aria-selected="@selected.ToString().ToLowerInvariant()" title="@profile.Id" @onclick="() => SelectProfile(profile.Id)">
@@ -28,6 +30,36 @@
                     </div>
                 }
             </div>
+            @if (CompareMode)
+            {
+                <button class="swap-profiles" type="button" title="@Localizer["compare.swap"]" aria-label="@Localizer["compare.swap"]" disabled="@Busy" @onclick="SwapProfilesRequested"><span aria-hidden="true">⇆</span></button>
+                <div class="profile-field compare-profile @(ComparisonProfileMenuOpen ? "open" : null)">
+                    <button class="profile-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="@ComparisonProfileMenuOpen.ToString().ToLowerInvariant()" aria-label="@Localizer["compare.profileB"]" disabled="@(Busy || SelectedComparisonProfile is null)" @onclick="ToggleComparisonProfileMenu" @onkeydown="OnComparisonProfileKeyDown">
+                        <span class="profile-select-face" aria-hidden="true">
+                            <span class="profile-slot comparison-slot">B</span>
+                            <span class="profile-side-icon @SideClass(SelectedComparisonProfile?.Side)"></span>
+                            <strong class="profile-name">@(SelectedComparisonProfile?.Nickname ?? "-")</strong>
+                            <span class="profile-level">@(SelectedComparisonProfile?.Level.ToString() ?? "-")</span>
+                            <span class="profile-chevron">⌄</span>
+                        </span>
+                    </button>
+                    @if (ComparisonProfileMenuOpen)
+                    {
+                        <button class="profile-dismiss-layer" type="button" tabindex="-1" aria-label="@Localizer["selection.clear"]" @onclick="CloseComparisonProfileMenu"></button>
+                        <div class="profile-menu" role="listbox" aria-label="@Localizer["compare.profileB"]">
+                            @foreach (var profile in Profiles.Where(profile => profile.Id != SelectedProfile?.Id))
+                            {
+                                var selected = profile.Id == SelectedComparisonProfile?.Id;
+                                <button class="profile-option @(selected ? "selected" : null)" type="button" role="option" aria-selected="@selected.ToString().ToLowerInvariant()" title="@profile.Id" @onclick="() => SelectComparisonProfile(profile.Id)">
+                                    <span class="profile-side-icon @SideClass(profile.Side)"></span>
+                                    <strong class="profile-option-name">@profile.Nickname</strong>
+                                    <span class="profile-option-level">@profile.Level</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
             <label class="field language-field"><span>@Localizer["language.label"]</span>
                 <select value="@Localizer.Language" aria-label="@Localizer["language.aria"]" disabled="@Busy" @onchange="OnLanguageChanged">
                     @foreach (var language in Languages)
@@ -45,22 +77,36 @@
     [Parameter, EditorRequired] public QuestMapLocalizer Localizer { get; set; } = default!;
     [Parameter, EditorRequired] public IReadOnlyList<ProfileSummaryDto> Profiles { get; set; } = [];
     [Parameter] public ProfileSummaryDto? SelectedProfile { get; set; }
+    [Parameter] public ProfileSummaryDto? SelectedComparisonProfile { get; set; }
+    [Parameter] public bool CompareMode { get; set; }
     [Parameter, EditorRequired] public IReadOnlyList<QuestMapLanguageDto> Languages { get; set; } = [];
     [Parameter] public bool Busy { get; set; }
     [Parameter] public EventCallback RefreshRequested { get; set; }
     [Parameter] public EventCallback<string> ProfileChanged { get; set; }
+    [Parameter] public EventCallback<string> ComparisonProfileChanged { get; set; }
+    [Parameter] public EventCallback<bool> CompareModeChanged { get; set; }
+    [Parameter] public EventCallback SwapProfilesRequested { get; set; }
     [Parameter] public EventCallback<string> LanguageChanged { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private bool ProfileMenuOpen { get; set; }
+    private bool ComparisonProfileMenuOpen { get; set; }
 
-    private void ToggleProfileMenu() => ProfileMenuOpen = !ProfileMenuOpen;
+    private void ToggleProfileMenu() { ComparisonProfileMenuOpen = false; ProfileMenuOpen = !ProfileMenuOpen; }
     private void CloseProfileMenu() => ProfileMenuOpen = false;
+    private void ToggleComparisonProfileMenu() { ProfileMenuOpen = false; ComparisonProfileMenuOpen = !ComparisonProfileMenuOpen; }
+    private void CloseComparisonProfileMenu() => ComparisonProfileMenuOpen = false;
 
     private async Task SelectProfile(string profileId)
     {
         ProfileMenuOpen = false;
         if (profileId != SelectedProfile?.Id) await ProfileChanged.InvokeAsync(profileId);
+    }
+
+    private async Task SelectComparisonProfile(string profileId)
+    {
+        ComparisonProfileMenuOpen = false;
+        if (profileId != SelectedComparisonProfile?.Id) await ComparisonProfileChanged.InvokeAsync(profileId);
     }
 
     private async Task OnLanguageChanged(ChangeEventArgs args)
@@ -72,6 +118,12 @@
     {
         if (args.Key is "ArrowDown" or "Enter" or " ") ProfileMenuOpen = true;
         else if (args.Key == "Escape") ProfileMenuOpen = false;
+    }
+
+    private void OnComparisonProfileKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key is "ArrowDown" or "Enter" or " ") ComparisonProfileMenuOpen = true;
+        else if (args.Key == "Escape") ComparisonProfileMenuOpen = false;
     }
 
     private static string SideClass(string? side) => side?.ToLowerInvariant() switch { "usec" => "usec", "bear" => "bear", _ => "unknown" };

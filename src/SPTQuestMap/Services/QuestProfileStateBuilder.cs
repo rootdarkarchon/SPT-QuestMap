@@ -77,7 +77,7 @@ internal sealed class QuestProfileStateBuilder(
                 return new ObjectiveProgressDto(
                     objective.Id,
                     QuestProfileRules.ObjectiveIsComplete(conditionRecorded, counter?.Value, objective.RequiredValue, objective.Compare),
-                    counter?.Value,
+                    QuestProfileRules.CapObjectiveCurrent(counter?.Value, objective.RequiredValue),
                     objective.RequiredValue,
                     counter is not null || conditionRecorded
                 );
@@ -256,7 +256,7 @@ internal sealed class QuestProfileStateBuilder(
             return new ObjectiveProgressDto(
                 objective.Id,
                 QuestProfileRules.ObjectiveIsComplete(conditionRecorded, counter?.Value, objective.RequiredValue, objective.Compare),
-                counter?.Value,
+                QuestProfileRules.CapObjectiveCurrent(counter?.Value, objective.RequiredValue),
                 objective.RequiredValue,
                 counter is not null || conditionRecorded
             );

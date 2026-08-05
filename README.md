@@ -26,6 +26,7 @@ SPT-QuestMap is an independent community project. It is not affiliated with or e
 - Includes a persistent **Quests In Progress** drawer grouped by trader.
 - Places profile-generated Daily and Weekly operational quests in a labeled horizontal band above the dependency graph, including live remaining time and expired-state display.
 - Preserves profile choice, language, filters, selection, focus state, pan, and zoom in the browser.
+- Compares two profiles on one shared graph with explicit change categories, readable A/B transitions, objective deltas, profile-exclusive quests and category filters.
 - Uses a Canvas renderer so the full graph remains practical to pan and zoom.
 - Refreshes only when you ask it to. It does not poll or modify the profile.
 
@@ -55,6 +56,7 @@ Your browser may warn about SPT's local TLS certificate until you trust that cer
 ## Using the map
 
 - Pick a profile in the top bar. Headless and level-zero profiles are intentionally omitted.
+- Use the compare control to add profile B. Matching quests collapse to one dimmed card, while changed quests show an outlined reason badge and explicit A/B state or progress rows. The comparison bar can show all quests, all changes or one change category while preserving selected-chain context. Daily and Weekly quests are hidden during comparison because separately generated quests cannot be matched safely.
 - Click a quest to inspect its details and highlight its recursive prerequisites and direct successors.
 - Selection behaves the same with or without a trader filter: recursive prerequisites remain visible across traders, while only direct successors are highlighted.
 - Double-click a quest, or select it and press **Focus chain**, to compact the view to that chain.
