@@ -93,6 +93,9 @@ internal static class QuestProfileRules
     internal static bool ObjectiveIsComplete(bool conditionRecorded, double? current, double? required, string? compare) =>
         conditionRecorded || (current.HasValue && required.HasValue && QuestGraphRules.Compare(current.Value, required.Value, compare ?? ">="));
 
+    internal static double? CapObjectiveCurrent(double? current, double? required) =>
+        current.HasValue && required.HasValue && current.Value > required.Value ? required : current;
+
     internal static double? CalculateObjectiveProgress(IReadOnlyCollection<ObjectiveProgressDto> objectives)
     {
         if (objectives.Count == 0) return null;

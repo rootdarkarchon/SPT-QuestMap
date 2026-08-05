@@ -3,7 +3,7 @@
         <div class="filter-toggles">
             <button class="filter-toggle @(State.ShowAllFuture ? "active" : null)" type="button" aria-pressed="@State.ShowAllFuture.ToString().ToLowerInvariant()" title="@Localizer["showAllFuture"]" aria-label="@Localizer["showAllFuture"]" @onclick="() => ShowAllFutureChanged.InvokeAsync(!State.ShowAllFuture)"><span aria-hidden="true">⇉</span></button>
             <button class="filter-toggle @(State.ShowFinished ? "active" : null)" type="button" aria-pressed="@State.ShowFinished.ToString().ToLowerInvariant()" title="@Localizer["showFinished"]" aria-label="@Localizer["showFinished"]" disabled="@State.FocusMode" @onclick="() => ShowFinishedChanged.InvokeAsync(!State.ShowFinished)"><span aria-hidden="true">✓</span></button>
-            <button class="filter-toggle repeatable-toggle @(State.ShowRepeatables ? "active" : null)" type="button" aria-pressed="@State.ShowRepeatables.ToString().ToLowerInvariant()" title="@Localizer["showRepeatables"]" aria-label="@Localizer["showRepeatables"]" disabled="@State.FocusMode" @onclick="() => RepeatablesChanged.InvokeAsync(!State.ShowRepeatables)">
+            <button class="filter-toggle repeatable-toggle @(!State.CompareMode && State.ShowRepeatables ? "active" : null)" type="button" aria-pressed="@(!State.CompareMode && State.ShowRepeatables).ToString().ToLowerInvariant()" title="@Localizer[State.CompareMode ? "compare.repeatablesUnavailable" : "showRepeatables"]" aria-label="@Localizer[State.CompareMode ? "compare.repeatablesUnavailable" : "showRepeatables"]" disabled="@(State.FocusMode || State.CompareMode)" @onclick="() => RepeatablesChanged.InvokeAsync(!State.ShowRepeatables)">
                 <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M7 2v3M17 2v3M3.5 9h17M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" /></svg>
             </button>
             <button class="filter-toggle level-toggle @(State.LevelEligibleOnly ? "active" : null)" type="button" aria-pressed="@State.LevelEligibleOnly.ToString().ToLowerInvariant()" title="@Localizer["levelEligible"]" aria-label="@Localizer["levelEligible"]" disabled="@State.FocusMode" @onclick="() => LevelEligibleChanged.InvokeAsync(!State.LevelEligibleOnly)"><span>≤ @(State.Profile?.Level.ToString() ?? "?")</span></button>
@@ -24,6 +24,19 @@
         }
     </div>
 </div>
+@if (State.CompareMode)
+{
+    <div class="comparison-filterbar" role="radiogroup" aria-label="@Localizer["compare.filter.aria"]">
+        <span class="comparison-filter-summary"><strong>@State.DifferenceCount</strong> @Localizer["compare.differencesShort"]</span>
+        @foreach (var filter in ComparisonFilters)
+        {
+            var selected = State.ComparisonFilter == filter;
+            <button class="comparison-filter @(selected ? "selected" : null)" type="button" role="radio" aria-checked="@selected.ToString().ToLowerInvariant()" disabled="@State.FocusMode" @onclick="() => ComparisonFilterChanged.InvokeAsync(filter)">
+                <span>@FilterLabel(filter)</span><b>@FilterCount(filter)</b>
+            </button>
+        }
+    </div>
+}
 
 @code {
     [Parameter, EditorRequired] public QuestMapPageState State { get; set; } = default!;
@@ -32,8 +45,26 @@
     [Parameter] public EventCallback<bool> ShowFinishedChanged { get; set; }
     [Parameter] public EventCallback<bool> RepeatablesChanged { get; set; }
     [Parameter] public EventCallback<bool> LevelEligibleChanged { get; set; }
+    [Parameter] public EventCallback<QuestComparisonFilter> ComparisonFilterChanged { get; set; }
     [Parameter] public EventCallback<string> SearchChanged { get; set; }
     [Parameter] public EventCallback<string> TraderChanged { get; set; }
 
     private Task OnSearchInput(ChangeEventArgs args) => SearchChanged.InvokeAsync(args.Value?.ToString() ?? string.Empty);
+
+    private static QuestComparisonFilter[] ComparisonFilters { get; } = Enum.GetValues<QuestComparisonFilter>();
+
+    private string FilterLabel(QuestComparisonFilter filter) => Localizer[$"compare.filter.{filter}"];
+
+    private int FilterCount(QuestComparisonFilter filter) => filter switch
+    {
+        QuestComparisonFilter.AllQuests => State.ComparableQuestCount,
+        QuestComparisonFilter.AllChanges => State.DifferenceCount,
+        QuestComparisonFilter.PrimaryOnly => State.ComparisonCounts.GetValueOrDefault(QuestDifferenceCategory.PrimaryOnly),
+        QuestComparisonFilter.ComparisonOnly => State.ComparisonCounts.GetValueOrDefault(QuestDifferenceCategory.ComparisonOnly),
+        QuestComparisonFilter.Exclusion => State.ComparisonCounts.GetValueOrDefault(QuestDifferenceCategory.Exclusion),
+        QuestComparisonFilter.Status => State.ComparisonCounts.GetValueOrDefault(QuestDifferenceCategory.Status),
+        QuestComparisonFilter.Objectives => State.ComparisonCounts.GetValueOrDefault(QuestDifferenceCategory.Objectives),
+        QuestComparisonFilter.AvailableAfter => State.ComparisonCounts.GetValueOrDefault(QuestDifferenceCategory.AvailableAfter),
+        _ => 0,
+    };
 }

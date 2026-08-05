@@ -1,5 +1,9 @@
 <div class="legend" aria-label="@Localizer["legend.aria"]">
     <strong>@Localizer["legend.states"]</strong>
+    @if (State.CompareMode)
+    {
+        <span><i class="compare-change-key"></i><span>@Localizer["compare.changedQuest"]</span></span><span><i class="compare-match-key"></i><span>@Localizer["compare.matchingQuest"]</span></span>
+    }
     <span><i style="--swatch:var(--qm-state-locked)"></i><span>@Localizer["state.Locked"]</span></span><span><i style="--swatch:var(--qm-state-prerequisite-gated)"></i><span>@Localizer["legend.priorGate"]</span></span>
     <span><i style="--swatch:var(--qm-state-level-gated)"></i><span>@Localizer["legend.levelGate"]</span></span><span><i style="--swatch:var(--qm-state-trader-gated)"></i><span>@Localizer["legend.traderRequirement"]</span></span>
     <span><i style="--swatch:var(--qm-state-trader-unavailable)"></i><span>@Localizer["state.TraderUnavailable"]</span></span><span><i class="future-key"></i><span>@Localizer["legend.futureTier"]</span></span>
@@ -11,4 +15,7 @@
     <span><b class="edge-key started"></b><span>@Localizer["legend.requiresStarted"]</span></span><span><b class="edge-key outcome"></b><span>@Localizer["legend.requiresOutcome"]</span></span>
 </div>
 
-@code { [Parameter, EditorRequired] public QuestMapLocalizer Localizer { get; set; } = default!; }
+@code {
+    [Parameter, EditorRequired] public QuestMapPageState State { get; set; } = default!;
+    [Parameter, EditorRequired] public QuestMapLocalizer Localizer { get; set; } = default!;
+}

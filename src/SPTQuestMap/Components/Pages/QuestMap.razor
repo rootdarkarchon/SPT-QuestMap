@@ -12,8 +12,8 @@
 @if (Localizer is not null)
 {
     <div class="app-shell">
-        <QuestMapHeader Localizer="@Localizer" Profiles="@Profiles" SelectedProfile="@SelectedProfile" Languages="@Bootstrap!.Languages" Busy="@Busy" RefreshRequested="RefreshAsync" ProfileChanged="ChangeProfileAsync" LanguageChanged="ChangeLanguageAsync">
-            <QuestMapFilters State="@State" Localizer="@Localizer" ShowAllFutureChanged="SetShowAllFutureAsync" ShowFinishedChanged="SetShowFinishedAsync" RepeatablesChanged="SetShowRepeatablesAsync" LevelEligibleChanged="SetLevelEligibleAsync" SearchChanged="SetSearchAsync" TraderChanged="SetTraderAsync" />
+        <QuestMapHeader Localizer="@Localizer" Profiles="@Profiles" SelectedProfile="@SelectedProfile" SelectedComparisonProfile="@SelectedComparisonProfile" CompareMode="@State.CompareMode" Languages="@Bootstrap!.Languages" Busy="@Busy" RefreshRequested="RefreshAsync" ProfileChanged="ChangeProfileAsync" ComparisonProfileChanged="ChangeComparisonProfileAsync" CompareModeChanged="SetCompareModeAsync" SwapProfilesRequested="SwapProfilesAsync" LanguageChanged="ChangeLanguageAsync">
+            <QuestMapFilters State="@State" Localizer="@Localizer" ShowAllFutureChanged="SetShowAllFutureAsync" ShowFinishedChanged="SetShowFinishedAsync" RepeatablesChanged="SetShowRepeatablesAsync" LevelEligibleChanged="SetLevelEligibleAsync" ComparisonFilterChanged="SetComparisonFilterAsync" SearchChanged="SetSearchAsync" TraderChanged="SetTraderAsync" />
         </QuestMapHeader>
         <main class="workspace">
             <section class="viewport @(State.InProgressExpanded ? "progress-panel-open" : null)" aria-label="@Localizer["graph.aria"]" @ref="ViewportElement">
@@ -33,7 +33,7 @@
                 {
                     <div class="error-state" role="alert">@ErrorMessage</div>
                 }
-                <QuestLegend Localizer="@Localizer" />
+                <QuestLegend State="@State" Localizer="@Localizer" />
                 <div class="metrics" aria-live="polite" @ref="MetricsElement"></div>
             </section>
             <QuestDetails State="@State" Localizer="@Localizer" QuestSelected="SelectRelationAsync" />
@@ -47,6 +47,7 @@
     private QuestMapLocalizer? Localizer;
     private IReadOnlyList<ProfileSummaryDto> Profiles = [];
     private ProfileSummaryDto? SelectedProfile;
+    private ProfileSummaryDto? SelectedComparisonProfile;
     private ElementReference CanvasElement;
     private ElementReference ViewportElement;
     private ElementReference MetricsElement;
@@ -60,7 +61,7 @@
     protected override void OnInitialized()
     {
         BusyMessage = "Loading quest topology and profiles…";
-        LoadSnapshots(null, null);
+        LoadSnapshots(null, null, null, false);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -72,9 +73,11 @@
             var settings = await LoadSettingsAsync();
             if (settings is not null)
             {
-                LoadSnapshots(settings.Language, settings.SelectedProfileId);
+                LoadSnapshots(settings.Language, settings.SelectedProfileId, settings.ComparisonProfileId, settings.CompareEnabled);
                 State.ApplySettings(settings);
                 SelectedProfile = Profiles.FirstOrDefault(profile => profile.Id == State.Profile?.ProfileId);
+                SelectedComparisonProfile = Profiles.FirstOrDefault(profile => profile.Id == State.ComparisonProfile?.ProfileId)
+                    ?? Profiles.FirstOrDefault(profile => profile.Id == settings.ComparisonProfileId && profile.Id != SelectedProfile?.Id);
                 StateHasChanged();
             }
 
@@ -93,43 +96,69 @@
         }
     }
 
-    private void LoadSnapshots(string? language, string? requestedProfileId)
+    private void LoadSnapshots(string? language, string? requestedProfileId, string? requestedComparisonProfileId, bool compareEnabled)
     {
         Bootstrap = DataService.GetBootstrap(language);
         Localizer = new QuestMapLocalizer(Bootstrap);
         Profiles = DataService.GetProfiles(Bootstrap.Language);
         SelectedProfile = Profiles.FirstOrDefault(profile => profile.Id == requestedProfileId) ?? Profiles.FirstOrDefault();
+        var requestedComparisonProfile = Profiles.FirstOrDefault(profile => profile.Id == requestedComparisonProfileId && profile.Id != SelectedProfile?.Id);
+        var requestedComparisonMissing = compareEnabled && requestedComparisonProfileId is not null && requestedComparisonProfile is null;
+        SelectedComparisonProfile = requestedComparisonProfile ?? Profiles.FirstOrDefault(profile => profile.Id != SelectedProfile?.Id);
         var topology = DataService.GetTopology(Bootstrap.Language);
         var profile = SelectedProfile is null ? null : DataService.GetProfileState(SelectedProfile.Id, Bootstrap.Language);
-        State.SetData(topology, profile);
+        var comparisonProfile = compareEnabled && !requestedComparisonMissing && SelectedComparisonProfile is not null
+            ? DataService.GetProfileState(SelectedComparisonProfile.Id, Bootstrap.Language)
+            : null;
+        State.SetData(topology, profile, comparisonProfile);
         BusyMessage = Profiles.Count == 0 ? Localizer["profiles.none"] : Localizer["loading.initial"];
     }
 
     private async Task RefreshAsync()
     {
         if (Localizer is null) return;
-        await ReloadAsync(Localizer.Language, SelectedProfile?.Id, Localizer["loading.refresh"]);
+        await ReloadAsync(Localizer.Language, SelectedProfile?.Id, SelectedComparisonProfile?.Id, State.CompareMode, Localizer["loading.refresh"]);
     }
 
     private async Task ChangeProfileAsync(string profileId)
     {
         if (Localizer is null) return;
-        await ReloadAsync(Localizer.Language, profileId, Localizer["loading.profile"]);
+        await ReloadAsync(Localizer.Language, profileId, SelectedComparisonProfile?.Id, State.CompareMode, Localizer["loading.profile"]);
     }
 
-    private async Task ChangeLanguageAsync(string language) => await ReloadAsync(language, SelectedProfile?.Id, Localizer?["loading.topology"] ?? string.Empty);
+    private async Task ChangeComparisonProfileAsync(string profileId)
+    {
+        if (Localizer is null || !State.CompareMode) return;
+        await ReloadAsync(Localizer.Language, SelectedProfile?.Id, profileId, true, Localizer["loading.profile"]);
+    }
 
-    private async Task ReloadAsync(string? language, string? profileId, string message)
+    private async Task SetCompareModeAsync(bool enabled)
+    {
+        if (Localizer is null || enabled && Profiles.Count < 2) return;
+        await ReloadAsync(Localizer.Language, SelectedProfile?.Id, SelectedComparisonProfile?.Id, enabled, Localizer["loading.profile"]);
+    }
+
+    private async Task SwapProfilesAsync()
+    {
+        if (Localizer is null || !State.CompareMode || SelectedProfile is null || SelectedComparisonProfile is null) return;
+        await ReloadAsync(Localizer.Language, SelectedComparisonProfile.Id, SelectedProfile.Id, true, Localizer["loading.profile"]);
+    }
+
+    private async Task ChangeLanguageAsync(string language) => await ReloadAsync(language, SelectedProfile?.Id, SelectedComparisonProfile?.Id, State.CompareMode, Localizer?["loading.topology"] ?? string.Empty);
+
+    private async Task ReloadAsync(string? language, string? profileId, string? comparisonProfileId, bool compareEnabled, string message)
     {
         if (Localizer is null) return;
-        var settings = State.CaptureSettings(profileId, language ?? Localizer.Language) with { SelectedProfileId = profileId, Language = language };
+        var settings = State.CaptureSettings(profileId, language ?? Localizer.Language, comparisonProfileId, compareEnabled) with { SelectedProfileId = profileId, Language = language };
         Busy = true; BusyMessage = message; ErrorMessage = null;
         await InvokeAsync(StateHasChanged);
         try
         {
-            LoadSnapshots(language, profileId);
+            LoadSnapshots(language, profileId, comparisonProfileId, compareEnabled);
             State.ApplySettings(settings);
             SelectedProfile = Profiles.FirstOrDefault(profile => profile.Id == State.Profile?.ProfileId);
+            SelectedComparisonProfile = Profiles.FirstOrDefault(profile => profile.Id == State.ComparisonProfile?.ProfileId)
+                ?? Profiles.FirstOrDefault(profile => profile.Id == comparisonProfileId && profile.Id != SelectedProfile?.Id);
             if (Module is not null) await Module.InvokeVoidAsync("refresh", State.BuildGraphSnapshot(Localizer!));
             Busy = false; BusyMessage = string.Empty;
             await SaveSettingsAsync();
@@ -141,6 +170,7 @@
     private Task SetShowFinishedAsync(bool value) => ChangeViewAsync(() => State.SetShowFinished(value));
     private Task SetShowRepeatablesAsync(bool value) => ChangeViewAsync(() => State.SetShowRepeatables(value));
     private Task SetLevelEligibleAsync(bool value) => ChangeViewAsync(() => State.SetLevelEligibleOnly(value));
+    private Task SetComparisonFilterAsync(QuestComparisonFilter value) => ChangeViewAsync(() => State.SetComparisonFilter(value));
     private Task SetSearchAsync(string value) => ChangeViewAsync(() => State.SetSearch(value));
     private Task SetTraderAsync(string value) => ChangeViewAsync(() => State.SetTraderFilter(value));
     private Task SetDrawerExpandedAsync(bool value) => ChangeViewAsync(() => State.SetInProgressExpanded(value));
@@ -209,7 +239,7 @@
     private async Task SaveSettingsAsync()
     {
         if (Localizer is null) return;
-        var settings = State.CaptureSettings(SelectedProfile?.Id, Localizer.Language);
+        var settings = State.CaptureSettings(SelectedProfile?.Id, Localizer.Language, SelectedComparisonProfile?.Id, State.CompareMode);
         try { await JavaScript.InvokeVoidAsync("localStorage.setItem", QuestMapSettingsStorage.PageStorageKey, QuestMapSettingsStorage.Serialize(settings)); }
         catch (JSException) { }
     }
@@ -219,8 +249,10 @@
         try
         {
             var currentJson = await JavaScript.InvokeAsync<string?>("localStorage.getItem", QuestMapSettingsStorage.PageStorageKey);
+            var previousJson = await JavaScript.InvokeAsync<string?>("localStorage.getItem", QuestMapSettingsStorage.PreviousStorageKey);
+            var versionTwoJson = await JavaScript.InvokeAsync<string?>("localStorage.getItem", QuestMapSettingsStorage.VersionTwoStorageKey);
             var legacyJson = await JavaScript.InvokeAsync<string?>("localStorage.getItem", QuestMapSettingsStorage.LegacyStorageKey);
-            return QuestMapSettingsStorage.Deserialize(currentJson, legacyJson);
+            return QuestMapSettingsStorage.Deserialize(currentJson, previousJson, versionTwoJson, legacyJson);
         }
         catch (JSException) { return null; }
     }

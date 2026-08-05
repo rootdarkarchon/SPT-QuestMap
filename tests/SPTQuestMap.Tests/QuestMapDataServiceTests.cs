@@ -150,6 +150,13 @@ public sealed class QuestMapDataServiceTests
             "state.Pending", "state.FailRestartable", "state.AvailableAfter", "details.effectiveGates",
             "details.availableAfter", "details.currentBlockers", "details.mutualExclusion", "details.branchAlternatives",
             "details.prerequisites", "details.successors", "inProgress.title", "showFinished", "levelEligible", "trader.allShort",
+            "compare.toggle", "compare.exit", "compare.swap", "compare.profileA", "compare.profileB",
+            "compare.differencesOnly", "compare.repeatablesUnavailable", "compare.splitLegend", "compare.different",
+            "compare.differencesShort", "compare.progress", "compare.status",
+            "compare.filter.aria", "compare.filter.AllQuests", "compare.filter.AllChanges", "compare.filter.Objectives",
+            "compare.filter.AvailableAfter", "compare.category.PrimaryOnlyNamed", "compare.changedQuest",
+            "compare.matchingQuest", "compare.changeCount", "compare.noChanges", "compare.matchingFields",
+            "compare.matchingObjectives", "compare.objectiveDelta",
         };
         var untranslatedExtended = requiredExtendedKeys
             .Where(key => catalog[key] == QuestMapUiCatalog.English[key])
@@ -622,6 +629,22 @@ public sealed class QuestMapDataServiceTests
     }
 
     [Test]
+    public void ObjectiveCurrentCapsAtRequirementWithoutChangingOtherBoundaries()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(QuestProfileRules.CapObjectiveCurrent(0, 1), Is.EqualTo(0));
+            Assert.That(QuestProfileRules.CapObjectiveCurrent(1, 1), Is.EqualTo(1));
+            Assert.That(QuestProfileRules.CapObjectiveCurrent(2, 1), Is.EqualTo(1));
+            Assert.That(QuestProfileRules.CapObjectiveCurrent(1.25, 1), Is.EqualTo(1));
+            Assert.That(QuestProfileRules.CapObjectiveCurrent(2, 0), Is.EqualTo(0));
+            Assert.That(QuestProfileRules.CapObjectiveCurrent(-1, 1), Is.EqualTo(-1));
+            Assert.That(QuestProfileRules.CapObjectiveCurrent(null, 1), Is.Null);
+            Assert.That(QuestProfileRules.CapObjectiveCurrent(2, null), Is.EqualTo(2));
+        });
+    }
+
+    [Test]
     public void ObjectiveCounterSatisfactionCompletesConditionWhenCompletedConditionsOmitsIt()
     {
         Assert.Multiple(() =>
@@ -629,6 +652,7 @@ public sealed class QuestMapDataServiceTests
             Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 3, 3, null), Is.True);
             Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 2, 3, null), Is.False);
             Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 3, 3, ">"), Is.False);
+            Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 2, 1, "=="), Is.False);
             Assert.That(QuestProfileRules.ObjectiveIsComplete(true, null, 3, null), Is.True);
         });
     }

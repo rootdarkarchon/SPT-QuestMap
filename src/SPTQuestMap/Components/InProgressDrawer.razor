@@ -15,10 +15,24 @@
                 <div class="in-progress-trader"><img src="@(group.Trader.ImageUrl ?? "/files/trader/avatar/unknown.png")" alt=""><strong>@group.Trader.Name</strong></div>
                 @foreach (var quest in group.Quests)
                 {
-                    var percent = Math.Clamp(quest.State.ProgressPercent ?? 0, 0, 100);
-                    <button class="in-progress-quest @(quest.Node.Id == State.SelectedId ? "selected" : null)" type="button" @onclick="() => QuestSelected.InvokeAsync(quest.Node.Id)">
+                    var comparison = State.GetComparison(quest.Node.Id);
+                    <button class="in-progress-quest @(quest.Node.Id == State.SelectedId ? "selected" : null) @(State.CompareMode ? comparison.HasDifferences ? "comparison-changed" : "comparison-matching" : null)" type="button" @onclick="() => QuestSelected.InvokeAsync(quest.Node.Id)">
                         <span class="in-progress-quest-header"><strong>@quest.Node.Name</strong><span class="in-progress-location">@LocationName(quest.Node)</span></span>
-                        <span class="in-progress-meter"><i style="width:@percent.ToString("0.##", CultureInfo.InvariantCulture)%"></i><span>@percent.ToString("0.#", NumberCulture)%</span></span>
+                        @if (State.CompareMode)
+                        {
+                            @if (comparison.HasDifferences)
+                            {
+                                <span class="in-progress-difference-label">@DifferenceLabel(comparison)</span>
+                            }
+                            <span class="in-progress-compare">
+                                @ProgressLane("A", quest.PrimaryState, State.IsPrimaryApplicable(quest.Node.Id))
+                                @ProgressLane("B", quest.ComparisonState, State.IsComparisonApplicable(quest.Node.Id))
+                            </span>
+                        }
+                        else
+                        {
+                            @ProgressMeter(quest.State.ProgressPercent)
+                        }
                         @if (State.IsCollectorRoute(quest.Node.Id) || State.IsLightkeeperRoute(quest.Node.Id))
                         {
                             <span class="in-progress-route" title="@RouteTitle(quest.Node.Id)">
@@ -42,4 +56,29 @@
     private CultureInfo NumberCulture { get { try { return CultureInfo.GetCultureInfo(Localizer.BrowserLocale); } catch { return CultureInfo.InvariantCulture; } } }
     private string LocationName(QuestNodeDto node) => node.Location.Any ? Localizer["location.any"] : node.Location.Name ?? node.Location.Id;
     private string RouteTitle(string id) => string.Join(" / ", new[] { State.IsCollectorRoute(id) ? Localizer["route.collector"] : null, State.IsLightkeeperRoute(id) ? Localizer["route.lightkeeper"] : null }.Where(value => value is not null));
+    private string DifferenceLabel(QuestComparisonDto comparison) => $"{Localizer[$"compare.category.{comparison.Categories[0]}"]}{(comparison.Categories.Length > 1 ? $" +{comparison.Categories.Length - 1}" : string.Empty)}";
+
+    private RenderFragment ProgressLane(string label, QuestStateDto? questState, bool applicable) => builder =>
+    {
+        builder.OpenElement(0, "span"); builder.AddAttribute(1, "class", "in-progress-compare-lane");
+        builder.OpenElement(2, "b"); builder.AddContent(3, label); builder.CloseElement();
+        if (!applicable || questState?.DisplayState != "InProgress")
+        {
+            builder.OpenElement(4, "small"); builder.AddContent(5, applicable ? Localizer[$"state.{questState?.DisplayState ?? "Locked"}"] : Localizer["state.NotApplicable"]); builder.CloseElement();
+        }
+        else
+        {
+            builder.AddContent(6, ProgressMeter(questState.ProgressPercent));
+        }
+        builder.CloseElement();
+    };
+
+    private RenderFragment ProgressMeter(double? value) => builder =>
+    {
+        var percent = Math.Clamp(value ?? 0, 0, 100);
+        builder.OpenElement(0, "span"); builder.AddAttribute(1, "class", "in-progress-meter");
+        builder.OpenElement(2, "i"); builder.AddAttribute(3, "style", $"width:{percent.ToString("0.##", CultureInfo.InvariantCulture)}%"); builder.CloseElement();
+        builder.OpenElement(4, "span"); builder.AddContent(5, $"{percent.ToString("0.#", NumberCulture)}%"); builder.CloseElement();
+        builder.CloseElement();
+    };
 }

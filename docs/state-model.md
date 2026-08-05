@@ -127,7 +127,21 @@ For each objective:
 
 Nested counter conditions may represent one user-facing objective. Avoid dumping every low-level child condition as an unrelated objective unless that is how the client presents it.
 
+The sanitized profile overlay caps a known numeric `current` at its known `required` value before presentation. The raw profile counter is still used for the condition comparator, so capping cannot change completion semantics. This keeps ordinary progress displays bounded and prevents comparison mode from treating `2 / 1` and `1 / 1` as different progress.
+
 For an in-progress quest's approximate overall percentage, weight every displayed objective equally. A completed objective contributes `1 / objective count`; an incomplete numerical objective contributes its clamped `current / required` fraction of that same share. Unknown incomplete progress contributes zero rather than inventing progress. For example, one kill out of ten on one of three objectives contributes about `3.3%` overall.
+
+## Profile comparison
+
+Comparison reuses one cached topology with two independently built sanitized profile overlays. The visible graph is the union of both profiles' normal frontier or all-future sets. A quest applicable to only one faction or event scope remains visible with `Not applicable` on the other side.
+
+A quest differs when applicability, display state, available-after value, exclusion outcome or objective completion/numeric progress differs. Blocker explanations remain profile-specific but do not alone turn an otherwise equal quest state into a progress difference. No universal ahead/behind score is calculated because failure and mutually exclusive branch outcomes are not linearly ordered.
+
+Each differing quest carries an ordered set of categories: profile A only, profile B only, exclusion/branch, status, objective progress and available-after wait time. Categories can overlap. The first category is the card's primary reason and any additional reasons are shown as `+N`; selected details expose every category and exact A/B values.
+
+The default `All quests` comparison keeps the union graph intact and dims matching nodes. `All changes` and the individual category filters remove nonmatching nodes while retaining the selected quest, its recursive prerequisites and its direct successors. Filter counts are calculated after the ordinary frontier, finished, level, trader and search filters but before the comparison category filter. The selected comparison filter persists in browser settings; version-three `differencesOnly` settings migrate to `All changes` or `All quests`.
+
+Hide-finished removes a quest only when every applicable profile state is terminal and hideable. Level filtering removes it only when every applicable profile is level-gated. The default frontier, selection closure, direct-successor behavior, search and trader context otherwise retain their existing rules. Daily and Weekly generated quests are omitted because their profile-local IDs do not provide a safe equivalence key.
 
 ## Objective ordering
 

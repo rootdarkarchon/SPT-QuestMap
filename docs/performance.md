@@ -73,5 +73,6 @@ Pointer movement, hover, pan, zoom, image decoding, hit testing, and animation f
 - Quest and trader images are requested lazily from their SPT asset URLs only when a node is rendered above the overview threshold.
 - Resize changes the Canvas backing size and redraws the same viewport; it does not call fit or reset pan/zoom.
 - Daily/Weekly nodes remain a small profile-owned overlay. The renderer composes their horizontal band above the active static layout without adding them to the cached dependency topology; a one-second browser timer redraws only the Canvas countdown and never polls the server.
+- Comparison adds a second state lookup and a precomputed quest-to-category map while retaining the same topology, spatial indexes and edge geometry. Each visible node performs constant-time comparison and A/B lookups; pan, zoom and hover continue to avoid full-graph scans or Blazor renders. Category filtering recalculates membership only when a filter changes.
 
 The bottom-right runtime metric bar records visible/applicable node counts, visible edge count, layout duration, profile-overlay request/application duration, last render duration, and whether overview mode is active. Final user-hardware measurements belong to Milestone 4.
