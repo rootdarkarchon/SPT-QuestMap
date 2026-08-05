@@ -8,7 +8,9 @@
     else
     {
         var questState = State.SelectedQuestState;
+        var comparisonState = State.GetComparisonQuestState(node.Id);
         var traderState = State.GetTraderState(node.TraderId);
+        var comparisonTraderState = State.GetComparisonTraderState(node.TraderId);
         <div class="detail-banners">
             <div class="detail-header">
                 @if (!string.IsNullOrWhiteSpace(node.ImageUrl)) { <img src="@node.ImageUrl" alt=""> }
@@ -22,26 +24,49 @@
         {
             <RichTextBlock Value="@node.Description" Localizer="@Localizer" />
         }
-        <section class="detail-section">
-            <h3>@Localizer["details.trader"]</h3>
-            <div class="trader-detail">
-                @if (!string.IsNullOrWhiteSpace(node.TraderImageUrl)) { <img src="@node.TraderImageUrl" alt=""> }
-                <p>@TraderSummary(node, traderState)</p>
-            </div>
-        </section>
-        @if (questState?.DisplayState is not ("Completed" or "InProgress" or "ReadyToFinish"))
+        @if (State.CompareMode)
+        {
+            var comparison = State.GetComparison(node.Id);
+            <section class="detail-section comparison-section">
+                <h3>@Localizer["compare.progress"]</h3>
+                <div class="comparison-summary @(comparison.HasDifferences ? "changed" : "matching")">
+                    <strong>@Localizer.Format(comparison.HasDifferences ? "compare.changeCount" : "compare.noChanges", ("count", comparison.Categories.Length))</strong>
+                    @if (comparison.HasDifferences)
+                    {
+                        <div class="comparison-category-list">
+                            @foreach (var category in comparison.Categories)
+                            {
+                                <span class="comparison-category">@CategoryLabel(category, true)</span>
+                            }
+                        </div>
+                    }
+                </div>
+                @ComparisonSummary(node, questState, comparisonState, traderState, comparisonTraderState)
+            </section>
+        }
+        else
+        {
+            <section class="detail-section">
+                <h3>@Localizer["details.trader"]</h3>
+                <div class="trader-detail">
+                    @if (!string.IsNullOrWhiteSpace(node.TraderImageUrl)) { <img src="@node.TraderImageUrl" alt=""> }
+                    <p>@TraderSummary(node, traderState)</p>
+                </div>
+            </section>
+        }
+        @if (State.CompareMode || questState?.DisplayState is not ("Completed" or "InProgress" or "ReadyToFinish"))
         {
             <section class="detail-section"><h3>@Localizer["details.effectiveGates"]</h3>@RequirementList(node.EffectiveRequirements)</section>
         }
-        @if (questState?.AvailableAfter is > 0)
+        @if (!State.CompareMode && questState?.AvailableAfter is > 0)
         {
             <section class="detail-section"><h3>@Localizer["details.availableAfter"]</h3><p>@FormatAvailableAfter(questState.AvailableAfter.Value)</p></section>
         }
-        @if (questState?.Blockers.Length > 0)
+        @if (!State.CompareMode && questState?.Blockers.Length > 0)
         {
             <section class="detail-section"><h3>@Localizer["details.currentBlockers"]</h3><ul class="plain-list">@foreach (var blocker in questState.Blockers) { <li>@BlockerText(blocker)</li> }</ul></section>
         }
-        @if (questState?.Exclusion is { } exclusion)
+        @if (!State.CompareMode && questState?.Exclusion is { } exclusion)
         {
             <section class="detail-section"><h3>@Localizer["details.mutualExclusion"]</h3><p>@Localizer["exclusion.prefix"] <button class="relation-button" type="button" @onclick="() => SelectRelation(exclusion.CausedByQuestId)">@QuestName(exclusion.CausedByQuestId)</button> (@StateLabel(exclusion.CauseStatus)@(exclusion.Permanent ? $", {Localizer["exclusion.permanent"]}" : string.Empty)).</p></section>
         }
@@ -49,7 +74,7 @@
         {
             <section class="detail-section"><h3>@Localizer["details.branchAlternatives"]</h3>@RelationList(node.ExclusionRules.Select(rule => rule.CausedByQuestId))</section>
         }
-        <section class="detail-section"><h3>@Localizer["details.objectives"]</h3>@ObjectiveList(node, questState)</section>
+        <section class="detail-section"><h3>@Localizer["details.objectives"]</h3>@(State.CompareMode ? ComparisonObjectiveList(node, questState, comparisonState) : ObjectiveList(node, questState))</section>
         <section class="detail-section"><h3>@Localizer["details.rewards"]</h3>@RewardList(node.Rewards)</section>
         <section class="detail-section"><h3>@Localizer["details.prerequisites"]</h3>@RelationList(State.Incoming(node.Id).Select(item => item.Edge.SourceId))</section>
         <section class="detail-section"><h3>@Localizer["details.successors"]</h3>@RelationList(State.Outgoing(node.Id).Select(item => item.Edge.TargetId))</section>
@@ -72,6 +97,80 @@
     private string TraderSummary(QuestNodeDto node, TraderStateDto? traderState) => traderState is null
         ? Localizer.Format("trader.noState", ("trader", node.TraderName))
         : Localizer.Format("trader.summary", ("trader", node.TraderName), ("availability", Localizer[traderState.Available ? "trader.unlocked" : "trader.unavailable"]), ("loyalty", traderState.LoyaltyLevel?.ToString() ?? "?"), ("standing", Number(traderState.Standing)));
+
+    private RenderFragment ComparisonSummary(QuestNodeDto node, QuestStateDto? primary, QuestStateDto? comparison, TraderStateDto? primaryTrader, TraderStateDto? comparisonTrader) => builder =>
+    {
+        var primaryApplicable = State.IsPrimaryApplicable(node.Id);
+        var comparisonApplicable = State.IsComparisonApplicable(node.Id);
+        var rows = new List<ComparisonRow>
+        {
+            new(Localizer["compare.status"], StateValue(primary, primaryApplicable), StateValue(comparison, comparisonApplicable), primaryApplicable != comparisonApplicable || primary?.DisplayState != comparison?.DisplayState),
+            new(Localizer["details.trader"], ProfileValue(primaryApplicable, TraderSummary(node, primaryTrader)), ProfileValue(comparisonApplicable, TraderSummary(node, comparisonTrader)), primaryApplicable != comparisonApplicable || primaryTrader != comparisonTrader),
+            new(Localizer["details.currentBlockers"], ProfileValue(primaryApplicable, BlockerSummary(primary)), ProfileValue(comparisonApplicable, BlockerSummary(comparison)), primaryApplicable != comparisonApplicable || !Enumerable.SequenceEqual(primary?.Blockers ?? [], comparison?.Blockers ?? [])),
+        };
+        if (primary?.AvailableAfter is > 0 || comparison?.AvailableAfter is > 0)
+        {
+            rows.Add(new(Localizer["details.availableAfter"], ProfileValue(primaryApplicable, primary?.AvailableAfter is > 0 ? FormatAvailableAfter(primary.AvailableAfter.Value) : Localizer["common.none"]), ProfileValue(comparisonApplicable, comparison?.AvailableAfter is > 0 ? FormatAvailableAfter(comparison.AvailableAfter.Value) : Localizer["common.none"]), primaryApplicable != comparisonApplicable || primary?.AvailableAfter != comparison?.AvailableAfter));
+        }
+        if (primary?.Exclusion is not null || comparison?.Exclusion is not null)
+        {
+            rows.Add(new(Localizer["details.mutualExclusion"], ExclusionSummary(primary, primaryApplicable), ExclusionSummary(comparison, comparisonApplicable), primaryApplicable != comparisonApplicable || primary?.Exclusion != comparison?.Exclusion));
+        }
+        var changed = rows.Where(row => row.Different).ToArray();
+        var matching = rows.Where(row => !row.Different).ToArray();
+        var sequence = 0;
+        if (changed.Length > 0) builder.AddContent(sequence++, ComparisonTable(changed, "changed-comparison-table"));
+        if (matching.Length > 0)
+        {
+            builder.OpenElement(sequence++, "details"); builder.AddAttribute(sequence++, "class", "matching-comparison-details");
+            builder.OpenElement(sequence++, "summary"); builder.AddContent(sequence++, Localizer.Format("compare.matchingFields", ("count", matching.Length))); builder.CloseElement();
+            builder.AddContent(sequence++, ComparisonTable(matching, "matching-comparison-table"));
+            builder.CloseElement();
+        }
+    };
+
+    private RenderFragment ComparisonTable(IReadOnlyList<ComparisonRow> rows, string className) => builder =>
+    {
+        var sequence = 0;
+        builder.OpenElement(sequence++, "table"); builder.AddAttribute(sequence++, "class", $"comparison-table {className}");
+        builder.OpenElement(sequence++, "thead"); builder.OpenElement(sequence++, "tr");
+        builder.OpenElement(sequence++, "th"); builder.AddAttribute(sequence++, "scope", "col"); builder.CloseElement();
+        AddProfileHeading("A", State.Profile?.Nickname ?? "-");
+        AddProfileHeading("B", State.ComparisonProfile?.Nickname ?? "-");
+        builder.CloseElement(); builder.CloseElement(); builder.OpenElement(sequence++, "tbody");
+        foreach (var row in rows)
+        {
+            builder.OpenElement(sequence++, "tr"); if (row.Different) builder.AddAttribute(sequence++, "class", "different");
+            builder.OpenElement(sequence++, "th"); builder.AddAttribute(sequence++, "scope", "row"); builder.AddContent(sequence++, row.Label); builder.CloseElement();
+            builder.OpenElement(sequence++, "td"); builder.AddContent(sequence++, row.PrimaryValue); builder.CloseElement();
+            builder.OpenElement(sequence++, "td"); builder.AddContent(sequence++, row.ComparisonValue); builder.CloseElement();
+            builder.CloseElement();
+        }
+        builder.CloseElement(); builder.CloseElement();
+
+        void AddProfileHeading(string label, string nickname)
+        {
+            builder.OpenElement(sequence++, "th"); builder.AddAttribute(sequence++, "scope", "col");
+            builder.OpenElement(sequence++, "span"); builder.AddAttribute(sequence++, "class", $"profile-slot {(label == "A" ? "primary-slot" : "comparison-slot")}"); builder.AddContent(sequence++, label); builder.CloseElement();
+            builder.AddContent(sequence++, nickname); builder.CloseElement();
+        }
+    };
+
+    private string StateValue(QuestStateDto? questState, bool applicable) =>
+        applicable ? StateLabel(questState?.DisplayState ?? "Locked") : Localizer["state.NotApplicable"];
+
+    private string ProfileValue(bool applicable, string value) => applicable ? value : Localizer["state.NotApplicable"];
+
+    private string BlockerSummary(QuestStateDto? questState) => questState?.Blockers.Length > 0
+        ? string.Join("; ", questState.Blockers.Select(BlockerText))
+        : Localizer["common.none"];
+
+    private string ExclusionSummary(QuestStateDto? questState, bool applicable)
+    {
+        if (!applicable) return Localizer["state.NotApplicable"];
+        if (questState?.Exclusion is not { } exclusion) return Localizer["common.none"];
+        return $"{QuestName(exclusion.CausedByQuestId)} ({StateLabel(exclusion.CauseStatus)}{(exclusion.Permanent ? $", {Localizer["exclusion.permanent"]}" : string.Empty)})";
+    }
 
     private string RequirementText(RequirementDto requirement)
     {
@@ -123,6 +222,82 @@
         }
         builder.CloseElement();
     };
+
+    private RenderFragment ComparisonObjectiveList(QuestNodeDto node, QuestStateDto? primaryState, QuestStateDto? comparisonState) => builder =>
+    {
+        if (node.Objectives.Length == 0) { builder.OpenElement(0, "p"); builder.AddAttribute(1, "class", "muted"); builder.AddContent(2, Localizer["objectives.none"]); builder.CloseElement(); return; }
+        var primaryProgress = (primaryState?.Objectives ?? []).ToDictionary(item => item.ObjectiveId, StringComparer.Ordinal);
+        var comparisonProgress = (comparisonState?.Objectives ?? []).ToDictionary(item => item.ObjectiveId, StringComparer.Ordinal);
+        var primaryApplicable = State.IsPrimaryApplicable(node.Id);
+        var comparisonApplicable = State.IsComparisonApplicable(node.Id);
+        var items = node.Objectives.Select((objective, index) => new ComparisonObjective(
+            objective,
+            primaryProgress.GetValueOrDefault(objective.Id),
+            comparisonProgress.GetValueOrDefault(objective.Id),
+            !primaryApplicable || !comparisonApplicable || State.ObjectiveDiffers(objective.Id),
+            index)).ToArray();
+        var changed = items.Where(item => item.Different).OrderBy(item => item.Index).ToArray();
+        var matching = items.Where(item => !item.Different).OrderBy(item => item.Index).ToArray();
+        var sequence = 0;
+        if (changed.Length > 0) builder.AddContent(sequence++, ObjectiveComparisonItems(changed, primaryApplicable, comparisonApplicable));
+        if (matching.Length > 0)
+        {
+            builder.OpenElement(sequence++, "details"); builder.AddAttribute(sequence++, "class", "matching-objective-details");
+            builder.OpenElement(sequence++, "summary"); builder.AddContent(sequence++, Localizer.Format("compare.matchingObjectives", ("count", matching.Length))); builder.CloseElement();
+            builder.AddContent(sequence++, ObjectiveComparisonItems(matching, primaryApplicable, comparisonApplicable));
+            builder.CloseElement();
+        }
+    };
+
+    private RenderFragment ObjectiveComparisonItems(IReadOnlyList<ComparisonObjective> items, bool primaryApplicable, bool comparisonApplicable) => builder =>
+    {
+        var sequence = 0;
+        builder.OpenElement(sequence++, "ol"); builder.AddAttribute(sequence++, "class", "objectives comparison-objectives");
+        foreach (var item in items)
+        {
+            builder.OpenElement(sequence++, "li"); if (item.Different) builder.AddAttribute(sequence++, "class", "different");
+            builder.OpenElement(sequence++, "div"); builder.AddAttribute(sequence++, "class", "objective-description rich-description"); builder.AddMarkupContent(sequence++, ObjectiveMarkup(item.Objective)); builder.CloseElement();
+            builder.OpenElement(sequence++, "div"); builder.AddAttribute(sequence++, "class", "objective-comparison");
+            AddObjectiveLane("A", item.Primary, primaryApplicable);
+            AddObjectiveLane("B", item.Comparison, comparisonApplicable);
+            builder.CloseElement();
+            if (ObjectiveDelta(item.Primary, item.Comparison) is { } delta)
+            {
+                builder.OpenElement(sequence++, "small"); builder.AddAttribute(sequence++, "class", "objective-delta"); builder.AddContent(sequence++, delta); builder.CloseElement();
+            }
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        void AddObjectiveLane(string label, ObjectiveProgressDto? progress, bool applicable)
+        {
+            builder.OpenElement(sequence++, "span"); builder.AddAttribute(sequence++, "class", "objective-comparison-lane");
+            builder.OpenElement(sequence++, "b"); builder.AddAttribute(sequence++, "class", $"profile-slot {(label == "A" ? "primary-slot" : "comparison-slot")}"); builder.AddContent(sequence++, label); builder.CloseElement();
+            if (!applicable) builder.AddContent(sequence++, Localizer["state.NotApplicable"]);
+            else
+            {
+                builder.OpenElement(sequence++, "span"); builder.AddAttribute(sequence++, "class", progress?.Complete == true ? "complete" : null); builder.AddContent(sequence++, progress?.Complete == true ? "✓" : "○"); builder.CloseElement();
+                builder.AddContent(sequence++, ObjectiveProgressText(progress));
+            }
+            builder.CloseElement();
+        }
+    };
+
+    private string? ObjectiveDelta(ObjectiveProgressDto? primary, ObjectiveProgressDto? comparison)
+    {
+        if (primary?.Current is not { } primaryCurrent || comparison?.Current is not { } comparisonCurrent || primary.Required != comparison.Required) return null;
+        var delta = comparisonCurrent - primaryCurrent;
+        if (delta == 0) return null;
+        return Localizer.Format("compare.objectiveDelta", ("value", delta > 0 ? $"+{Number(delta)}" : Number(delta)));
+    }
+
+    private string ObjectiveProgressText(ObjectiveProgressDto? progress)
+    {
+        if (progress?.Current is not null && progress.Required is not null) return $"{Number(progress.Current)} / {Number(progress.Required)}";
+        if (progress?.Required is not null) return Localizer.Format("objectives.required", ("value", Number(progress.Required)));
+        if (progress?.Complete == true) return StateLabel("Completed");
+        return progress?.ProgressKnown == true ? Localizer["objectives.progressRecorded"] : Localizer["common.none"];
+    }
 
     internal static string ObjectiveMarkup(ObjectiveDefinitionDto objective) =>
         QuestRichTextSanitizer.Sanitize(objective.Text.Length > 0 ? objective.Text : objective.ConditionType);
@@ -176,5 +351,15 @@
         builder.CloseElement();
     };
 
+    private string CategoryLabel(QuestDifferenceCategory category, bool useProfileName) => category switch
+    {
+        QuestDifferenceCategory.PrimaryOnly when useProfileName => Localizer.Format("compare.category.PrimaryOnlyNamed", ("profile", State.Profile?.Nickname ?? "A")),
+        QuestDifferenceCategory.ComparisonOnly when useProfileName => Localizer.Format("compare.category.ComparisonOnlyNamed", ("profile", State.ComparisonProfile?.Nickname ?? "B")),
+        _ => Localizer[$"compare.category.{category}"],
+    };
+
     private Task SelectRelation(string id) => QuestSelected.InvokeAsync(id);
+
+    private sealed record ComparisonRow(string Label, string PrimaryValue, string ComparisonValue, bool Different);
+    private sealed record ComparisonObjective(ObjectiveDefinitionDto Objective, ObjectiveProgressDto? Primary, ObjectiveProgressDto? Comparison, bool Different, int Index);
 }

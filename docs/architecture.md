@@ -103,3 +103,5 @@ Show warnings in diagnostics/logs without failing the entire graph.
 ## Blazor implementation
 
 SPT 4.0.13 discovers QuestMap's mod-owned `/questmap` Razor page natively. Semantic page UI and testable state live in Blazor/C#, while the performance-critical Canvas renderer remains a browser-side `.mjs` module. See `docs/blazor-migration.md` for the source evidence, implemented boundary, performance rationale, and verification record.
+
+Comparison mode keeps that boundary intact. Blazor loads two `ProfileStateDto` overlays through the same read-only service, derives symmetric multi-category comparison records and union-filter state in C#, then sends both overlays plus compact comparison records to the existing Canvas island. The renderer retains one topology, one layout, one edge layer and one viewport. Matching nodes reuse the ordinary card renderer at reduced emphasis; changed nodes draw explicit reason badges and A/B transition rows.

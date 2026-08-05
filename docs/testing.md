@@ -21,8 +21,11 @@ Cover pure state and graph logic with small fixtures:
 - hide-finished behavior;
 - objective dependency ordering;
 - objective rich-text parsing through the same allowlisted sanitizer as descriptions and rewards;
-- task counter mapping;
+- task counter mapping, including capped exposed progress without changing raw comparator semantics;
 - focused-chain closure: recursive predecessors plus direct successors only.
+- symmetric profile comparison for state, objective, pending-time, exclusion and faction-applicability differences;
+- multi-category comparison filtering, both-sides finished/level boundaries, pair-scoped persistence and repeatable suppression;
+- version-three differences-only migration and runtime rendering of the comparison header, category bar, changed-first summary and objective matrix.
 
 ## Integration tests
 
@@ -51,6 +54,7 @@ Verify:
 - missing-image fallbacks;
 - Daily/Weekly horizontal ordering, countdown/expired labels, divider collapse, and repeatable selection;
 - keyboard/focus accessibility for major controls.
+- profile A/B selection and swapping, all-change and category filtering, dimmed matching quests, cross-faction N/A states, objective deltas, collapsed matching details and responsive comparison controls.
 
 ## Performance tests
 

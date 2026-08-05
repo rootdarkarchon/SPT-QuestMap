@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 using SPTQuestMap.Components;
 using SPTQuestMap.Components.Pages;
@@ -7,6 +10,7 @@ using SPTQuestMap.Presentation;
 using SPTQuestMap.Services;
 using SPTarkov.Server.Core.Models.Enums;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace SPTQuestMap.Tests;
@@ -51,11 +55,19 @@ public sealed class BlazorMigrationTests
             Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("--qm-state-locked"));
             Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("--qm-renderer-outline-selected"));
             Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("--qm-renderer-repeatable-divider"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("--qm-renderer-compare-difference"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("--qm-renderer-compare-difference-text"));
             Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".profile-dismiss-layer:hover:not(:disabled)"),
                 "The full-screen profile-menu dismiss button must override the global button hover background.");
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("getComputedStyle"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("composeRepeatableLayout"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("effectiveQuestState"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("drawCompareNode"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("comparisonStateById"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("comparisonById"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("comparisonReason"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("dimmed?dimAlpha"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Not.Contain("drawDifferenceMarker"));
             Assert.That(QuestMapEmbeddedAssets.RendererModuleDataUrl, Does.StartWith("data:text/javascript;base64,"));
             Assert.That(Regex.IsMatch(QuestMapEmbeddedAssets.RendererSource, colorLiteralPattern), Is.False,
                 "Renderer colors must be supplied by CSS custom properties, not JavaScript literals.");
@@ -63,9 +75,9 @@ public sealed class BlazorMigrationTests
     }
 
     [Test]
-    public void GraphSnapshotCarriesTheAlreadyLoadedTopologyAndProfile()
+    public void GraphSnapshotCarriesTheAlreadyLoadedProfiles()
     {
-        var state = CreateState();
+        var state = CreateComparisonState();
         var localizer = new QuestMapLocalizer(new QuestMapBootstrapDto("en", "en", [], new Dictionary<string, string>()));
 
         var snapshot = state.BuildGraphSnapshot(localizer);
@@ -74,7 +86,53 @@ public sealed class BlazorMigrationTests
         {
             Assert.That(snapshot.Topology, Is.SameAs(state.Topology));
             Assert.That(snapshot.Profile, Is.SameAs(state.Profile));
+            Assert.That(snapshot.ComparisonProfile, Is.SameAs(state.ComparisonProfile));
             Assert.That(snapshot.View.ProfileId, Is.EqualTo("profile"));
+            Assert.That(snapshot.View.ComparisonProfileId, Is.EqualTo("comparison"));
+            Assert.That(snapshot.View.CompareMode, Is.True);
+        });
+    }
+
+    [Test]
+    public void ProfileSelectorNamesUseTheFullContentAreaAboveBackgroundLevels()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("grid-template-columns: 48px minmax(0,1fr) 20px;"),
+                "The ordinary selector must not reserve a foreground column for the level watermark.");
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("grid-template-columns: 24px 40px minmax(0,1fr) 18px;"),
+                "Comparison selectors must not reserve a foreground column for the level watermark.");
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".profile-name, .profile-option-name { position: relative; z-index: 1;"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("white-space: normal;"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".profile-level, .profile-option-level { position: absolute; z-index: 0;"),
+                "Level numbers must be decorative background content rather than layout columns.");
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("inset-block: 0; display: flex;"),
+                "The oversized level glyph must be clipped vertically by the selector height.");
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("font: 700 5rem/1 Georgia,serif;"),
+                "The background level must be oversized enough to clip at both vertical edges.");
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("opacity: .28; pointer-events: none;"),
+                "The watermark must remain readable against the live selector background.");
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".profile-level { right: calc(.55rem + 20px + .65rem - 13px); width: 90px; }"),
+                "The ordinary watermark must preserve the original right-side center point.");
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".compare-profile .profile-level { right: calc(.55rem + 18px + .42rem - 13px); }"),
+                "Comparison watermarks must preserve the original right-side center point.");
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".profile-option-level { right: 0; width: 84px; font-size: 4.5rem; opacity: .25;"),
+                "Dropdown watermarks must remain oversized on the right.");
+        });
+    }
+
+    [Test]
+    public void GraphSnapshotSerializesComparisonCategoriesForJavaScript()
+    {
+        var state = CreateComparisonState();
+        var localizer = new QuestMapLocalizer(new QuestMapBootstrapDto("en", "en", [], QuestMapUiCatalog.English));
+
+        var json = JsonSerializer.Serialize(state.BuildGraphSnapshot(localizer), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(json, Does.Contain("\"categories\":[\"Status\"]"));
+            Assert.That(json, Does.Contain("\"hasDifferences\":true"));
         });
     }
 
@@ -84,6 +142,10 @@ public sealed class BlazorMigrationTests
         var expected = new QuestMapSettings("profile", "en", true, false, false, true, "search", "trader", new Dictionary<string, QuestProfileUiSettings> { ["profile"] = new("quest", "focus") })
         {
             ShowRepeatables = false,
+            CompareEnabled = true,
+            ComparisonProfileId = "comparison",
+            ComparisonFilter = QuestComparisonFilter.Objectives,
+            ComparePairs = new Dictionary<string, QuestProfileUiSettings> { ["profile|comparison"] = new("other-quest", null) },
         };
 
         var actual = QuestMapSettingsStorage.Deserialize(QuestMapSettingsStorage.Serialize(expected), null);
@@ -101,6 +163,312 @@ public sealed class BlazorMigrationTests
             Assert.That(actual.Search, Is.EqualTo(expected.Search));
             Assert.That(actual.TraderFilter, Is.EqualTo(expected.TraderFilter));
             Assert.That(actual.Profiles, Is.EquivalentTo(expected.Profiles));
+            Assert.That(actual.CompareEnabled, Is.True);
+            Assert.That(actual.ComparisonProfileId, Is.EqualTo("comparison"));
+            Assert.That(actual.ComparisonFilter, Is.EqualTo(QuestComparisonFilter.Objectives));
+            Assert.That(actual.ComparePairs, Is.EquivalentTo(expected.ComparePairs));
+        });
+    }
+
+    [Test]
+    public void VersionTwoSettingsMigrateWithComparisonDisabled()
+    {
+        const string versionTwo = """{"selectedProfileId":"profile","language":"en","showFinished":true,"showRepeatables":false,"levelEligibleOnly":true,"profiles":{}}""";
+
+        var actual = QuestMapSettingsStorage.Deserialize(null, versionTwo, null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(actual, Is.Not.Null);
+            Assert.That(actual!.SelectedProfileId, Is.EqualTo("profile"));
+            Assert.That(actual.ShowRepeatables, Is.False);
+            Assert.That(actual.CompareEnabled, Is.False);
+            Assert.That(actual.ComparisonProfileId, Is.Null);
+            Assert.That(actual.ComparisonFilter, Is.EqualTo(QuestComparisonFilter.AllQuests));
+        });
+    }
+
+    [Test]
+    public void VersionThreeDifferencesOnlyMigratesToComparisonFilter()
+    {
+        const string versionThree = """{"selectedProfileId":"profile","language":"en","compareEnabled":true,"comparisonProfileId":"comparison","differencesOnly":true,"profiles":{}}""";
+
+        var actual = QuestMapSettingsStorage.Deserialize(null, versionThree, null, null);
+
+        Assert.That(actual?.ComparisonFilter, Is.EqualTo(QuestComparisonFilter.AllChanges));
+    }
+
+    [Test]
+    public void ComparisonClassifiesEveryDifferenceCategorySymmetrically()
+    {
+        var state = CreateComparisonState();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.GetComparison("same").Categories, Is.Empty);
+            Assert.That(state.GetComparison("state-difference").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.Status }));
+            Assert.That(state.GetComparison("objective-difference").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.Objectives }));
+            Assert.That(state.GetComparison("wait-difference").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.AvailableAfter }));
+            Assert.That(state.GetComparison("exclusion-difference").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.Exclusion }));
+            Assert.That(state.GetComparison("combined-difference").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.Status, QuestDifferenceCategory.Objectives }));
+            Assert.That(state.GetComparison("primary-only").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.PrimaryOnly }));
+            Assert.That(state.GetComparison("comparison-only").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.ComparisonOnly }));
+        });
+
+        state.SetData(state.Topology!, state.ComparisonProfile, state.Profile);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.GetComparison("same").Categories, Is.Empty);
+            Assert.That(state.GetComparison("state-difference").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.Status }));
+            Assert.That(state.GetComparison("objective-difference").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.Objectives }));
+            Assert.That(state.GetComparison("wait-difference").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.AvailableAfter }));
+            Assert.That(state.GetComparison("exclusion-difference").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.Exclusion }));
+            Assert.That(state.GetComparison("combined-difference").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.Status, QuestDifferenceCategory.Objectives }));
+            Assert.That(state.GetComparison("primary-only").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.ComparisonOnly }));
+            Assert.That(state.GetComparison("comparison-only").Categories, Is.EqualTo(new[] { QuestDifferenceCategory.PrimaryOnly }));
+        });
+    }
+
+    [Test]
+    public void OvercappedObjectiveDoesNotCreateAComparisonDifferenceInEitherDirection()
+    {
+        var topology = new QuestTopologyDto("version", [Node("quest", "Quest", "trader-a")], [],
+            [new QuestTraderDto("trader-a", "Trader A", null)], [], []);
+        var primaryObjective = new ObjectiveProgressDto(
+            "objective",
+            true,
+            QuestProfileRules.CapObjectiveCurrent(2, 1),
+            1,
+            true
+        );
+        var comparisonObjective = new ObjectiveProgressDto(
+            "objective",
+            true,
+            QuestProfileRules.CapObjectiveCurrent(1, 1),
+            1,
+            true
+        );
+        var primary = new ProfileStateDto("profile", "Primary", "Usec", 10, 0, false, false,
+            [State("quest", "InProgress") with { Objectives = [primaryObjective] }], [], ["quest"], ["quest"]);
+        var comparison = new ProfileStateDto("comparison", "Comparison", "Bear", 10, 0, false, false,
+            [State("quest", "InProgress") with { Objectives = [comparisonObjective] }], [], ["quest"], ["quest"]);
+        var state = new QuestMapPageState();
+
+        state.SetData(topology, primary, comparison);
+        Assert.That(state.GetComparison("quest").Categories, Is.Empty);
+
+        state.SetData(topology, comparison, primary);
+        Assert.That(state.GetComparison("quest").Categories, Is.Empty);
+    }
+
+    [Test]
+    public void ComparisonVisibilityUsesUnionAndSymmetricFinishedAndLevelFilters()
+    {
+        var state = CreateComparisonState();
+        state.SetShowFinished(false);
+        state.SetLevelEligibleOnly(true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.VisibleIds, Does.Contain("primary-only"));
+            Assert.That(state.VisibleIds, Does.Contain("comparison-only"));
+            Assert.That(state.VisibleIds, Does.Contain("finished-active"), "One active side must keep the quest visible.");
+            Assert.That(state.VisibleIds, Does.Not.Contain("both-finished"));
+            Assert.That(state.VisibleIds, Does.Contain("level-available"), "One eligible side must keep the quest visible.");
+            Assert.That(state.VisibleIds, Does.Not.Contain("both-level-gated"));
+        });
+
+        state.SetComparisonFilter(QuestComparisonFilter.AllChanges);
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.VisibleIds, Does.Not.Contain("same"));
+            Assert.That(state.VisibleIds, Does.Contain("state-difference"));
+            Assert.That(state.VisibleIds, Does.Contain("objective-difference"));
+        });
+
+        state.SetData(state.Topology!, state.ComparisonProfile, state.Profile);
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.VisibleIds, Does.Contain("finished-active"), "Swapping A/B must preserve the active/finished boundary.");
+            Assert.That(state.VisibleIds, Does.Contain("level-available"), "Swapping A/B must preserve the gated/eligible boundary.");
+        });
+    }
+
+    [Test]
+    public void ComparisonCategoryFilterShowsOnlyThatCategoryAndSelectionContext()
+    {
+        var state = CreateComparisonState();
+
+        state.SetComparisonFilter(QuestComparisonFilter.Objectives);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.VisibleIds, Does.Contain("objective-difference"));
+            Assert.That(state.VisibleIds, Does.Contain("combined-difference"));
+            Assert.That(state.VisibleIds, Does.Not.Contain("state-difference"));
+            Assert.That(state.ComparisonCounts[QuestDifferenceCategory.Objectives], Is.EqualTo(2));
+        });
+    }
+
+    [Test]
+    public void ComparisonTraderContextCanBeSeededByEitherProfile()
+    {
+        var nodes = new[] { Node("source", "Source", "trader-a"), Node("target", "Target", "trader-b") };
+        var topology = new QuestTopologyDto("version", nodes, [new QuestEdgeDto("source", "target", ["Success"], 0)],
+            [new QuestTraderDto("trader-a", "Trader A", null), new QuestTraderDto("trader-b", "Trader B", null)], [], []);
+        var primary = new ProfileStateDto("profile", "Primary", "Usec", 10, 0, false, false,
+            [State("source", "Locked"), State("target", "PrerequisiteGated")], [], ["source"], ["source", "target"]);
+        var comparison = new ProfileStateDto("comparison", "Comparison", "Usec", 20, 0, false, false,
+            [State("source", "InProgress"), State("target", "PrerequisiteGated")], [], ["source"], ["source", "target"]);
+        var state = new QuestMapPageState();
+        state.SetData(topology, primary, comparison);
+        state.SetTraderFilter("trader-a");
+
+        Assert.That(state.VisibleIds, Does.Contain("target"));
+
+        state.SetData(topology, comparison, primary);
+        Assert.That(state.VisibleIds, Does.Contain("target"));
+    }
+
+    [Test]
+    public void AllChangesPreservesSelectedPrerequisitesAndDirectSuccessors()
+    {
+        var nodes = new[] { Node("a", "A", "trader-a"), Node("b", "B", "trader-a"), Node("c", "C", "trader-a") };
+        var topology = new QuestTopologyDto("version", nodes,
+            [new QuestEdgeDto("a", "b", ["Success"], 0), new QuestEdgeDto("b", "c", ["Success"], 0)],
+            [new QuestTraderDto("trader-a", "Trader A", null)], [], []);
+        ProfileStateDto Profile(string id) => new(id, id, "Usec", 10, 0, false, false,
+            [State("a", "Completed"), State("b", "InProgress"), State("c", "PrerequisiteGated")], [], ["a", "b", "c"], ["a", "b", "c"]);
+        var state = new QuestMapPageState();
+        state.SetData(topology, Profile("primary"), Profile("comparison"));
+        state.SelectQuest("b");
+        state.SetComparisonFilter(QuestComparisonFilter.AllChanges);
+
+        Assert.That(state.VisibleIds, Is.EquivalentTo(new[] { "a", "b", "c" }));
+    }
+
+    [Test]
+    public void ComparisonSelectionPersistsPerOrderedProfilePair()
+    {
+        var state = CreateComparisonState();
+        state.SelectQuest("objective-difference");
+        var settings = state.CaptureSettings("profile", "en", "comparison", true);
+        var restored = CreateComparisonState();
+
+        restored.ApplySettings(settings);
+
+        Assert.That(restored.SelectedId, Is.EqualTo("objective-difference"));
+    }
+
+    [Test]
+    public void ComparisonModeSuppressesRepeatablesWithoutChangingTheirPreference()
+    {
+        var ordinary = CreateStateWithRepeatables();
+        var comparison = new ProfileStateDto("comparison", "Other", "Usec", 15, 100, false, false,
+            [State("normal", "Completed")], [], ["normal"], ["normal"]);
+
+        ordinary.SetData(ordinary.Topology!, ordinary.Profile, comparison);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ordinary.CompareMode, Is.True);
+            Assert.That(ordinary.ShowRepeatables, Is.True);
+            Assert.That(ordinary.VisibleIds, Does.Not.Contain("daily-available"));
+            Assert.That(ordinary.VisibleIds, Does.Not.Contain("daily-completed"));
+            Assert.That(ordinary.VisibleIds, Does.Not.Contain("weekly-expired"));
+        });
+
+        ordinary.SetData(ordinary.Topology!, ordinary.Profile, null);
+        Assert.That(ordinary.VisibleIds, Does.Contain("daily-available"));
+    }
+
+    [Test]
+    public async Task ComparisonComponentsInstantiateAndRenderAtRuntime()
+    {
+        var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
+        var state = CreateComparisonState();
+        state.SelectQuest("objective-difference");
+        var localizer = new QuestMapLocalizer(new QuestMapBootstrapDto("en", "en", [], QuestMapUiCatalog.English));
+        var profiles = new[]
+        {
+            new ProfileSummaryDto("profile", "PrimaryProfileWithLongName", "Usec", 10),
+            new ProfileSummaryDto("comparison", "ComparisonProfileWithLongName", "Bear", 20),
+        };
+
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+        {
+            var header = await renderer.RenderComponentAsync<QuestMapHeader>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                [nameof(QuestMapHeader.Localizer)] = localizer,
+                [nameof(QuestMapHeader.Profiles)] = profiles,
+                [nameof(QuestMapHeader.SelectedProfile)] = profiles[0],
+                [nameof(QuestMapHeader.SelectedComparisonProfile)] = profiles[1],
+                [nameof(QuestMapHeader.CompareMode)] = true,
+                [nameof(QuestMapHeader.Languages)] = Array.Empty<QuestMapLanguageDto>(),
+            }));
+            var details = await renderer.RenderComponentAsync<QuestDetails>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                [nameof(QuestDetails.State)] = state,
+                [nameof(QuestDetails.Localizer)] = localizer,
+            }));
+            var filters = await renderer.RenderComponentAsync<QuestMapFilters>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                [nameof(QuestMapFilters.State)] = state,
+                [nameof(QuestMapFilters.Localizer)] = localizer,
+            }));
+            return header.ToHtmlString() + filters.ToHtmlString() + details.ToHtmlString();
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(html, Does.Contain("PrimaryProfileWithLongName"));
+            Assert.That(html, Does.Contain("ComparisonProfileWithLongName"));
+            Assert.That(html, Does.Contain("comparison-filterbar"));
+            Assert.That(html, Does.Contain("comparison-summary"));
+            Assert.That(html, Does.Contain("matching-comparison-details"));
+            Assert.That(html, Does.Contain("comparison-table"));
+            Assert.That(html, Does.Contain("objective-comparison"));
+        });
+    }
+
+    [Test]
+    public async Task OrdinaryQuestDetailsRendersCappedObjectiveProgress()
+    {
+        var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
+        var objective = new ObjectiveDefinitionDto("objective", "Make progress", "CounterCreator", 0, null, 1, null, []);
+        var node = Node("quest", "Quest", "trader-a") with { Objectives = [objective] };
+        var topology = new QuestTopologyDto("version", [node], [], [new QuestTraderDto("trader-a", "Trader A", null)], [], []);
+        var progress = new ObjectiveProgressDto(
+            objective.Id,
+            true,
+            QuestProfileRules.CapObjectiveCurrent(2, objective.RequiredValue),
+            objective.RequiredValue,
+            true
+        );
+        var profile = new ProfileStateDto("profile", "Primary", "Usec", 10, 0, false, false,
+            [State("quest", "InProgress") with { Objectives = [progress] }], [], ["quest"], ["quest"]);
+        var state = new QuestMapPageState();
+        state.SetData(topology, profile);
+        state.SelectQuest("quest");
+        var localizer = new QuestMapLocalizer(new QuestMapBootstrapDto("en", "en", [], QuestMapUiCatalog.English));
+
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+        {
+            var details = await renderer.RenderComponentAsync<QuestDetails>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                [nameof(QuestDetails.State)] = state,
+                [nameof(QuestDetails.Localizer)] = localizer,
+            }));
+            return details.ToHtmlString();
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(html, Does.Contain("1 / 1"));
+            Assert.That(html, Does.Not.Contain("2 / 1"));
         });
     }
 
@@ -497,6 +865,51 @@ public sealed class BlazorMigrationTests
         };
         var state = new QuestMapPageState();
         state.SetData(topology, profile);
+        return state;
+    }
+
+    private static QuestMapPageState CreateComparisonState()
+    {
+        var ids = new[]
+        {
+            "same", "state-difference", "objective-difference", "primary-only", "comparison-only",
+            "wait-difference", "exclusion-difference", "combined-difference",
+            "finished-active", "both-finished", "level-available", "both-level-gated",
+        };
+        var nodes = ids.Select(id => id is "objective-difference" or "combined-difference"
+            ? Node(id, id, "trader-a") with { Objectives = [new ObjectiveDefinitionDto("objective", "Make progress", "CounterCreator", 0, null, 10, null, [])] }
+            : Node(id, id, "trader-a")).ToArray();
+        var topology = new QuestTopologyDto("version", nodes, [], [new QuestTraderDto("trader-a", "Trader A", null)], [], []);
+        var primary = new ProfileStateDto("profile", "Primary", "Usec", 10, 0, false, false,
+            [
+                State("same", "Available"),
+                State("state-difference", "InProgress"),
+                State("objective-difference", "InProgress") with { Objectives = [new ObjectiveProgressDto("objective", false, 0, 10, true)] },
+                State("wait-difference", "Pending") with { AvailableAfter = 100 },
+                State("exclusion-difference", "Excluded") with { Exclusion = new QuestExclusionDto("branch-a", "Success", true) },
+                State("combined-difference", "InProgress") with { Objectives = [new ObjectiveProgressDto("objective", false, 0, 10, true)] },
+                State("primary-only", "Available"),
+                State("finished-active", "Completed"),
+                State("both-finished", "Completed"),
+                State("level-available", "LevelGated"),
+                State("both-level-gated", "LevelGated"),
+            ], [], ids.Except(["comparison-only"]).ToArray(), ids.Except(["comparison-only"]).ToArray());
+        var comparison = new ProfileStateDto("comparison", "Comparison", "Bear", 20, 0, false, false,
+            [
+                State("same", "Available"),
+                State("state-difference", "Completed"),
+                State("objective-difference", "InProgress") with { Objectives = [new ObjectiveProgressDto("objective", true, 10, 10, true)] },
+                State("wait-difference", "Pending") with { AvailableAfter = 200 },
+                State("exclusion-difference", "Excluded") with { Exclusion = new QuestExclusionDto("branch-b", "Success", true) },
+                State("combined-difference", "Completed") with { Objectives = [new ObjectiveProgressDto("objective", true, 10, 10, true)] },
+                State("comparison-only", "Available"),
+                State("finished-active", "InProgress"),
+                State("both-finished", "Completed"),
+                State("level-available", "Available"),
+                State("both-level-gated", "LevelGated"),
+            ], [], ids.Except(["primary-only"]).ToArray(), ids.Except(["primary-only"]).ToArray());
+        var state = new QuestMapPageState();
+        state.SetData(topology, primary, comparison);
         return state;
     }
 

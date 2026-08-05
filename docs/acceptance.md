@@ -19,6 +19,16 @@ Status reflects the user's browser reviews through 2026-08-04. The installed SPT
 - [x] Selected profile persists across reloads.
 - [x] Deleted/missing selected profiles fail gracefully.
 
+## Profile comparison
+
+- [x] Comparison mode uses two distinct sanitized profiles without adding a profile-data endpoint.
+- [x] The graph shows the union of both profile frontiers with dimmed matching cards, explicit changed-card A/B transitions and N/A for profile-exclusive quests.
+- [x] Quest status, pending time, exclusion and objective progress differences are detected symmetrically.
+- [x] All-change, change-category, hide-finished and level filters apply across both profiles without losing selected-chain context.
+- [x] Selected details show changed fields first and keep matching fields available in collapsed sections.
+- [x] Daily/Weekly quests are omitted during comparison and return with the prior setting afterward.
+- [x] Pair selection, focused quest, comparison profile, filter state and viewport scope persist safely.
+
 ## Quest applicability
 
 - [x] USEC profile does not show Bear-only quests.

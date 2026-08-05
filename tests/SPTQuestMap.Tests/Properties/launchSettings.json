@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "SPTQuestMap.Tests": {
+      "commandName": "Project",
+      "commandLineArgs": "SptInstallRoot=E:\\Games\\Tarkov-SPT"
+    }
+  }
+}
