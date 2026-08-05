@@ -1,4 +1,8 @@
 <Solution>
   <Project Path="../../tests/SPTQuestMap.Tests/SPTQuestMap.Tests.csproj" />
+  <Project Path="../../tests/SPTQuestMap.Core.Tests/SPTQuestMap.Core.Tests.csproj" />
+  <Project Path="../../tools/SPTQuestMap.ClientProbe/SPTQuestMap.ClientProbe.csproj" />
+  <Project Path="../SPTQuestMap.Client/SPTQuestMap.Client.csproj" />
+  <Project Path="../SPTQuestMap.Core/SPTQuestMap.Core.csproj" />
   <Project Path="SPTQuestMap.csproj" />
 </Solution>

@@ -1,0 +1,79 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>SPTQuestMap.Client</AssemblyName>
+    <RootNamespace>SPTQuestMap.Client</RootNamespace>
+    <Version>0.1.0</Version>
+    <DebugType>portable</DebugType>
+    <Deterministic>true</Deterministic>
+    <EftInstallRoot Condition="'$(EftInstallRoot)' == ''">$(SPT_ROOT)</EftInstallRoot>
+    <ManagedRoot>$(EftInstallRoot)\EscapeFromTarkov_Data\Managed</ManagedRoot>
+    <BepInExCoreRoot>$(EftInstallRoot)\BepInEx\core</BepInExCoreRoot>
+  </PropertyGroup>
+
+  <Target Name="ValidateEftInstallRoot" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="'$(EftInstallRoot)' == ''"
+           Text="Set EftInstallRoot or SPT_ROOT to the Tarkov directory containing BepInEx and SPT." />
+    <Error Condition="!Exists('$(EftInstallRoot)\EscapeFromTarkov.exe')"
+           Text="EftInstallRoot does not contain EscapeFromTarkov.exe: $(EftInstallRoot)" />
+    <Error Condition="!Exists('$(ManagedRoot)\Assembly-CSharp.dll')"
+           Text="Required client assembly is missing: $(ManagedRoot)\Assembly-CSharp.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\Sirenix.Serialization.dll')"
+           Text="Required EFT serialization assembly is missing: $(ManagedRoot)\Sirenix.Serialization.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\Newtonsoft.Json.dll')"
+           Text="Required EFT JSON assembly is missing: $(ManagedRoot)\Newtonsoft.Json.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.dll')"
+           Text="Required Unity assembly is missing: $(ManagedRoot)\UnityEngine.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.CoreModule.dll')"
+           Text="Required Unity assembly is missing: $(ManagedRoot)\UnityEngine.CoreModule.dll" />
+    <Error Condition="!Exists('$(BepInExCoreRoot)\BepInEx.dll')"
+           Text="Required BepInEx assembly is missing: $(BepInExCoreRoot)\BepInEx.dll" />
+    <Error Condition="!Exists('$(BepInExCoreRoot)\0Harmony.dll')"
+           Text="Required Harmony assembly is missing: $(BepInExCoreRoot)\0Harmony.dll" />
+    <Error Condition="!Exists('$(EftInstallRoot)\BepInEx\plugins\spt\spt-core.dll')"
+           Text="SPT client core is missing: $(EftInstallRoot)\BepInEx\plugins\spt\spt-core.dll" />
+    <Error Condition="!Exists('$(EftInstallRoot)\BepInEx\plugins\spt\spt-common.dll')"
+           Text="SPT client HTTP assembly is missing: $(EftInstallRoot)\BepInEx\plugins\spt\spt-common.dll" />
+  </Target>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SPTQuestMap.Core\SPTQuestMap.Core.csproj" />
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExCoreRoot)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(ManagedRoot)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExCoreRoot)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Sirenix.Serialization">
+      <HintPath>$(ManagedRoot)\Sirenix.Serialization.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(ManagedRoot)\Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="spt-common">
+      <HintPath>$(EftInstallRoot)\BepInEx\plugins\spt\spt-common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(ManagedRoot)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ManagedRoot)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

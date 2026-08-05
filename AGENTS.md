@@ -173,6 +173,7 @@ Do not create write endpoints in the first version.
 - Deploy only after a successful build and test pass.
 - Default deployment target is expected to be under the SPT server's mod directory, but confirm the exact 4.0.13 layout from source and the installed server.
 - If the deployed DLL changed, restart the SPT server using the user-provided restart command.
+- Treat that restart as part of the deployment task: run the configured command yourself instead of leaving the restart as a manual user step. If no command is configured, ask for it before deployment.
 - Do not guess or hard-code the restart command.
 - Static-only changes may be copied without restart if the 4.0.13 host serves them dynamically; verify this rather than assuming it.
 - `scripts/deploy.ps1` is a starting hook and may be adapted after source inspection.
@@ -180,6 +181,7 @@ Do not create write endpoints in the first version.
 ## Development discipline
 
 - Maintain `docs/development-status.md` with the current milestone, completed work, blockers, and the next concrete step.
+- Add every new `.csproj` to `src/SPTQuestMap/SPTQuestMap.slnx` in the same change.
 - Keep commits/milestone changes reviewable.
 - Prefer tests around graph/state logic over screenshot-only validation.
 - Add fixture profiles only after sanitizing them.

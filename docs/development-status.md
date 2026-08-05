@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 4 and the Blazor migration are complete. The user accepted the installed SPT 4.0.13 application on 2026-08-04 as usable, performant, and observably current. Remaining unavailable runtime cases are deferred evidence, not release blockers.
+The server/Blazor application remains complete and accepted. In-game client Milestones 0, 1, and 2 are **Complete**. Milestone 2's read-only complete-topology transport, pure graph core, deterministic layout, live-overlay capture boundary, and observation-only lifecycle integration passed static and in-game runtime validation. Milestone 3 is next.
 
 ## SPT 4.0.13 integration audit
 
@@ -183,3 +183,131 @@ Milestone 4 and the Blazor migration are complete. The user accepted the install
 ## Next concrete step
 
 Live-check cross-trader unmet-prerequisite context after server startup. Afterward, collect active-season, restartable-failure, and missing-asset fallback evidence opportunistically when representative runtime cases become available.
+
+## In-game client milestone 0 — installed-client investigation
+
+Status: Complete
+
+### Completed
+
+- Verified the intended target: EFT `0.16.9.40087`, SPT client `4.0.13.0`, BepInEx `5.4.23.2`, SPT Reflection `4.0.13.0`, and Unity `2022.3.43f1`. Stable hashes and paths are recorded in `docs/in-game-client-design.md`.
+- Compared the build-40087 public source with installed `Assembly-CSharp.dll` metadata. All twelve proposed UI/controller/template targets exist locally with matching namespaces, signatures, fields, and metadata tokens.
+- Established exact trader/global Tasks `Show` and `Close` patch candidates plus serialized access to the native list, detail, task, Quest Items, Notes, transfer, search, blocker, and back controls.
+- Traced accept/restart/complete/reroll/ordinary/partial-stack/currency/weapon-assembly flows through the native controllers and standard item-event transport. No profile mutation was performed.
+- Proved that `RequestQuestsTemplates(true)` calls the profile-visible `/client/quest/list`; `GClass4014.GlobalQuestTemplates` is not a complete future topology. Milestone 2 must use a deliberate read-only complete-topology source and must not call `QuestBook.LoadAll()` or inject fake live quests.
+- Added a strictly read-only, exact-version-gated hierarchy probe at `tools/SPTQuestMap.ClientProbe`. It patches only the two native `Show` methods and logs transform/component/rect/canvas/mask/raycast plus known serialized-field paths.
+- Captured six paired trader task-screen dumps and one paired global task-screen dump on 2026-08-05. All required serialized fields resolved, and the captures establish concrete roots, rectangles, masks, scroll ownership, canvas ordering, raycast state, and native view separation.
+- Selected evidence-backed mount boundaries: mirror `QuestList` under trader `MainArea/Center` while preserving `QuestView`; mirror `TasksPanel` inside global `TasksPart` while leaving Notes, Quest Items, search, transfer, blocker, and back controls native.
+
+### Verification
+
+- Build: `dotnet build tools\SPTQuestMap.ClientProbe\SPTQuestMap.ClientProbe.csproj -c Release -p:EftInstallRoot=D:\Tarkov-SPT` passes with 0 warnings and 0 errors.
+- Automated tests: build-time reference/root guards pass; installed metadata inspection confirms all required targets. The unchanged server/browser solution passes all 92 tests in Release.
+- Manual tests: passed the hierarchy-only checklist. Trader Tasks and global Tasks both produced paired begin/end blocks; switching among the native global views and normal close/back navigation completed without a probe error. No quest or inventory action was performed.
+- Runtime log audit: no `QUESTMAP_M00_ERROR`, exception, or patch failure. Two hierarchy dumps reached the intentional 750-node cap only after all insertion-relevant roots and fields had been recorded; earlier trader dumps completed below the cap.
+
+### Known limitations
+
+- Runtime hierarchy evidence is specific to the installed EFT build, 1920x1080 capture, and current mod set. Layout code must still use serialized component references and relative anchors rather than brittle transform-path or pixel assumptions.
+- The installed environment includes Task List Fixes `1.7.1`, Quest Tracker `1.6.0`, UI Fixes `5.3.11`, and Fika `2.3.9`. The probe coexisted with them for hierarchy capture, including UI Fixes' task-list `KeyScroller`; future replacement-UI coexistence remains a later milestone concern.
+- The ordinary client quest-template response omits future quests blocked by level, prerequisites, trader loyalty/standing, faction, event state, or game edition. This is a known architecture input, not a reason to mutate the live quest book.
+
+### Source-sensitive targets
+
+- `QuestsScreen.Show` `0x0600F3CF`; `QuestsScreen.Close` `0x0600F3D0`.
+- `TasksScreen.Show` `0x0600F30E`; `TasksScreen.Close` `0x0600F318`.
+- `QuestView.StartQuest(QuestClass)` `0x0600F3E8`; `QuestView.FinishQuest(QuestClass)` `0x0600F3EB`; repeatable confirmation `0x0600F3DE`.
+- `AbstractQuestControllerClass.AcceptQuest/FinishQuest/HandoverItem` `0x06010AC5` through `0x06010AC7`; concrete local methods `0x06010B57` through `0x06010B59`.
+- `GClass4014.GetAllProfileQuestTemplates` `0x06010930`; `MainMenuControllerClass.method_5` `0x06009288`.
+- Full target/hash table: `docs/in-game-client-design.md`.
+- Captured probe hashes: DLL `16B4B8E4FE3CB8B4571CDF4C8171F8F0ABBEB40B053D1C78DA3AB45945FBE845`; PDB `0456F3D7647C438DC106C33A68836A7736002E817DF9BF785650F3BB114B3CFD`. The temporary deployed copy was removed after capture; reproducible source remains under `tools/SPTQuestMap.ClientProbe`.
+
+### Blockers
+
+- None for Milestone 0.
+
+### Next step
+
+- Complete the Milestone 1 runtime checklist below; Milestone 0 itself remains complete.
+
+## In-game client milestone 1 — client project and compatibility harness
+
+Status: Complete
+
+### Completed
+
+- Added `src/SPTQuestMap.Client`, targeting `netstandard2.1`, with guarded `EftInstallRoot`/shared `SPT_ROOT` resolution and actionable missing-file errors. Both roots identify the Tarkov directory containing `BepInEx` and `SPT`.
+- Kept all exact installed references external with `Private=false`. The output contains no copied BepInEx, Harmony, EFT, Sirenix, Unity, or SPT assembly.
+- Added BepInEx metadata and default-false trader graph, global Tasks graph, custom details, and debug settings. A default-false forced-failure diagnostic supports the mismatch test without modifying vendor files.
+- Reused the M00 exact guard: EFT private build part `40087`, SPT client `4.0.13.0`, and `Assembly-CSharp.dll` SHA-256 `FAEF6F0B9F142F9D047495EC3DCCFD5D6974AC048368DC7045955CF54B117982`.
+- Added exact-environment resolution for `QuestsScreen.Show/Close` and `TasksScreen.Show/Close`. After the raw identity guard succeeds, each target must be the unique declared method with the expected name and parameter count; exceptions, ambiguity, and missing targets fail closed.
+- Added an owned Harmony registration lifecycle and structured one-time startup diagnostics. Milestone 1 installs exactly zero patches. An incompatible client, unresolved target, forced failure, or enabled placeholder feature safely disables behavior.
+- Deployed only `SPTQuestMap.Client.dll` and its PDB to `D:\Tarkov-SPT\BepInEx\plugins\SPTQuestMap` after confirming EFT was not running.
+
+### Verification
+
+- Client build: `dotnet build .\src\SPTQuestMap.Client\SPTQuestMap.Client.csproj -c Release -p:EftInstallRoot="D:\Tarkov-SPT" -m:1` passes with 0 warnings and 0 errors.
+- Root guard: the same build against `B:\source\SPT-QuestMap\.missing-m01-root` fails before compilation with the expected actionable `EftInstallRoot does not contain EscapeFromTarkov.exe` error.
+- Server regression: `dotnet test .\src\SPTQuestMap\SPTQuestMap.slnx -c Release -p:SptInstallRoot="D:\Tarkov-SPT" --no-restore -m:1` passes all 92 tests.
+- Copy-local audit: the client output contains no external reference DLL. Corrected resolver artifacts are deployed and match the tested output: DLL `6E8B3CCC67EAB16B4753057880640AC72D4DAD5FA04B6696E5B60AA7C6AC30C4`; PDB `010B9DA7DF437DE8BD235EC0AF50D0A3F78F67F589ED25B44B01974A22B68315`.
+- Corrected default-config runtime: the plugin loaded, detected EFT `0.16.9.0-40087-8ce8af8`, SPT `4.0.13.0`, and the exact `Assembly-CSharp` hash; resolved `4/4` targets with `unresolved=none`; reported all replacement features false; installed zero patches; and entered `compatible=True`, `active=True`, `safelyDisabled=False`. Manual inspection confirmed trader and global Tasks screens remained vanilla.
+- Forced incompatibility runtime: with only `ForceCompatibilityFailure=True`, the plugin loaded, skipped source-sensitive targets, installed zero patches, and entered `compatible=False`, `active=False`, `safelyDisabled=True`. The setting is restored to `false`.
+- Runtime logs were preserved separately at `artifacts/runtime/m01/corrected-default-LogOutput.log` and `artifacts/runtime/m01/forced-incompatibility-LogOutput.log` before subsequent EFT startups cleared the live log. No QuestMap exception or patch failure occurred; unrelated existing-mod errors remained present.
+
+### Manual runtime gate
+
+1. Start SPT/EFT normally with the generated client configuration left at its default values.
+2. Confirm `BepInEx/LogOutput.log` contains one complete `QUESTMAP_M01_*` startup block with `resolved=4/4`, `unresolved=none`, `installedPatches=0`, `compatible=True`, `active=True`, and `safelyDisabled=False`.
+3. Open a trader Tasks tab and the global Tasks screen. Confirm both are visually and behaviorally vanilla, including selection, close/back navigation, regular/daily switching, Notes, and Quest Items. Do not perform a quest or inventory mutation for this compatibility check.
+4. Exit EFT. Set `Diagnostics.ForceCompatibilityFailure = true` in `BepInEx/config/com.rootdarkarchon.sptquestmap.client.cfg`, start EFT once, and confirm the startup state reports `compatible=False`, `active=False`, `safelyDisabled=True`, and `installedPatches=0`.
+5. Exit EFT and restore `Diagnostics.ForceCompatibilityFailure = false`.
+
+The first default-config capture was preserved at `artifacts/runtime/m01/default-config-LogOutput.log` before another restart could clear it. It proved that the DLL loaded, all default feature flags were false, the executable/SPT/hash identity guard passed, zero patches were installed, both inspected screens remained vanilla, and the initial raw-token runtime matcher safely disabled at `resolved=0/4`. BepInEx preloader patching changes the loaded module's metadata layout, so the harness now follows M00 by resolving the unique declared type/name target with an additional arity check. The corrected default and forced-failure captures both passed.
+
+### Blockers
+
+- None for Milestone 1.
+
+### Next step
+
+- Continue the Milestone 2 runtime/data checklist below; Milestone 1 itself remains complete.
+
+## In-game client milestone 2 — graph model and client data adapter
+
+Status: Complete
+
+### Completed
+
+- Added `src/SPTQuestMap.Core`, a `netstandard2.1` project with no Unity, BepInEx, EFT, SPT server, ASP.NET, Blazor, or JavaScript references. It owns immutable normalized graph models, stable node/edge/trader lookups, pure graph rules, overlay composition, and deterministic initial layout.
+- Added the deliberate read-only server route `/questmap/client/topology`. It reuses `QuestMapDataService.GetTopology()` rather than `/client/quest/list`, so the static portion contains the complete database topology, including locked future quests. The response adds only sanitized profile-generated repeatable quest definitions for the authenticated SPT session; it never returns a raw profile and exposes no mutation action.
+- Extended the server topology DTO with explicit unsupported start-condition entries. Unknown conditions retain stage, type, and condition ID while the existing warning remains; they are not silently discarded or fabricated as satisfied.
+- Added the exact client transport through SPT 4.0.13 `SPT.Common.Http.RequestHandler.GetDataAsync`. The client decodes the raw topology-only response, maps it into the pure graph, preserves malformed/missing edge references in diagnostics, and does not call `/client/quest/list` for completeness.
+- Added `EftLiveSnapshotAdapter`, which reads verified `QuestClass`, `AbstractQuestClass`, `QuestDataClass`, `GClass3996`, `EFT.Profile`, `Profile.TraderInfo`, `Condition`, and `ConditionProgressChecker` members. It captures exact status, live existence, visibility, objective completion/current values, repeatable expiration, player level/faction, trader availability/loyalty/standing/sales, and hand-in-ready status without writing to any game object.
+- Kept topology, deterministic layout, and profile overlay as separate objects. `QuestGraphDataSet.RefreshOverlay` replaces only the overlay; tests assert that the topology and layout references remain unchanged.
+- Implemented pure success/failure/started/any-outcome classification, cycle-safe prerequisite closure, direct-successor lookup, trader/faction/event filtering, `None` event descendant removal, immediate frontier selection, active filtering, finished/permanent-failure hiding, stable ordering, missing-reference handling, and cycle-safe layout fallback.
+- Added observation-only postfix hooks to the verified trader and global Tasks `Show` lifecycle methods. They invoke the read-only adapter without replacing either screen and emit structured topology, overlay, refresh-reuse, quest-book invariant, and state diagnostics. Milestone 2 installs two data hooks but no screen replacement.
+
+### Verification
+
+- Pure core build: `dotnet build .\src\SPTQuestMap.Core\SPTQuestMap.Core.csproj -c Release -m:1` passes with 0 warnings and 0 errors.
+- Exact client build: `dotnet build .\src\SPTQuestMap.Client\SPTQuestMap.Client.csproj -c Release -p:EftInstallRoot="D:\Tarkov-SPT" -m:1` passes with 0 warnings and 0 errors. Exact `spt-common.dll` and `Newtonsoft.Json.dll` references are `Private=false`.
+- Combined regression: `dotnet test .\src\SPTQuestMap\SPTQuestMap.slnx -c Release -p:SptInstallRoot="D:\Tarkov-SPT" -p:EftInstallRoot="D:\Tarkov-SPT" -m:1` passes the existing 92 server/browser tests plus 15 graph-core tests.
+- The client output contains only the client DLL/PDB/deps manifest and project-owned `SPTQuestMap.Core.dll`/PDB. No EFT, Unity, BepInEx, Harmony, Sirenix, Newtonsoft, or SPT vendor DLL is copied.
+- Installed metadata was rechecked read-only before implementation: `RequestHandler.GetDataAsync(string)` is public static; `QuestBookClass` is enumerable but remains untouched; and every live snapshot member used by the adapter exists with the compiled shape in the exact build-40087 assembly.
+
+### Runtime/manual validation
+
+- Deployed the tested server DLL and client/core pair, restarted `SPT.Server.exe` through the exact configured installation path, and completed one EFT runtime pass across both native Tasks screens.
+- The authenticated client transport returned 561 templates and normalized them into 561 nodes and 736 edges with zero missing predecessors, missing targets, or unsupported conditions. Initial topology/layout timings were 332.19 ms and 11.31 ms.
+- The live overlay captured 25 quests. `QUESTMAP_M02_BOOK` recorded `before=25`, `after=25`, `unchanged=True`, `loadAllCalled=False`, and `templatesInjected=False`.
+- Repeated screen refreshes retained `topologyReused=True` and `layoutReused=True`; subsequent overlay-only refreshes completed in 0.96–1.50 ms. The topology version remained `6746ec506d186f44`.
+- The exact-version guard passed, all four lifecycle targets resolved, and the two observation hooks installed. The user confirmed both Tasks screens remained vanilla. No `QUESTMAP_M02_ERROR`, QuestMap exception, or patch failure occurred.
+- The exact runtime log was preserved at `D:\Tarkov-SPT\QuestMap-runtime-logs\m02-final-LogOutput.log` with SHA-256 `A6BA34DD2F0EA0672FB98709E318A72D798E8B85E92BD33A582B1910F9BD5D0B` before another EFT startup could clear it.
+
+### Blockers
+
+- None for Milestone 2.
+
+### Next step
+
+- Begin Milestone 3, retaining the accepted read-only topology/overlay boundary and keeping native quest details/actions intact.

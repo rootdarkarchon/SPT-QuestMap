@@ -58,6 +58,15 @@ internal sealed class QuestTopologyBuilder(
                 .Where(requirement => requirement is not null)
                 .Cast<RequirementDto>()
                 .ToArray();
+            var unknownConditions = startConditions
+                .Where(condition => condition.ConditionType is not ("Quest" or "Level" or "TraderLoyalty" or "TraderStanding"))
+                .Select(condition => new UnknownConditionDto(
+                    "AvailableForStart",
+                    condition.ConditionType,
+                    condition.Id.ToString()))
+                .OrderBy(condition => condition.ConditionType, StringComparer.Ordinal)
+                .ThenBy(condition => condition.ConditionId, StringComparer.Ordinal)
+                .ToArray();
 
             foreach (var condition in startConditions.Where(condition => condition.ConditionType == "Quest"))
             {
@@ -72,10 +81,7 @@ internal sealed class QuestTopologyBuilder(
                 }
             }
 
-            foreach (var unsupported in startConditions
-                .Select(condition => condition.ConditionType)
-                .Distinct()
-                .Where(type => type is not ("Quest" or "Level" or "TraderLoyalty" or "TraderStanding")))
+            foreach (var unsupported in unknownConditions.Select(condition => condition.ConditionType).Distinct(StringComparer.Ordinal))
             {
                 logger.Warning($"SPT-QuestMap: unsupported start condition '{unsupported}' on quest {questId}; availability remains authoritative but the blocker explanation may be incomplete.");
             }
@@ -112,7 +118,10 @@ internal sealed class QuestTopologyBuilder(
                     items,
                     traders
                 )
-            ));
+            )
+            {
+                UnknownConditions = unknownConditions,
+            });
         }
 
         nodes = QuestGraphRules.PropagateSeasonalEventTypes(nodes, edges);

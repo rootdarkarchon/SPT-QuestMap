@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>SPTQuestMap.ClientProbe</AssemblyName>
+    <RootNamespace>SPTQuestMap.ClientProbe</RootNamespace>
+    <Version>0.0.1</Version>
+    <DebugType>portable</DebugType>
+    <EftInstallRoot Condition="'$(EftInstallRoot)' == ''">$(SPT_ROOT)</EftInstallRoot>
+  </PropertyGroup>
+
+  <Target Name="ValidateEftInstallRoot" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="'$(EftInstallRoot)' == ''"
+           Text="Set EftInstallRoot or SPT_ROOT to the Tarkov directory containing BepInEx and SPT." />
+    <Error Condition="!Exists('$(EftInstallRoot)\EscapeFromTarkov.exe')"
+           Text="EftInstallRoot does not contain EscapeFromTarkov.exe: $(EftInstallRoot)" />
+    <Error Condition="!Exists('$(EftInstallRoot)\EscapeFromTarkov_Data\Managed\Assembly-CSharp.dll')"
+           Text="Assembly-CSharp.dll was not found under EftInstallRoot: $(EftInstallRoot)" />
+    <Error Condition="!Exists('$(EftInstallRoot)\BepInEx\plugins\spt\spt-core.dll')"
+           Text="SPT client assemblies were not found under EftInstallRoot: $(EftInstallRoot)" />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(EftInstallRoot)\BepInEx\core\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(EftInstallRoot)\EscapeFromTarkov_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>$(EftInstallRoot)\BepInEx\core\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Sirenix.Serialization">
+      <HintPath>$(EftInstallRoot)\EscapeFromTarkov_Data\Managed\Sirenix.Serialization.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(EftInstallRoot)\EscapeFromTarkov_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(EftInstallRoot)\EscapeFromTarkov_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(EftInstallRoot)\EscapeFromTarkov_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(EftInstallRoot)\EscapeFromTarkov_Data\Managed\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

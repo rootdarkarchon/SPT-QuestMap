@@ -67,6 +67,27 @@ foreach ($sourceDll in $sourceDlls) {
     }
 }
 
+$defaultServerExecutable = Join-Path $sptRootResolved 'SPT/SPT.Server.exe'
+$useDefaultRestart = $dllChanged -and [string]::IsNullOrWhiteSpace($RestartCommand)
+$defaultServerWasRunning = $false
+if ($useDefaultRestart) {
+    if (-not (Test-Path -LiteralPath $defaultServerExecutable -PathType Leaf)) {
+        throw "SPT server executable was not found: $defaultServerExecutable"
+    }
+
+    $serverExecutableFull = [System.IO.Path]::GetFullPath($defaultServerExecutable)
+    $serverProcesses = @(Get-Process -Name 'SPT.Server' -ErrorAction SilentlyContinue | Where-Object {
+        $_.Path -and [System.IO.Path]::GetFullPath($_.Path).Equals($serverExecutableFull, [StringComparison]::OrdinalIgnoreCase)
+    })
+    $defaultServerWasRunning = $serverProcesses.Count -gt 0
+    foreach ($serverProcess in $serverProcesses) {
+        if ($PSCmdlet.ShouldProcess($serverProcess.Path, "Stop SPT server process $($serverProcess.Id) before DLL deployment")) {
+            Stop-Process -Id $serverProcess.Id -Force
+            Wait-Process -Id $serverProcess.Id -Timeout 30 -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 if ($PSCmdlet.ShouldProcess($destination, "Deploy files from $DeploymentSource")) {
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
 
@@ -83,7 +104,17 @@ if ($PSCmdlet.ShouldProcess($destination, "Deploy files from $DeploymentSource")
         if ($copyRequired) {
             $destinationDirectory = Split-Path -Parent $destinationFile
             New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
-            Copy-Item -LiteralPath $_.FullName -Destination $destinationFile -Force
+            $copied = $false
+            for ($attempt = 1; $attempt -le 20 -and -not $copied; $attempt++) {
+                try {
+                    Copy-Item -LiteralPath $_.FullName -Destination $destinationFile -Force
+                    $copied = $true
+                }
+                catch [System.IO.IOException] {
+                    if ($attempt -eq 20) { throw }
+                    Start-Sleep -Milliseconds 250
+                }
+            }
             Write-Host "Updated deployment file: $relativePath"
         }
     }
@@ -106,8 +137,13 @@ Write-Host "Deployed SPT-QuestMap to: $destination"
 Write-Host "DLL changed: $dllChanged"
 
 if ($dllChanged) {
-    if ([string]::IsNullOrWhiteSpace($RestartCommand)) {
-        Write-Warning 'The deployed DLL changed. Restart the SPT server before testing /questmap. Supply -RestartCommand to automate this.'
+    if ($useDefaultRestart -and $defaultServerWasRunning) {
+        if ($PSCmdlet.ShouldProcess($defaultServerExecutable, 'Start SPT server after DLL deployment')) {
+            Start-Process -FilePath $defaultServerExecutable -WorkingDirectory (Split-Path -Parent $defaultServerExecutable)
+        }
+    }
+    elseif ($useDefaultRestart) {
+        Write-Host 'The SPT server was not running before deployment; it was left stopped.'
     }
     elseif ($PSCmdlet.ShouldProcess('SPT server', "Run restart command: $RestartCommand")) {
         Invoke-Expression $RestartCommand

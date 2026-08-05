@@ -28,7 +28,10 @@ public sealed record QuestNodeDto(
     ObjectiveDefinitionDto[] Objectives,
     QuestExclusionRuleDto[] ExclusionRules,
     QuestRewardDto[] Rewards
-);
+)
+{
+    public UnknownConditionDto[] UnknownConditions { get; init; } = [];
+}
 
 public sealed record QuestLocationDto(string Id, string? Name, bool Any, string? BannerImageUrl);
 
@@ -42,6 +45,7 @@ public sealed record ObjectiveDefinitionDto(string Id, string Text, string Condi
 public sealed record QuestRewardDto(string Id, string Type, string? TargetId, string? TargetName, double? Value, int? LoyaltyLevel, string? TraderName, bool Unknown, bool Hidden, QuestRewardItemDto[] Items);
 public sealed record QuestRewardItemDto(string TemplateId, string Name, double Count);
 public sealed record QuestExclusionRuleDto(string CausedByQuestId, string[] RequiredStatuses);
+public sealed record UnknownConditionDto(string Stage, string ConditionType, string? ConditionId);
 public sealed record ProfileStateDto(string ProfileId, string Nickname, string Side, int Level, long GeneratedAt, bool ChristmasActive, bool HalloweenActive, IReadOnlyList<QuestStateDto> Quests, IReadOnlyList<TraderStateDto> Traders, string[] DefaultVisibleQuestIds, string[] AllApplicableQuestIds)
 {
     public IReadOnlyList<RepeatableQuestGroupDto> RepeatableQuestGroups { get; init; } = [];
@@ -56,3 +60,4 @@ public sealed record TraderStateDto(string TraderId, bool Available, int? Loyalt
 public sealed record QuestMapBootstrapDto(string Language, string BrowserLocale, QuestMapLanguageDto[] Languages, IReadOnlyDictionary<string, string> Strings);
 public sealed record QuestMapLanguageDto(string Code, string Name);
 public sealed record ProfileSummaryDto(string Id, string Nickname, string Side, int Level);
+public sealed record QuestMapClientTopologyFeedDto(QuestTopologyDto Topology, QuestNodeDto[] ProfileGeneratedQuests);
