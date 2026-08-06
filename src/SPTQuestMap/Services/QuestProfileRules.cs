@@ -1,6 +1,8 @@
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Enums;
+using CoreDisplayState = SPTQuestMap.Core.Models.QuestDisplayStateKind;
+using CoreGraphRules = SPTQuestMap.Core.Rules.QuestGraphRules;
 
 namespace SPTQuestMap.Services;
 
@@ -69,19 +71,20 @@ internal static class QuestProfileRules
         QuestBlockerDto[] blockers
     )
     {
-        if (status == QuestStatusEnum.Success) return "Completed";
+        var coreState = CoreGraphRules.ClassifyDisplayState(status?.ToString(), status.HasValue, quest.Restartable);
+        if (coreState == CoreDisplayState.Success) return "Completed";
         if (exclusion is not null) return "Excluded";
-        if (status == QuestStatusEnum.AvailableForFinish) return "ReadyToFinish";
-        if (status == QuestStatusEnum.Started) return "InProgress";
-        if (status == QuestStatusEnum.FailRestartable) return "RestartableFailure";
-        if (status == QuestStatusEnum.Expired) return "Expired";
-        if (status is QuestStatusEnum.Fail or QuestStatusEnum.MarkedAsFailed) return quest.Restartable ? "RestartableFailure" : "Failed";
+        if (coreState == CoreDisplayState.AvailableForFinish) return "ReadyToFinish";
+        if (coreState == CoreDisplayState.Started) return "InProgress";
+        if (coreState == CoreDisplayState.FailRestartable) return "RestartableFailure";
+        if (coreState == CoreDisplayState.Expired) return "Expired";
+        if (coreState is CoreDisplayState.Fail or CoreDisplayState.MarkedAsFailed) return "Failed";
         if (blockers.Any(blocker => blocker.Kind == "TraderUnavailable")) return "TraderUnavailable";
-        if (status == QuestStatusEnum.AvailableAfter) return "Pending";
+        if (coreState == CoreDisplayState.AvailableAfter) return "Pending";
         if (blockers.Any(blocker => blocker.Kind == "Level")) return "LevelGated";
         if (blockers.Any(blocker => blocker.Kind is "TraderLoyalty" or "TraderStanding")) return "TraderGated";
         if (blockers.Any(blocker => blocker.Kind == "Prerequisite")) return "PrerequisiteGated";
-        if (status == QuestStatusEnum.AvailableForStart || authoritative) return "Available";
+        if (coreState == CoreDisplayState.AvailableForStart || authoritative) return "Available";
         return "Locked";
     }
 

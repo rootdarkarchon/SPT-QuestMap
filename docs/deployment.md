@@ -46,13 +46,15 @@ SPT/
         LICENSE
         SPTQuestMap.dll
         SPTQuestMap.pdb
+        SPTQuestMap.Core.dll
+        SPTQuestMap.Core.pdb
 ```
 
 The official SPT archive is used only as a build reference on the runner and is not republished inside the QuestMap archive. The MIT license travels with the binary distribution; installation and usage documentation remain on the GitHub Release and repository README.
 
 ## Restart command
 
-The user will provide the command. Treat it as an opaque shell command and do not invent service names or process paths.
+The local deployment helper treats `SPT_ROOT` as the Tarkov directory containing both `BepInEx` and `SPT`. When a deployed server DLL changes and the matching server was already running, it stops only that exact `SPT/SPT.Server.exe` process and launches the same executable again. An explicit `-RestartCommand` remains available for other environments.
 
 ## Safety
 

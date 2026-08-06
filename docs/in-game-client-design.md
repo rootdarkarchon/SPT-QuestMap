@@ -439,3 +439,13 @@ The native detail view already owns its live subscriptions, so an ordinary overl
 The M04 screenshots corrected an earlier hierarchy assumption: the complete `QuestsListView` rectangle also contains the native accept/replace strip and completed/locked controls above its scrolling list. Hiding or covering that complete root makes native actions inaccessible regardless of sibling order. The controller now resolves the exact serialized `_questListContainer`, finds its owning `ScrollRect`, keeps the complete `QuestsListView` active, disables the scroll component, hides only its viewport, and mounts the graph as that viewport's replacement. Disposal restores the viewport's prior active state and the scroll component's prior enabled state. The graph is additionally kept behind the native detail whenever they share a parent. The read-only future pane calls `SetAsLastSibling` only while shown, after the native detail has been intentionally closed and hidden.
 
 With debug logging enabled, each coalesced batch emits exact old/new quest statuses and one `QUESTMAP_M04_REFRESH` record containing reasons, changed quest count, topology/layout identity, invalidation category, and selection consequence. Normal configuration does not emit event-level diagnostics.
+
+## Milestone 5 production renderer and shared core
+
+The M03 view was replaced at the screen-controller boundary by reusable `QuestGraphView`, which depends on `IQuestGraphProjection` rather than trader-screen types. The trader adapter still mounts it into the exact M04-validated vanilla scroll viewport and retains the native control/detail ownership; M05 does not expand into the M07 full-pane detail redesign.
+
+Node GameObjects are now a bounded viewport pool. A runtime-neutral spatial index returns only nodes intersecting the padded graph-space viewport, and the pool rebinds static content only when a node enters that set. Overlay refreshes update the active node status layer in place. Selection is a separate pure-core set containing the selected quest, every recursive prerequisite, and direct successors.
+
+Edges use deterministic pure-core port/route calculations and fixed-size Unity `MaskableGraphic` batches. Selection rebuilds only the relevant batched mesh style: prerequisite and direct-successor paths brighten while unrelated edges dim. Pan, zoom, and resize never regenerate route geometry.
+
+Unity `PlayerPrefs` stores scale, anchored position, and selected quest under a hashed scope containing topology version, profile ID, and view type. Screen reopen restores the matching state; explicit Fit remains the only reset, Center Selected retains zoom, and a legitimate topology rebuild preserves the live transform while moving persistence into the new topology scope.

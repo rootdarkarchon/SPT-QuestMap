@@ -28,17 +28,19 @@ internal sealed class TraderGraphScreenController : IDisposable
     private readonly AbstractQuestControllerClass _questController;
     private readonly TraderClass _trader;
     private readonly ManualLogSource _log;
+    private readonly bool _debugLogging;
     private QuestsListView? _vanillaList;
     private QuestView? _nativeQuestView;
     private ScrollRect? _vanillaScroll;
     private RectTransform? _vanillaScrollViewport;
     private bool _vanillaScrollWasEnabled;
     private bool _vanillaViewportWasActive;
-    private TraderGraphView? _graphView;
+    private QuestGraphView? _graphView;
     private ReadonlyFutureQuestView? _futureView;
     private QuestGraphTopology? _topology;
     private QuestProfileOverlay? _overlay;
     private string? _selectedQuestId;
+    private string? _viewStateScope;
     private bool _mounted;
     private bool _disposed;
 
@@ -48,7 +50,8 @@ internal sealed class TraderGraphScreenController : IDisposable
         InventoryController inventoryController,
         AbstractQuestControllerClass questController,
         TraderClass trader,
-        ManualLogSource log)
+        ManualLogSource log,
+        bool debugLogging)
     {
         _screen = screen;
         _session = session;
@@ -56,6 +59,7 @@ internal sealed class TraderGraphScreenController : IDisposable
         _questController = questController;
         _trader = trader;
         _log = log;
+        _debugLogging = debugLogging;
     }
 
     public void Mount(
@@ -88,15 +92,32 @@ internal sealed class TraderGraphScreenController : IDisposable
         var nativeDetailRect = _nativeQuestView.transform as RectTransform
             ?? throw new InvalidOperationException("The native quest detail view has no RectTransform.");
         var projection = TraderGraphProjectionBuilder.Build(topology, layout, _trader.Id);
+        _viewStateScope = QuestGraphViewStateStore.Scope(topology.Version, overlay.ProfileId, $"trader:{_trader.Id}");
+        var hasPersistedState = QuestGraphViewStateStore.TryLoad(_viewStateScope, out var persistedState);
+        if (hasPersistedState && projection.NodesById.ContainsKey(persistedState.SelectedQuestId ?? string.Empty))
+        {
+            _selectedQuestId = persistedState.SelectedQuestId;
+        }
 
         _topology = topology;
         _overlay = overlay;
-        _graphView = TraderGraphView.Create(_vanillaScrollViewport, projection, overlay, SelectQuest);
+        _graphView = QuestGraphView.Create(
+            _vanillaScrollViewport,
+            projection.Nodes.Count == 0 ? "QUEST MAP" : $"QUEST MAP  ·  {projection.Nodes[0].TraderName}",
+            projection,
+            topology,
+            overlay,
+            SelectQuest,
+            PersistCurrentState,
+            _log,
+            _debugLogging,
+            hasPersistedState ? persistedState.Viewport : null);
         _futureView = ReadonlyFutureQuestView.Create(nativeDetailRect);
         PlaceGraphBehindNativeDetail();
         _vanillaScroll.enabled = false;
         _vanillaScrollViewport.gameObject.SetActive(false);
         _mounted = true;
+        if (_selectedQuestId is not null) SelectQuest(_selectedQuestId);
         _log.LogInfo(
             "QUESTMAP_M03_MOUNT " +
             $"screen={_screen.GetInstanceID()}; trader={_trader.Id}; nodes={projection.Nodes.Count}; " +
@@ -107,13 +128,15 @@ internal sealed class TraderGraphScreenController : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
+        PersistCurrentState();
+        QuestGraphViewStateStore.Flush();
         _disposed = true;
         _graphView?.Dispose();
         _graphView = null;
         _futureView?.Destroy();
         _futureView = null;
         foreach (var ownedRoot in _screen.GetComponentsInChildren<RectTransform>(true)
-                     .Where(rect => rect.name == "QuestMapTraderGraph" || rect.name == "QuestMapReadonlyFutureDetail")
+                     .Where(rect => rect.name == "QuestMapTraderGraph" || rect.name == "QuestMapGraph" || rect.name == "QuestMapReadonlyFutureDetail")
                      .ToArray())
         {
             UnityEngine.Object.Destroy(ownedRoot.gameObject);
@@ -157,6 +180,7 @@ internal sealed class TraderGraphScreenController : IDisposable
 
         _selectedQuestId = null;
         _graphView.SetSelected(null);
+        PersistCurrentState();
         _futureView?.Hide();
         if (_nativeQuestView is not null)
         {
@@ -175,17 +199,29 @@ internal sealed class TraderGraphScreenController : IDisposable
         var selectedQuestId = _selectedQuestId;
         var projection = TraderGraphProjectionBuilder.Build(topology, layout, _trader.Id);
         var viewportState = _graphView?.CaptureViewportState();
+        PersistCurrentState();
 
         _graphView?.Dispose();
         _topology = topology;
         _overlay = overlay;
-        _graphView = TraderGraphView.Create(_vanillaScrollViewport, projection, overlay, SelectQuest);
-        if (viewportState.HasValue) _graphView.RestoreViewportState(viewportState.Value);
+        _viewStateScope = QuestGraphViewStateStore.Scope(topology.Version, overlay.ProfileId, $"trader:{_trader.Id}");
+        _graphView = QuestGraphView.Create(
+            _vanillaScrollViewport,
+            projection.Nodes.Count == 0 ? "QUEST MAP" : $"QUEST MAP  ·  {projection.Nodes[0].TraderName}",
+            projection,
+            topology,
+            overlay,
+            SelectQuest,
+            PersistCurrentState,
+            _log,
+            _debugLogging,
+            viewportState);
         PlaceGraphBehindNativeDetail();
-        if (selectedQuestId is not null && topology.NodesById.ContainsKey(selectedQuestId))
+        if (selectedQuestId is not null && projection.NodesById.ContainsKey(selectedQuestId))
         {
             _selectedQuestId = selectedQuestId;
             _graphView.SetSelected(selectedQuestId);
+            PersistCurrentState();
             return "selection-preserved-topology-rebuild";
         }
 
@@ -196,6 +232,7 @@ internal sealed class TraderGraphScreenController : IDisposable
             _nativeQuestView.Close();
             _nativeQuestView.gameObject.SetActive(true);
         }
+        PersistCurrentState();
         return selectedQuestId is null ? "selection-none" : "selection-cleared-topology-removed";
     }
 
@@ -221,6 +258,7 @@ internal sealed class TraderGraphScreenController : IDisposable
         {
             _graphView.SetSelected(questId);
             _selectedQuestId = questId;
+            PersistCurrentState();
             var liveQuest = _questController.Quests.FirstOrDefault(quest => string.Equals(quest.Id, questId, StringComparison.Ordinal));
             if (liveQuest is not null)
             {
@@ -285,5 +323,11 @@ internal sealed class TraderGraphScreenController : IDisposable
         builder.AppendLine();
         builder.AppendLine("This topology-only quest has no live EFT QuestClass. QuestMap does not create one and exposes no actions here.");
         return builder.ToString();
+    }
+
+    private void PersistCurrentState()
+    {
+        if (_graphView is null || string.IsNullOrWhiteSpace(_viewStateScope)) return;
+        QuestGraphViewStateStore.Save(_viewStateScope!, _graphView.CaptureViewportState(), _selectedQuestId);
     }
 }

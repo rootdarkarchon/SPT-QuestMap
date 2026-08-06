@@ -38,7 +38,20 @@ public sealed class QuestGraphCoreTests
             Assert.That(topology.IncomingEdgesByTarget["b"].Single().SourceId, Is.EqualTo("a"));
             Assert.That(topology.OutgoingEdgesBySource["a"].Single().TargetId, Is.EqualTo("b"));
             Assert.That(topology.TradersById.ContainsKey("prapor"), Is.True);
+            Assert.That(topology.Version, Does.StartWith("test:generated:"));
         });
+    }
+
+    [Test]
+    public void Normalize_ProfileGeneratedMembershipScopesTopologyVersion()
+    {
+        var first = Feed([Node("static", "Prapor", "Any")], []);
+        first.ProfileGeneratedQuests = [Node("daily-a", "Prapor", "Any")];
+        var second = Feed([Node("static", "Prapor", "Any")], []);
+        second.ProfileGeneratedQuests = [Node("daily-b", "Prapor", "Any")];
+
+        Assert.That(QuestTopologyNormalizer.Normalize(first).Version,
+            Is.Not.EqualTo(QuestTopologyNormalizer.Normalize(second).Version));
     }
 
     [Test]
@@ -210,6 +223,98 @@ public sealed class QuestGraphCoreTests
             Assert.That(data.Layout, Is.SameAs(originalLayout));
             Assert.That(second, Is.Not.SameAs(first));
             Assert.That(second.QuestsById["a"].ExactStatus, Is.EqualTo("Success"));
+        });
+    }
+
+    [TestCase(null, false, false, QuestDisplayStateKind.LockedFuture)]
+    [TestCase("Started", true, false, QuestDisplayStateKind.Started)]
+    [TestCase("Fail", true, true, QuestDisplayStateKind.FailRestartable)]
+    [TestCase("AvailableAfter", true, false, QuestDisplayStateKind.AvailableAfter)]
+    public void DisplayStateClassification_IsRuntimeNeutral(
+        string? status,
+        bool hasLiveQuest,
+        bool restartable,
+        QuestDisplayStateKind expected)
+    {
+        Assert.That(QuestGraphRules.ClassifyDisplayState(status, hasLiveQuest, restartable), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void GenericRules_MatchNormalizedTopologyRules()
+    {
+        var topology = QuestTopologyNormalizer.Normalize(Feed(
+            [Node("root", "Prapor", "Any"), Node("next", "Prapor", "Any"), Node("later", "Prapor", "Any")],
+            [Edge("root", "next", "Success"), Edge("next", "later", "Success")]));
+        var dependencies = topology.Edges.Select(edge => new QuestDependency(edge.SourceId, edge.TargetId)).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                QuestGraphRules.BuildPrerequisiteClosure("later", topology.NodesById.Keys, dependencies),
+                Is.EquivalentTo(QuestGraphRules.BuildPrerequisiteClosure(topology, "later")));
+            Assert.That(
+                QuestGraphRules.BuildDefaultFrontier(Set("root"), Set("root"), Set("root", "next", "later"), dependencies),
+                Is.EquivalentTo(QuestGraphRules.BuildDefaultFrontier(topology, Set("root"), Set("root"), Set("root", "next", "later"))));
+            Assert.That(QuestGraphRules.Compare(3, 2, ">="), Is.True);
+            Assert.That(QuestGraphRules.Compare(3, 3, "<"), Is.False);
+        });
+    }
+
+    [Test]
+    public void Selection_HighlightsRecursivePrerequisitesAndDirectSuccessorsOnly()
+    {
+        var topology = QuestTopologyNormalizer.Normalize(Feed(
+            [Node("root", "Prapor", "Any"), Node("selected", "Prapor", "Any"), Node("direct", "Prapor", "Any"), Node("later", "Prapor", "Any")],
+            [Edge("root", "selected", "Success"), Edge("selected", "direct", "Success"), Edge("direct", "later", "Success")]));
+
+        var selection = QuestGraphRules.BuildSelection(topology, "selected");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(selection.GetNodeHighlight("selected"), Is.EqualTo(QuestNodeHighlightKind.Selected));
+            Assert.That(selection.GetNodeHighlight("root"), Is.EqualTo(QuestNodeHighlightKind.Prerequisite));
+            Assert.That(selection.GetNodeHighlight("direct"), Is.EqualTo(QuestNodeHighlightKind.DirectSuccessor));
+            Assert.That(selection.GetNodeHighlight("later"), Is.EqualTo(QuestNodeHighlightKind.None));
+        });
+    }
+
+    [Test]
+    public void SpatialIndex_CullsDeterministicallyAcrossTargetViewportSizes()
+    {
+        var positions = new Dictionary<string, QuestNodePosition>(StringComparer.Ordinal)
+        {
+            ["a"] = new("a", 0, 0, 0, 320, 112),
+            ["b"] = new("b", 1, 900, 0, 320, 112),
+            ["c"] = new("c", 2, 1800, 900, 320, 112),
+            ["d"] = new("d", 3, 3000, 1300, 320, 112),
+        };
+        var index = new QuestGraphSpatialIndex(positions, 256);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(index.Query(new QuestGraphRect(0, 0, 1920, 1080)), Is.EqualTo(new[] { "a", "b", "c" }));
+            Assert.That(index.Query(new QuestGraphRect(0, 0, 2560, 1440)), Is.EqualTo(new[] { "a", "b", "c" }));
+            Assert.That(index.Query(new QuestGraphRect(0, 0, 3440, 1440)), Is.EqualTo(new[] { "a", "b", "c", "d" }));
+            Assert.That(index.Query(new QuestGraphRect(0, 0, 1920, 1080)), Is.EqualTo(index.Query(new QuestGraphRect(0, 0, 1920, 1080))));
+        });
+    }
+
+    [Test]
+    public void EdgeRoutes_AreDeterministicAndUseDistinctPorts()
+    {
+        var topology = QuestTopologyNormalizer.Normalize(Feed(
+            [Node("source", "Prapor", "Any"), Node("upper", "Prapor", "Any"), Node("lower", "Prapor", "Any")],
+            [Edge("source", "upper", "Success"), Edge("source", "lower", "Fail")]));
+        var projection = TraderGraphProjectionBuilder.Build(topology, DeterministicGraphLayout.Build(topology), "prapor");
+
+        var first = QuestEdgeRoutePlanner.Build(projection);
+        var second = QuestEdgeRoutePlanner.Build(projection);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first, Is.EqualTo(second));
+            Assert.That(first, Has.Count.EqualTo(2));
+            Assert.That(first[0].Start.Y, Is.Not.EqualTo(first[1].Start.Y));
         });
     }
 

@@ -197,6 +197,8 @@ public sealed class QuestMapDataServiceTests
     public void EdgeRequirementClassificationPreservesMixedStatusMeaning(string[] statuses, string expected)
     {
         Assert.That(QuestGraphRules.ClassifyEdgeRequirement(statuses), Is.EqualTo(expected));
+        var coreExpected = expected == "Other" ? "Unknown" : expected;
+        Assert.That(SPTQuestMap.Core.Rules.QuestGraphRules.ClassifyEdgeRequirement(statuses).ToString(), Is.EqualTo(coreExpected));
     }
 
     [Test]

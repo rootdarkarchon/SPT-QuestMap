@@ -8,6 +8,8 @@ Prepare the server/client pair for reliable SPT 4.0.13 distribution.
 
 Milestone 7 must be complete or deliberately deferred with native detail fallback chosen as the release behavior.
 
+Milestone 8 validates and hardens the visual and functional work from Milestones 6 and 7. It may fix regression and consistency defects, but it is not the milestone in which the primary visual system or full-pane trader layout is first designed.
+
 ## Compatibility handling
 
 Inspect or document conflicts with mods patching:
@@ -130,6 +132,26 @@ Verify:
 - multiple resolutions/UI scales;
 - stable performance.
 
+### Browser/in-game parity
+
+Verify side by side that meaningful browser QuestMap functionality is present in-game, including:
+
+- search, trader filtering, future depth, and finished/failed visibility;
+- prerequisite, successor, focus-chain, Collector-route, and Lightkeeper-route behavior;
+- selected-quest graph navigation and information;
+- status, blocker, objective, reward, exclusion, and route presentation;
+- viewport, selection, and relevant filter persistence.
+
+Verify visual consistency for:
+
+- global and trader graph controls;
+- node, edge, route, status, selection, and focus treatments;
+- full-pane trader layout and narrow detail pane;
+- typography, spacing, scrolling, information density, and non-color cues;
+- every supported resolution and UI scale in the release test matrix.
+
+List each intentional browser/in-game difference with its in-game rationale. Treat unexplained parity gaps as release blockers unless the affected feature is explicitly disabled in the chosen release configuration.
+
 ### Profile safety
 
 Using disposable profile backups, verify:
@@ -158,6 +180,8 @@ The project is release-ready when:
 - full graph performance is acceptable;
 - failure restores vanilla UI;
 - browser QuestMap has not regressed;
+- the browser/in-game parity audit passes or records an explicitly accepted in-game-specific deviation;
+- visual styling is consistent and usable across the supported resolution/UI-scale matrix;
 - packaging and documentation are complete.
 
 ## Final report

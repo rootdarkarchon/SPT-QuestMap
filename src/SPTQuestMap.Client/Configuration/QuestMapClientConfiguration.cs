@@ -39,7 +39,7 @@ internal sealed class QuestMapClientConfiguration
                 "Features",
                 "EnableTraderQuestGraph",
                 false,
-                "Replace each trader's vanilla quest list with the Milestone 3 QuestMap graph."),
+                "Replace each trader's vanilla quest list with the pooled native QuestMap graph."),
             config.Bind(
                 "Features",
                 "EnableGlobalTasksGraph",

@@ -35,9 +35,13 @@ $modDirectory = Join-Path $packageRoot 'SPT/user/mods/SPT-QuestMap'
 $archive = Join-Path $outputFull "SPT-QuestMap-$Version.zip"
 $buildOutput = Join-Path $root "src/SPTQuestMap/bin/$Configuration/net9.0"
 $dll = Join-Path $buildOutput 'SPTQuestMap.dll'
+$coreDll = Join-Path $buildOutput 'SPTQuestMap.Core.dll'
 
 if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) {
     throw "Built mod DLL was not found: $dll"
+}
+if (-not (Test-Path -LiteralPath $coreDll -PathType Leaf)) {
+    throw "Built shared core DLL was not found: $coreDll"
 }
 
 New-Item -ItemType Directory -Path $outputFull -Force | Out-Null
@@ -53,10 +57,15 @@ if (Test-Path -LiteralPath $packageRoot) {
 
 New-Item -ItemType Directory -Path $modDirectory -Force | Out-Null
 Copy-Item -LiteralPath $dll -Destination $modDirectory
+Copy-Item -LiteralPath $coreDll -Destination $modDirectory
 
 $pdb = Join-Path $buildOutput 'SPTQuestMap.pdb'
 if (Test-Path -LiteralPath $pdb -PathType Leaf) {
     Copy-Item -LiteralPath $pdb -Destination $modDirectory
+}
+$corePdb = Join-Path $buildOutput 'SPTQuestMap.Core.pdb'
+if (Test-Path -LiteralPath $corePdb -PathType Leaf) {
+    Copy-Item -LiteralPath $corePdb -Destination $modDirectory
 }
 
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $modDirectory
@@ -74,6 +83,10 @@ try {
     $requiredEntry = 'SPT/user/mods/SPT-QuestMap/SPTQuestMap.dll'
     if ($entries -notcontains $requiredEntry) {
         throw "Release archive is missing required entry '$requiredEntry'."
+    }
+    $requiredCoreEntry = 'SPT/user/mods/SPT-QuestMap/SPTQuestMap.Core.dll'
+    if ($entries -notcontains $requiredCoreEntry) {
+        throw "Release archive is missing required entry '$requiredCoreEntry'."
     }
 
     $filesOutsideModDirectory = @($entries | Where-Object {

@@ -61,8 +61,12 @@ if (Test-Path -LiteralPath $dist) {
 
 New-Item -ItemType Directory -Path $dist -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $output 'SPTQuestMap.dll') -Destination $dist
+Copy-Item -LiteralPath (Join-Path $output 'SPTQuestMap.Core.dll') -Destination $dist
 if (Test-Path -LiteralPath (Join-Path $output 'SPTQuestMap.pdb')) {
     Copy-Item -LiteralPath (Join-Path $output 'SPTQuestMap.pdb') -Destination $dist
+}
+if (Test-Path -LiteralPath (Join-Path $output 'SPTQuestMap.Core.pdb')) {
+    Copy-Item -LiteralPath (Join-Path $output 'SPTQuestMap.Core.pdb') -Destination $dist
 }
 $forbiddenScripts = @(Get-ChildItem -LiteralPath $dist -Recurse -File | Where-Object { $_.Extension -in @('.js', '.ts') })
 if ($forbiddenScripts.Count -gt 0) {

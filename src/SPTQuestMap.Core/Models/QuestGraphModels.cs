@@ -11,6 +11,29 @@ public enum QuestEdgeRequirementKind
     Unknown,
 }
 
+public enum QuestDisplayStateKind
+{
+    LockedFuture,
+    AvailableForStart,
+    Started,
+    AvailableForFinish,
+    Success,
+    Fail,
+    FailRestartable,
+    MarkedAsFailed,
+    Expired,
+    AvailableAfter,
+    Unknown,
+}
+
+public enum QuestNodeHighlightKind
+{
+    None,
+    Prerequisite,
+    DirectSuccessor,
+    Selected,
+}
+
 public sealed record QuestRequirement(string Kind, string? TraderId, string Compare, double Value);
 
 public sealed record QuestObjectiveDefinition(
@@ -71,6 +94,8 @@ public sealed record QuestGraphEdge(
     IReadOnlyList<string> RequiredStatuses,
     int AvailableAfterSeconds,
     QuestEdgeRequirementKind RequirementKind);
+
+public sealed record QuestDependency(string SourceId, string TargetId);
 
 public sealed record QuestTopologyDiagnostics(
     IReadOnlyList<string> MissingPredecessorIds,
@@ -190,10 +215,56 @@ public sealed record QuestGraphLayout(
     double Width,
     double Height);
 
+public interface IQuestGraphProjection
+{
+    IReadOnlyList<QuestGraphNode> Nodes { get; }
+    IReadOnlyList<QuestGraphEdge> Edges { get; }
+    IReadOnlyDictionary<string, QuestNodePosition> NodesById { get; }
+    double Width { get; }
+    double Height { get; }
+}
+
 public sealed record TraderGraphProjection(
     string TraderId,
     IReadOnlyList<QuestGraphNode> Nodes,
     IReadOnlyList<QuestGraphEdge> Edges,
     IReadOnlyDictionary<string, QuestNodePosition> NodesById,
     double Width,
-    double Height);
+    double Height) : IQuestGraphProjection;
+
+public sealed record QuestGraphSelection(
+    string? SelectedQuestId,
+    IReadOnlyCollection<string> PrerequisiteQuestIds,
+    IReadOnlyCollection<string> DirectSuccessorQuestIds)
+{
+    public static QuestGraphSelection Empty { get; } = new(null, [], []);
+
+    public QuestNodeHighlightKind GetNodeHighlight(string questId)
+    {
+        if (string.Equals(SelectedQuestId, questId, StringComparison.Ordinal)) return QuestNodeHighlightKind.Selected;
+        if (PrerequisiteQuestIds.Contains(questId)) return QuestNodeHighlightKind.Prerequisite;
+        if (DirectSuccessorQuestIds.Contains(questId)) return QuestNodeHighlightKind.DirectSuccessor;
+        return QuestNodeHighlightKind.None;
+    }
+}
+
+public readonly record struct QuestGraphRect(double X, double Y, double Width, double Height)
+{
+    public double Right => X + Width;
+    public double Bottom => Y + Height;
+
+    public bool Intersects(QuestNodePosition node, double padding = 0) =>
+        node.X + node.Width >= X - padding
+        && node.X <= Right + padding
+        && node.Y + node.Height >= Y - padding
+        && node.Y <= Bottom + padding;
+}
+
+public readonly record struct QuestGraphPoint(double X, double Y);
+
+public sealed record QuestEdgeRoute(
+    QuestGraphEdge Edge,
+    QuestGraphPoint Start,
+    QuestGraphPoint Control1,
+    QuestGraphPoint Control2,
+    QuestGraphPoint End);

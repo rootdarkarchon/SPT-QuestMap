@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-The server/Blazor Milestone 4 migration and difference-first profile comparison 1.3.0 are complete and remain the accepted web baseline. In-game client Milestones 0 through 3 are **Complete**. In-game Milestone 4 is next: verify native quest actions and reactive graph updates without introducing a second transaction path.
+The server/Blazor Milestone 4 migration and difference-first profile comparison 1.3.0 are complete and remain the accepted web baseline. In-game client Milestones 0 through 5 are **Complete**. In-game Milestone 6 is next: replace the global Tasks quest view while retaining native Notes, Quest Items, transfer, search, blocker, and back-navigation behavior.
 
 ## SPT 4.0.13 integration audit
 
@@ -187,7 +187,7 @@ The server/Blazor Milestone 4 migration and difference-first profile comparison 
 
 ## Next concrete step
 
-Verify the merged 1.3.0 metadata and difference-first profile-comparison interface at `/questmap` during the next server/browser validation, then begin in-game Milestone 3 while retaining the accepted read-only server/web behavior. Continue collecting cross-trader prerequisite, active-season, restartable-failure, and missing-asset fallback evidence opportunistically when representative runtime cases become available.
+Begin `M06-global-tasks-screen-replacement.md` from the accepted pooled renderer and shared-core boundary. Continue collecting specialized native-action, runtime overlay-refresh, and uncommon quest-state evidence opportunistically.
 
 ## In-game client milestone 0 — installed-client investigation
 
@@ -431,3 +431,39 @@ The representative accept, item handover, completion, linked-unlock, follow-up a
 ### Next step
 
 - Begin `M05-production-renderer-shared-core.md`. Revisit the deferred specialized native-action cases only when representative quests naturally become available; they no longer block Milestone 4 acceptance.
+
+## In-game client milestone 5 — production renderer and shared core
+
+Status: Complete
+
+### Implemented
+
+- Made `SPTQuestMap.Core` a real server/client dependency. Pure shared rules now own exact-status and edge classification, comparison semantics, cycle-safe traversal, known-plus-frontier and descendant exclusion behavior, selection sets, deterministic layout, spatial indexing, and edge route calculation. The server keeps SPT enums/DTOs at its boundary and the client keeps EFT/Unity types at its boundary.
+- Replaced the screen controller's transitional node-per-projection renderer with reusable `QuestGraphView` over `IQuestGraphProjection`. `QuestGraphNodePool` activates only the padded spatial-index viewport set; static binding, live status, selection, visibility, and culling are separate operations.
+- Replaced the single unbounded edge mesh with deterministic 128-route `MaskableGraphic` batches. Success, failure, started, any-outcome, and unknown styles remain distinct; recursive prerequisite and direct-successor edges highlight independently; unrelated edges dim. Pan/zoom moves the parent transform without mesh regeneration.
+- Added explicit zoom in/out, Fit, and Center Selected controls while retaining cursor-centered wheel zoom and drag pan. Resize retains the transform. Viewport plus selection persistence is scoped by topology version, profile ID, and `trader:<id>` view identity; topology rebuilds preserve the live viewport and re-scope it.
+- Added `QUESTMAP_M05_RENDER` first-render/node/edge/active-pool diagnostics plus debug-only edge-mesh, overlay-refresh, and pool high-water metrics. No per-frame logging was added.
+- Updated server build/release staging to include `SPTQuestMap.Core.dll`/PDB beside the web-mod assembly. Matched SPT 4.0.13 source confirms a mod directory may contain multiple top-level assemblies while requiring exactly one metadata implementation across them.
+
+### Static verification
+
+- Release builds for core, client, and server pass independently with 0 warnings and 0 errors.
+- Pure-core regression passes 25/25 tests, including shared generic rules, display classification, deterministic selection/routes, profile-generated topology-version scoping, overlay-without-layout replacement, and viewport queries for 1080p, 1440p, and ultrawide dimensions.
+- Existing server/browser regression remains 107/107. The server wrapper tests now also compare edge classification to the shared-core result.
+- External EFT, SPT, BepInEx, Harmony, Unity, TextMeshPro, and JSON assembly references remain `Private=false`; the shared project reference is the only new runtime dependency.
+- Guarded server build/test staging and the 1.3.0 local release archive check pass with the shared core present. Tested source/deployed SHA-256 values match at client `0F8047DBC7FDFA91E5D7015A5FB88859E92D7130BFAAE4E00FBC32DD4F9C3DAA`, server `65B44BCEE2B5BF61084BCCFCC0ABF74B338961B056713FECF2EA3B5949193DED`, and shared core `AA95FC9E1CE5B153354ABEFE1A86DC2301B3AEA79174D5E5BB9F1915B3CA9202` in both destinations. The exact SPT server process was stopped, all server/core DLL/PDB files were copied and hash-verified, and `D:\Tarkov-SPT\SPT\SPT.Server.exe` was launched once without startup polling. Both forced-failure flags remain false.
+
+### Manual runtime gate — accepted
+
+The user confirmed node/edge rendering and path highlighting, rapid pan/cursor zoom and all explicit viewport controls, same-trader selection/viewport restoration, independent trader viewports, and retained native details/actions. The evidence log is archived at `D:\Tarkov-SPT\QuestMap-runtime-logs\m05-production-renderer-manual-LogOutput.log` with SHA-256 `B8D43D90FE1CCB94AFA7F6707648C494AE3624F8252F77B57247561863830BD4`.
+
+- The largest exercised projection contained 78 nodes and 65 edges. Initial fit activated 39 pooled nodes; its restored viewport activated only 16. A second trader contained 57 nodes and 42 edges and retained its independent selection/viewport state.
+- First render measured 63.72 ms on the initial large view and 21.71–31.27 ms on subsequent restored/trader views. The initial edge mesh measured 3.22 ms; subsequent selection-style rebuilds measured approximately 0.58–1.07 ms.
+- The first large-view lifecycle recorded 24 edge mesh builds: one initial build plus exactly 23 quest selections. Rapid pan/zoom therefore caused no edge mesh rebuild. Pool high-water remained 39 for 78 nodes and did not grow during interaction.
+- Eight mounts correspond to seven clean disposals; the eighth was the still-open final trader screen when the log was captured. Every completed switch restored vanilla ownership. Reopened traders restored their prior selected quest before the mount record, proving persistence without duplicate selection/mount ownership.
+- The log contains zero M02/M03/M04 errors, QuestMap warnings, exceptions, duplicate mounts, or duplicate action records. No ordinary quest transaction was naturally available for the optional overlay-refresh repetition. M04 already proved the reactive overlay/layout reuse boundary in-game, and M05's 25/25 pure regressions verify the replacement renderer keeps overlay updates separate from topology/layout; another runtime status transition is deferred as opportunistic regression coverage rather than an M05 blocker.
+- Debug logging has been restored to `false`; both forced-failure diagnostics remain `false`.
+
+### Next step
+
+- Begin `M06-global-tasks-screen-replacement.md` while reusing the accepted production renderer and retaining the native Notes, Quest Items, transfer, search, blocker, and back-navigation ownership established by M00.

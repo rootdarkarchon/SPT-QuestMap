@@ -42,6 +42,7 @@ This release targets **SPT 4.0.13 exactly**. It was built and tested against the
 
    ```text
    <install parent>/SPT/user/mods/SPT-QuestMap/SPTQuestMap.dll
+   <install parent>/SPT/user/mods/SPT-QuestMap/SPTQuestMap.Core.dll
    ```
 
 4. Start the SPT server and let it finish loading.

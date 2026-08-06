@@ -64,6 +64,29 @@ Port the useful existing QuestMap behavior:
 
 Do not invent client state unavailable from the verified data adapter.
 
+## Web-parity and visual foundation
+
+Milestone 6 owns functional parity for graph-level interactions that are meaningful in-game. Use the browser QuestMap as the behavior reference for:
+
+- search and trader filtering;
+- future-depth and finished/failed visibility controls;
+- prerequisite, successor, focus-chain, Collector-route, and Lightkeeper-route interactions;
+- selection, viewport, and filter persistence;
+- clear status, edge, route, selection, and focus-chain distinctions.
+
+Do not mechanically copy browser-only behavior. Profile selection is owned by the active game session, and live client updates may replace explicit browser refresh flows. Record every deliberate parity difference rather than leaving it implicit.
+
+Establish the shared in-game visual system here, including:
+
+- graph toolbar and control hierarchy;
+- node status palette and selection/highlight treatment;
+- edge, route, and exclusion styling;
+- typography, spacing, and overview readability;
+- text or legend support where color alone is insufficient;
+- responsive behavior across the supported resolutions and UI scales.
+
+This is the visual foundation for Milestone 7. Milestone 8 must not be the first styling pass.
+
 ## Quest Items view
 
 Preserve native behavior for:
@@ -121,7 +144,9 @@ Test:
 - repeated open/close;
 - replacement disabled;
 - forced initialization failure;
-- relevant resolutions/UI scaling.
+- relevant resolutions/UI scaling;
+- side-by-side interaction comparison with the browser QuestMap;
+- readable status, route, selection, and focus distinctions at overview and detail zoom levels.
 
 ## Documentation
 
@@ -136,6 +161,8 @@ Milestone 6 is complete when:
 - In Progress and full Quest Map views work;
 - Quest Items and Notes retain their native behavior;
 - native quest actions work globally;
-- lifecycle and fallback are reliable.
+- lifecycle and fallback are reliable;
+- the listed graph interactions have browser parity or a documented in-game-specific deviation;
+- the shared graph visual system is usable at the tested resolutions and UI scales.
 
 When complete, proceed to `M07-custom-detail-pane.md`.

@@ -54,7 +54,28 @@ public static class QuestTopologyNormalizer
             missingTargets,
             nodes.Sum(node => node.UnknownConditions.Count));
 
-        return new QuestGraphTopology(feed.Topology.Version, nodes, edges, traders, diagnostics);
+        return new QuestGraphTopology(BuildTopologyVersion(feed.Topology.Version, generatedNodes), nodes, edges, traders, diagnostics);
+    }
+
+    private static string BuildTopologyVersion(string staticVersion, IEnumerable<QuestNodePayload> generatedNodes)
+    {
+        const ulong offset = 14695981039346656037;
+        const ulong prime = 1099511628211;
+        var hash = offset;
+        var count = 0;
+        foreach (var questId in generatedNodes.Select(node => node.Id).OrderBy(id => id, StringComparer.Ordinal))
+        {
+            count++;
+            foreach (var character in questId)
+            {
+                hash ^= character;
+                hash *= prime;
+            }
+            hash ^= 0xff;
+            hash *= prime;
+        }
+
+        return count == 0 ? staticVersion : $"{staticVersion}:generated:{hash:X16}";
     }
 
     private static QuestGraphNode MapNode(QuestNodePayload node, bool profileGenerated)

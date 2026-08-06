@@ -76,3 +76,15 @@ Pointer movement, hover, pan, zoom, image decoding, hit testing, and animation f
 - Comparison adds a second state lookup and a precomputed quest-to-category map while retaining the same topology, spatial indexes and edge geometry. Each visible node performs constant-time comparison and A/B lookups; pan, zoom and hover continue to avoid full-graph scans or Blazor renders. Category filtering recalculates membership only when a filter changes.
 
 The bottom-right runtime metric bar records visible/applicable node counts, visible edge count, layout duration, profile-overlay request/application duration, last render duration, and whether overview mode is active. Final user-hardware measurements belong to Milestone 4.
+
+## Native production renderer (in-game Milestone 5)
+
+The reusable native `QuestGraphView` receives any `IQuestGraphProjection`; trader ownership is now only one projection builder and screen-mount adapter. Static topology/layout, live overlay, selection, and viewport state remain separate inputs.
+
+- Node cards are acquired from `QuestGraphNodePool`. A pure bucketed `QuestGraphSpatialIndex` identifies the padded viewport set; panning recycles nodes leaving that set and binds only nodes entering it. Static labels/geometry bind on acquisition, status/progress updates touch the live overlay, and selection updates only the highlight layer.
+- Deterministic edge ports and cubic routes are calculated once by `QuestEdgeRoutePlanner`. `QuestGraphEdgeLayer` partitions routes into fixed 128-edge `MaskableGraphic` batches, avoiding both per-edge GameObjects and Canvas vertex-limit pressure. The viewport `RectMask2D` clips batches. Pan/zoom moves the common content transform and does not dirty edge meshes; only topology/geometry or selection-style changes rebuild them.
+- Drag and cursor-centered wheel zoom remain transform-only. Explicit plus/minus, Fit, and Center Selected controls share the same transform path. Resize preserves the transform and merely refreshes node culling.
+- Viewport and selected quest are stored in Unity `PlayerPrefs` under a stable hash scoped by topology version, profile ID, and view type (`trader:<id>`). In-memory topology replacement preserves the current transform, then saves it into the new scope; stale layouts cannot restore into a different topology version.
+- `QUESTMAP_M02_TOPOLOGY` and `QUESTMAP_M02_OVERLAY` retain topology, overlay, and layout timings. `QUESTMAP_M05_RENDER` adds first-render/node/edge/active-pool counts. Debug mode adds edge-mesh, overlay-refresh, and disposal high-water metrics without per-frame logging.
+
+Pure regressions cover deterministic full layout/routes, shared server/client rules, selection semantics, overlay-without-layout replacement, and spatial queries representing 1920×1080, 2560×1440, and 3440×1440 viewports. Final responsiveness and lifecycle evidence remains an in-game manual gate.

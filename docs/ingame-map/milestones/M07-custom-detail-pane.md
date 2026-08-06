@@ -18,6 +18,26 @@ EnableCustomQuestDetails
 
 Retain native `QuestView` fallback until feature parity is manually verified.
 
+## Trader screen composition and styling
+
+Replace the transitional narrow trader graph composition with the intended QuestMap layout:
+
+- let the graph use the full practical width and height of the trader Tasks pane;
+- show selected-quest details in a narrow, selection-driven side pane;
+- keep the graph usable while details are open;
+- preserve the native accept, complete, restart, reroll, and handover controls without covering or displacing them incorrectly;
+- adapt the side-pane width or presentation for supported resolutions and UI scales without returning to the narrow graph viewport.
+
+Use the browser QuestMap as the information-density and interaction reference while adapting its composition to EFT's existing navigation and action controls.
+
+Milestone 7 owns the detailed visual pass for:
+
+- quest card information hierarchy;
+- detail-pane typography, spacing, grouping, and scrolling;
+- blocker, objective, reward, penalty, exclusion, and route presentation;
+- status icons, labels, legends, and non-color cues;
+- consistent styling between trader and global graph screens.
+
 ## Detail contents
 
 ### Header
@@ -135,6 +155,16 @@ Compare native and custom detail behavior for:
 
 Any unsupported case must fall back to native details or remain explicitly read-only.
 
+Also perform a side-by-side browser/in-game parity audit covering:
+
+- graph and selected-quest information availability;
+- selection and graph-navigation behavior;
+- blocker, objective, reward, exclusion, and route presentation;
+- the full-pane graph and narrow detail-pane balance;
+- common resolutions and supported UI scales.
+
+Record intentional in-game deviations and unresolved visual or functional gaps. Do not classify an undocumented difference as parity.
+
 ## Documentation
 
 Record action bridges, unsupported cases, and parity results.
@@ -148,6 +178,9 @@ Milestone 7 is complete when:
 - the custom pane provides the required graph-oriented information;
 - native action controllers remain authoritative;
 - native fallback is available;
-- tested quest types do not lose action functionality.
+- tested quest types do not lose action functionality;
+- the trader graph uses the full-pane composition with a responsive narrow detail pane;
+- the detailed visual system is consistent across trader and global screens;
+- the browser/in-game parity audit has no unexplained functional or presentation gaps.
 
 When complete, proceed to `M08-packaging-release-hardening.md`.

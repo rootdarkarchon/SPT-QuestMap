@@ -1,19 +1,24 @@
+using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
 namespace SPTQuestMap.Client.UI;
 
-internal sealed class GraphPanZoomHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IScrollHandler
+internal sealed class GraphPanZoomHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IScrollHandler
 {
     private const float MinimumScale = 0.2f;
     private const float MaximumScale = 1.8f;
     private RectTransform? _content;
     private RectTransform? _viewport;
+    private Action? _onViewportChanged;
+    private Action? _onViewportSettled;
 
-    public void Bind(RectTransform viewport, RectTransform content)
+    public void Bind(RectTransform viewport, RectTransform content, Action onViewportChanged, Action onViewportSettled)
     {
         _viewport = viewport;
         _content = content;
+        _onViewportChanged = onViewportChanged;
+        _onViewportSettled = onViewportSettled;
     }
 
     public void OnBeginDrag(PointerEventData eventData)
@@ -26,6 +31,12 @@ internal sealed class GraphPanZoomHandler : MonoBehaviour, IBeginDragHandler, ID
         var canvas = GetComponentInParent<Canvas>();
         var scaleFactor = canvas is null ? 1f : Mathf.Max(0.01f, canvas.scaleFactor);
         _content.anchoredPosition += eventData.delta / scaleFactor;
+        _onViewportChanged?.Invoke();
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        _onViewportSettled?.Invoke();
     }
 
     public void OnScroll(PointerEventData eventData)
@@ -48,5 +59,21 @@ internal sealed class GraphPanZoomHandler : MonoBehaviour, IBeginDragHandler, ID
         var before = (anchorSpacePointer - _content.anchoredPosition) / oldScale;
         _content.localScale = new Vector3(newScale, newScale, 1f);
         _content.anchoredPosition = anchorSpacePointer - before * newScale;
+        _onViewportChanged?.Invoke();
+        _onViewportSettled?.Invoke();
+    }
+
+    public void ZoomFromViewportCenter(float factor)
+    {
+        if (_content is null || _viewport is null) return;
+        var oldScale = _content.localScale.x;
+        var newScale = Mathf.Clamp(oldScale * factor, MinimumScale, MaximumScale);
+        if (Mathf.Approximately(oldScale, newScale)) return;
+        var anchorSpacePointer = new Vector2(_viewport.rect.width / 2f, -_viewport.rect.height / 2f);
+        var before = (anchorSpacePointer - _content.anchoredPosition) / oldScale;
+        _content.localScale = new Vector3(newScale, newScale, 1f);
+        _content.anchoredPosition = anchorSpacePointer - before * newScale;
+        _onViewportChanged?.Invoke();
+        _onViewportSettled?.Invoke();
     }
 }

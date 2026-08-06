@@ -20,6 +20,12 @@ Profile overlay changes when:
 
 Do not recompute graph layout simply because quest statuses changed.
 
+## Shared runtime-neutral core
+
+`SPTQuestMap.Core` targets `netstandard2.1` and is consumed by both the net9.0 server/Blazor mod and the BepInEx client. It owns normalized topology/profile contracts, status and edge classification, comparison semantics, cycle-safe traversal, known-plus-frontier and event-descendant rules, deterministic layout, trader projection, spatial indexing, selection sets, and deterministic edge routes. It references neither runtime: no ASP.NET, Blazor, JavaScript, Unity, BepInEx, SPT, or EFT assemblies.
+
+The server adapts SPT enums and DTOs at `Services/QuestGraphRules` and `Services/QuestProfileRules`; the client adapts live EFT objects in `EftLiveSnapshotAdapter`. Runtime-owned action, persistence, rendering, localization, and transport code remain outside the core. The server release therefore deploys `SPTQuestMap.Core.dll` beside `SPTQuestMap.dll`; SPT 4.0.13 loads both top-level assemblies and still finds exactly one `AbstractModMetadata` implementation.
+
 ## Server and Blazor responsibilities
 
 - expose the mod-owned Razor page at `/questmap` through SPT's existing Interactive Server host;

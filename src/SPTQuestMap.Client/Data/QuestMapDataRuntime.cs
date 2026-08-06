@@ -378,7 +378,8 @@ internal sealed class QuestMapDataRuntime : IDisposable
             pending.InventoryController,
             pending.QuestController,
             pending.Trader,
-            _log);
+            _log,
+            _configuration.EnableDebugLogging.Value);
         try
         {
             controller.Mount(

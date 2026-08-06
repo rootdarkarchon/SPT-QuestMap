@@ -22,6 +22,7 @@
   </Target>
 
   <ItemGroup>
+    <ProjectReference Include="..\SPTQuestMap.Core\SPTQuestMap.Core.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Reference Include="SemanticVersioning">
       <HintPath>$(SptInstallRoot)\SPT\SemanticVersioning.dll</HintPath>
