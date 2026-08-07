@@ -9,6 +9,7 @@ public static class QuestGraphRules
         "Started",
         "AvailableForFinish",
         "MarkedAsFailed",
+        "FailRestartable",
     };
 
     private static readonly HashSet<string> FinishedStatuses = new(StringComparer.Ordinal)
@@ -49,6 +50,110 @@ public static class QuestGraphRules
             "AvailableAfter" => QuestDisplayStateKind.AvailableAfter,
             _ => QuestDisplayStateKind.Unknown,
         };
+    }
+
+    /// <summary>
+    /// Applies the same blocker priority used by the browser QuestMap to the
+    /// native client's live profile overlay.
+    /// </summary>
+    public static QuestMapDisplayStateKind ClassifyProfileDisplayState(
+        QuestGraphTopology topology,
+        QuestGraphNode node,
+        QuestProfileOverlay overlay)
+    {
+        if (overlay.AuthoritativeDisplayStates.TryGetValue(node.Id, out var authoritative)) return authoritative;
+
+        overlay.QuestsById.TryGetValue(node.Id, out var state);
+        var exact = ClassifyDisplayState(state?.ExactStatus, state?.HasLiveQuest == true, node.Restartable);
+
+        if (exact == QuestDisplayStateKind.Success) return QuestMapDisplayStateKind.Completed;
+        if (IsExcluded(node, overlay)) return QuestMapDisplayStateKind.Excluded;
+        if (exact == QuestDisplayStateKind.AvailableForFinish) return QuestMapDisplayStateKind.ReadyToFinish;
+        if (exact == QuestDisplayStateKind.Started) return QuestMapDisplayStateKind.InProgress;
+        if (exact == QuestDisplayStateKind.FailRestartable) return QuestMapDisplayStateKind.RestartableFailure;
+        if (exact == QuestDisplayStateKind.Expired) return QuestMapDisplayStateKind.Expired;
+        if (exact is QuestDisplayStateKind.Fail or QuestDisplayStateKind.MarkedAsFailed) return QuestMapDisplayStateKind.Failed;
+        if (HasUnavailableTrader(node, overlay)) return QuestMapDisplayStateKind.TraderUnavailable;
+        if (exact == QuestDisplayStateKind.AvailableAfter) return QuestMapDisplayStateKind.Pending;
+        if (HasUnmetLevel(node, overlay.Level)) return QuestMapDisplayStateKind.LevelGated;
+        if (HasUnmetTraderRequirement(node, overlay)) return QuestMapDisplayStateKind.TraderGated;
+        if (HasUnmetPrerequisite(topology, node.Id, overlay)) return QuestMapDisplayStateKind.PrerequisiteGated;
+        if (exact == QuestDisplayStateKind.AvailableForStart || state?.Visible == true) return QuestMapDisplayStateKind.Available;
+        return exact == QuestDisplayStateKind.Unknown ? QuestMapDisplayStateKind.Unknown : QuestMapDisplayStateKind.Locked;
+    }
+
+    public static bool TryParseProfileDisplayState(string? value, out QuestMapDisplayStateKind state) =>
+        Enum.TryParse(value, false, out state);
+
+    public static bool IsFinishedForFilter(
+        QuestMapDisplayStateKind state,
+        bool restartable,
+        bool permanentExclusion = true) => state switch
+    {
+        QuestMapDisplayStateKind.Completed or QuestMapDisplayStateKind.Failed => true,
+        QuestMapDisplayStateKind.Excluded => permanentExclusion,
+        QuestMapDisplayStateKind.Expired => !restartable,
+        _ => false,
+    };
+
+    public static bool IsLevelGatedForFilter(QuestMapDisplayStateKind state) =>
+        state == QuestMapDisplayStateKind.LevelGated;
+
+    public static bool IsTraderBoundaryForFilter(QuestMapDisplayStateKind state) => state is
+        QuestMapDisplayStateKind.Available or QuestMapDisplayStateKind.InProgress
+        or QuestMapDisplayStateKind.ReadyToFinish or QuestMapDisplayStateKind.Completed;
+
+    public static double? CalculateObjectiveProgressPercent(IReadOnlyCollection<QuestObjectiveProgress> objectives)
+    {
+        if (objectives.Count == 0) return null;
+        var completedShare = objectives.Sum(objective =>
+        {
+            if (objective.Complete) return 1d;
+            if (objective.Current.HasValue && objective.Required is > 0)
+                return Math.Clamp(objective.Current.Value / objective.Required.Value, 0d, 1d);
+            return 0d;
+        });
+        return Math.Round(completedShare / objectives.Count * 100d, 1, MidpointRounding.AwayFromZero);
+    }
+
+    public static bool IsTerminalQuest(QuestGraphTopology topology, string questId) =>
+        !topology.NodesById.TryGetValue(questId, out var node) || node.ProfileGenerated
+            ? false
+            : !topology.OutgoingEdgesBySource.TryGetValue(questId, out var outgoing)
+              || !outgoing.Any(edge => topology.ApplicableQuestIds.Contains(edge.TargetId));
+
+    private static bool IsExcluded(QuestGraphNode node, QuestProfileOverlay overlay) =>
+        node.ExclusionRules.Any(rule => overlay.QuestsById.TryGetValue(rule.CausedByQuestId, out var cause)
+            && cause.ExactStatus is not null
+            && rule.RequiredStatuses.Contains(cause.ExactStatus));
+
+    private static bool HasUnavailableTrader(QuestGraphNode node, QuestProfileOverlay overlay)
+    {
+        if (overlay.TradersById.TryGetValue(node.TraderId, out var questTrader) && !questTrader.Available) return true;
+        return node.EffectiveRequirements.Any(requirement => requirement.TraderId is not null
+            && overlay.TradersById.TryGetValue(requirement.TraderId, out var trader)
+            && !trader.Available);
+    }
+
+    private static bool HasUnmetLevel(QuestGraphNode node, int level) =>
+        node.EffectiveRequirements.Any(requirement => requirement.Kind == "Level"
+            && !Compare(level, requirement.Value, requirement.Compare));
+
+    private static bool HasUnmetTraderRequirement(QuestGraphNode node, QuestProfileOverlay overlay) =>
+        node.EffectiveRequirements.Any(requirement =>
+        {
+            if (requirement.Kind is not ("TraderLoyalty" or "TraderStanding") || requirement.TraderId is null) return false;
+            if (!overlay.TradersById.TryGetValue(requirement.TraderId, out var trader) || !trader.Available) return false;
+            var actual = requirement.Kind == "TraderLoyalty" ? trader.LoyaltyLevel : trader.Standing;
+            return !Compare(actual, requirement.Value, requirement.Compare);
+        });
+
+    private static bool HasUnmetPrerequisite(QuestGraphTopology topology, string questId, QuestProfileOverlay overlay)
+    {
+        if (!topology.IncomingEdgesByTarget.TryGetValue(questId, out var incoming)) return false;
+        return incoming.Any(edge => !overlay.QuestsById.TryGetValue(edge.SourceId, out var prerequisite)
+            || prerequisite.ExactStatus is null
+            || !edge.RequiredStatuses.Contains(prerequisite.ExactStatus));
     }
 
     public static bool Compare(double actual, double required, string compare) => compare switch

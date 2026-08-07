@@ -18,6 +18,8 @@ EnableCustomQuestDetails
 
 Retain native `QuestView` fallback until feature parity is manually verified.
 
+The global M06 replacement deliberately has no Native Tasks escape hatch. Until this milestone's custom detail/action bridge is enabled, the global graph remains read-only and disabling the global replacement in plugin settings restores the complete vanilla Tasks UI. M07 must not reintroduce the old relabeled-native-toggle composition.
+
 ## Trader screen composition and styling
 
 Replace the transitional narrow trader graph composition with the intended QuestMap layout:

@@ -38,6 +38,8 @@
            Text="Required TextMeshPro assembly is missing: $(ManagedRoot)\Unity.TextMeshPro.dll" />
     <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.TextRenderingModule.dll')"
            Text="Required Unity text rendering module is missing: $(ManagedRoot)\UnityEngine.TextRenderingModule.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.ImageConversionModule.dll')"
+           Text="Required Unity image conversion module is missing: $(ManagedRoot)\UnityEngine.ImageConversionModule.dll" />
     <Error Condition="!Exists('$(BepInExCoreRoot)\BepInEx.dll')"
            Text="Required BepInEx assembly is missing: $(BepInExCoreRoot)\BepInEx.dll" />
     <Error Condition="!Exists('$(BepInExCoreRoot)\0Harmony.dll')"
@@ -98,6 +100,10 @@
     </Reference>
     <Reference Include="UnityEngine.TextRenderingModule">
       <HintPath>$(ManagedRoot)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>$(ManagedRoot)\UnityEngine.ImageConversionModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

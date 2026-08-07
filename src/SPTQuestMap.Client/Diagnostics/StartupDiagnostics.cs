@@ -45,7 +45,8 @@ internal static class StartupDiagnostics
             $"customDetails={configuration.EnableCustomQuestDetails.Value}; " +
             $"debug={configuration.EnableDebugLogging.Value}; " +
             $"forceCompatibilityFailure={configuration.ForceCompatibilityFailure.Value}; " +
-            $"forceTraderGraphInitializationFailure={configuration.ForceTraderGraphInitializationFailure.Value}");
+            $"forceTraderGraphInitializationFailure={configuration.ForceTraderGraphInitializationFailure.Value}; " +
+            $"forceGlobalTasksGraphInitializationFailure={configuration.ForceGlobalTasksGraphInitializationFailure.Value}");
 
         if (configuration.EnableDebugLogging.Value && compatibility.Failures.Count > 0)
         {

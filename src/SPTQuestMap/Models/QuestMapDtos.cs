@@ -60,4 +60,13 @@ public sealed record TraderStateDto(string TraderId, bool Available, int? Loyalt
 public sealed record QuestMapBootstrapDto(string Language, string BrowserLocale, QuestMapLanguageDto[] Languages, IReadOnlyDictionary<string, string> Strings);
 public sealed record QuestMapLanguageDto(string Code, string Name);
 public sealed record ProfileSummaryDto(string Id, string Nickname, string Side, int Level);
-public sealed record QuestMapClientTopologyFeedDto(QuestTopologyDto Topology, QuestNodeDto[] ProfileGeneratedQuests);
+public sealed record QuestMapClientTopologyFeedDto(
+    QuestTopologyDto Topology,
+    QuestNodeDto[] ProfileGeneratedQuests,
+    IReadOnlyDictionary<string, string> RepeatableKinds,
+    string[] DefaultVisibleQuestIds,
+    string[] AllApplicableQuestIds,
+    IReadOnlyDictionary<string, string> DisplayStates,
+    IReadOnlyDictionary<string, double?> ProgressPercentages,
+    IReadOnlyDictionary<string, long> RepeatableEndTimes,
+    IReadOnlyDictionary<string, string[]> PrerequisiteBlockerIds);

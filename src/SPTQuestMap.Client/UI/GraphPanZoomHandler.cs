@@ -4,7 +4,7 @@ using UnityEngine.EventSystems;
 
 namespace SPTQuestMap.Client.UI;
 
-internal sealed class GraphPanZoomHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IScrollHandler
+internal sealed class GraphPanZoomHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IScrollHandler, IPointerClickHandler
 {
     private const float MinimumScale = 0.2f;
     private const float MaximumScale = 1.8f;
@@ -12,13 +12,15 @@ internal sealed class GraphPanZoomHandler : MonoBehaviour, IBeginDragHandler, ID
     private RectTransform? _viewport;
     private Action? _onViewportChanged;
     private Action? _onViewportSettled;
+    private Action? _onBackgroundClick;
 
-    public void Bind(RectTransform viewport, RectTransform content, Action onViewportChanged, Action onViewportSettled)
+    public void Bind(RectTransform viewport, RectTransform content, Action onViewportChanged, Action onViewportSettled, Action? onBackgroundClick = null)
     {
         _viewport = viewport;
         _content = content;
         _onViewportChanged = onViewportChanged;
         _onViewportSettled = onViewportSettled;
+        _onBackgroundClick = onBackgroundClick;
     }
 
     public void OnBeginDrag(PointerEventData eventData)
@@ -32,6 +34,11 @@ internal sealed class GraphPanZoomHandler : MonoBehaviour, IBeginDragHandler, ID
         var scaleFactor = canvas is null ? 1f : Mathf.Max(0.01f, canvas.scaleFactor);
         _content.anchoredPosition += eventData.delta / scaleFactor;
         _onViewportChanged?.Invoke();
+    }
+
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (eventData.button == PointerEventData.InputButton.Left && !eventData.dragging) _onBackgroundClick?.Invoke();
     }
 
     public void OnEndDrag(PointerEventData eventData)

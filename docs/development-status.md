@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-The server/Blazor Milestone 4 migration and difference-first profile comparison 1.3.0 are complete and remain the accepted web baseline. In-game client Milestones 0 through 5 are **Complete**. In-game Milestone 6 is next: replace the global Tasks quest view while retaining native Notes, Quest Items, transfer, search, blocker, and back-navigation behavior.
+The server/Blazor Milestone 4 migration and difference-first profile comparison 1.3.0 are complete and remain the accepted web baseline. In-game client Milestones 0 through 5 are **Complete**. In-game Milestone 6 implementation is **runtime validation pending**: the superseded relabeled-native-toggle/Native Tasks composition has been replaced by a QuestMap-owned full-surface overlay, Daily/Weekly band, web-equivalent projection rules, and custom controls over the real native Notes/Quest Items roots.
 
 ## SPT 4.0.13 integration audit
 
@@ -466,4 +466,110 @@ The user confirmed node/edge rendering and path highlighting, rapid pan/cursor z
 
 ### Next step
 
-- Begin `M06-global-tasks-screen-replacement.md` while reusing the accepted production renderer and retaining the native Notes, Quest Items, transfer, search, blocker, and back-navigation ownership established by M00.
+- Historical first-slice next step: validate In Progress/Quest Map toggle reuse, native Notes and Quest Items switching, native-task escape hatch, search, back/close cleanup, and safe fallback. This composition is superseded by the accepted M06 architecture correction below.
+
+## In-game client milestone 6 — global Tasks screen replacement
+
+Status: In Progress
+
+### Implemented first slice
+
+- Extended the existing sanitized `/questmap/client/topology` feed with the browser-computed `DefaultVisibleQuestIds` and `AllApplicableQuestIds`. Profile-generated repeatables are deliberately added to both sets. Collector and Lightkeeper path IDs already present on the topology are now retained by the shared client model. The client therefore consumes the server's authoritative faction/event/frontier decision instead of cloning SPT availability.
+- Added pure `GlobalQuestGraphProjectionBuilder` coverage for In Progress and full graph projections, all-future, hide-finished, trader/search, route, and focus-chain filters. Every projection keeps edges only when both endpoints are visible and compacts retained ranks without mutating the shared topology/layout.
+- Added an exact-version-gated `TasksScreen.Show`/`Close` lifecycle controller. Only after the graph and regular/daily toggle bindings resolve does it relabel those slots as In Progress/Quest Map and replace the native task workspace. The existing Notes, Quest Items, grids, transfer, warning, blocker, search, and back roots remain native.
+- Added persistent global mode/filter/focus state plus the existing topology/profile/view-scoped viewport and selection state. Reactive overlay changes update in place when membership is stable and rebuild only the global projection when its visible membership changes, preserving the live viewport.
+- Added a compact selected-quest summary and an explicit Native Tasks escape hatch. The latter temporarily restores EFT's original `TasksPanel` and exposes a persistent Return to Map control so native task interactions remain reachable without cloning their transaction paths.
+- Added `ForceGlobalTasksGraphInitializationFailure`; any mount failure removes listeners, restores labels/content, and leaves the complete vanilla screen active.
+
+### Static verification
+
+- Exact installed-client Release build passes with 0 warnings and 0 errors.
+- Shared-core regression passes 28/28 tests, including authoritative frontier/applicable sets and combined global projection filters.
+- Existing server/browser regression remains 107/107.
+- Guarded Release staging and the final exact-client Release build pass. Source/deployed SHA-256 values match at server `044DBBBC28A551F389A157F17841E162036909CED3A13A8811F2842BF60F1A2A`, client `C2466A00608DA61963C651475030D1EF4E90C0E65EAE431A038E255BF36753F7`, and shared core `046C9822BA3D805F40DE8F04E33C386750B0E7C7A47F95711394D9A8110486EC` in both destinations. The exact EFT/SPT processes were stopped if present, scoped artifacts were copied and hash-verified, and `D:\Tarkov-SPT\SPT\SPT.Server.exe` was launched hidden without startup polling. The installed runtime configuration enables the trader and global graphs with both initialization-failure switches and debug logging disabled.
+
+### Transitional runtime gate — superseded
+
+The following gate described the first deployed slice. It is retained as implementation history but is no longer the M06 target; use the accepted architecture correction and revised next step below.
+
+- Confirm the installed toggle spawners expose exactly one Unity `Toggle` and one usable label each after vanilla `Show`.
+- Confirm In Progress and Quest Map replace only the task workspace; Notes, Quest Items, transfers, search, blocker, and back remain native and usable.
+- Confirm Native Tasks and Return to Map do not cover native controls and preserve native task interactions.
+- Confirm repeated view switching and screen reopen produce no duplicate listeners/roots and restore persisted mode, filters, selection, pan, and zoom.
+- Exercise the forced-failure and feature-disabled branches in separate log runs after the main ownership path is accepted.
+
+### First runtime correction
+
+- The first global test failed safely on its initial open because the default native toggle spawner temporarily exposed two Unity toggles; a later open mounted after that transient duplicate disappeared. Successful global mounts were nevertheless malformed: every `QUESTMAP_M05_RENDER` record reported `activeNodes=0` despite non-empty projections, while trader projections retained normal active pools. This proves the global graph was being created during the native screen's layout transition rather than a topology/render-data failure. Native Notes and Quest Items remained present as intended.
+- Archived the complete evidence log at `D:\Tarkov-SPT\QuestMap-runtime-logs\m06-first-global-broken-LogOutput.log` with SHA-256 `439757E6BB75D91B57CDE0FD5E25D7F7B8D1B62F5B450981E880D0F755CF5EDC`.
+- Global mounting now waits through vanilla's next layout frame before resolving spawners or creating geometry. Toggle resolution prefers the single active-in-hierarchy candidate, then the single active-self candidate, and otherwise fails with candidate paths/states rather than guessing. The global root opts out of parent layout control, uses a fresh `global-v2` viewport scope, and logs panel/parent/root/viewport geometry. A non-empty projection with a sub-100-pixel or zero-active-node viewport is rejected and vanilla is restored instead of displaying an edge-only graph.
+- The corrected exact-client Release build passes with 0 warnings/errors and shared-core tests remain 28/28. Corrected source/deployed client SHA-256 is `06CEE4C753B75AFBF060C454F0385A75C039651041385D6D1417E8CF01EB2925`. This was a client-only correction; the exact EFT process was stopped for deployment and the running SPT server was not restarted because its deployed assemblies did not change.
+
+### Second runtime correction
+
+- The delayed-layout correction produced valid geometry and active pooled nodes, and user review confirmed that the global graph itself rendered. The complete evidence log is archived at `D:\Tarkov-SPT\QuestMap-runtime-logs\m06-second-sidepanel-tooltip-LogOutput.log` with SHA-256 `BF5D81C82FB55471759FD45CBC32A3C1C98CFF5D376F377CB3B4981215771A4A`.
+- Review exposed two remaining ownership errors: the graph still inherited the narrow left task region, and Quest Items/Notes toggles were incorrectly treated as mutually exclusive graph views even though their native content is a right-side panel. A stale native task-detail subscription also continued rendering its Russian description and red loading image below the graph after only the task root was deactivated.
+- The graph now mounts against the world-space union of the lower Tasks, Quest Items, and Notes regions and is ordered behind the two native side-panel branches. Quest Items and Notes remain independently toggleable native overlays and no longer affect graph visibility. Entering graph mode explicitly closes `TasksPanel`; the Native Tasks escape hatch calls the verified native `Show(...)`, and Return to Map closes it again before restoring the graph.
+- The revised exact-client Release build passes with 0 warnings/errors, shared-core tests remain 28/28, and `git diff --check` passes. The exact EFT process was stopped and the client-only DLL/PDB were deployed; source/deployed client SHA-256 matches at `1DD5247D4A9CB10E9BE80EE10BB84AF7300086469B00D0DFDF27AB14B21E16FA`. The SPT server was not restarted because no server assembly changed. Runtime acceptance of the expanded surface and overlay layering remains required.
+
+### Third runtime correction and parity pass
+
+- The expanded graph surface remained stable at `1833x905` with active pooled nodes and no QuestMap exception. User review found that `_notesTaskDescription` still rendered its `NotesTaskDescriptionShort` image/loader/description, Quest Items did not become visible, native side toggles could not close themselves, ordinary selection did not restore filtered predecessors, Finished had inverted visual semantics, route membership was exposed as destructive filters, and the first-pass cards/In Progress composition did not yet meet the MS6 browser-parity foundation. The complete evidence log is archived at `D:\Tarkov-SPT\QuestMap-runtime-logs\m06-full-surface-parity-feedback-LogOutput.log` with SHA-256 `F4555CECD33BCF4AF6A798ED14C1B219566ABA037D5AC4FC8EA5CFB0FCA8F43F`.
+- Graph mode now closes `TasksPanel`, disables its separately owned `_notesTaskDescription`, and closes both verified tooltip instances. Native Tasks re-enables the description before calling the exact `Show(...)` path. Notes and Quest Items are explicitly initialized off, allow reselect-to-close, hide each other, directly enforce their native root visibility after the vanilla callback, and never hide the graph.
+- Full-map selection now unions the complete applicable recursive predecessor chain after future-depth, finished, trader, search, route, and focus presentation filters. A new pure-core test proves the selected chain and connecting edges survive simultaneous frontier, finished, trader, and search restrictions. Route filter controls were removed; Collector/Lightkeeper membership is rendered as split lower card stripes. Finished is selected when terminal quests are shown and deselected when they are hidden.
+- The pooled card renderer now lazily requests the existing SPT quest image, partial location banner, and trader portrait through `SPT.Common.Http.RequestHandler`, retaining initial fallbacks and graph-lifetime caching. Status moved to a dedicated rail above the image treatment. In Progress uses a dense three-column task-card projection ordered by trader/name rather than sparse dependency ranks. The new exact `UnityEngine.ImageConversionModule` reference remains external with `Private=false`.
+- Static verification passes: exact-client Release build 0 warnings/errors, shared-core 29/29, server/browser 107/107, and `git diff --check`. EFT was already closed; the client DLL/PDB and client-process shared-core DLL/PDB were deployed and hash-verified at client `37C9FFC57FE45FEFF8847D86FE3EFFDE86A7B856ED1DB75C0D0F752C4D429C4E` and core `BC6AE04E397FBDF98797A0262804EE7283757B776B941304C03F5821C7E1D564`. No server mod DLL changed, so the SPT server was not restarted. Runtime verification of the native-description suppression, both overlay toggles, selected-chain expansion, asset loading, route strips, and revised active-task composition remains required.
+
+### Native/web parity audit
+
+- Audited the current global controller, projection builder, pooled card/edge renderer, native overlay ownership, and persistence behavior against the accepted Blazor state/filter components, In Progress drawer, details pane, and Canvas renderer. The complete discrepancy matrix and scope decision are recorded in `docs/ingame-map/M06-native-web-parity-audit.md`.
+- Confirmed that authoritative applicability/frontier data, recursive prerequisite selection, shared pan/zoom/persistence, batched curved edges, full-surface composition, and native-root reuse are the correct foundation. The latest overlay, asset, route-strip, Finished-semantics, and predecessor-restoration changes remain runtime-unverified.
+- Identified M06 functional gaps that cannot be reclassified as M07 polish: Focus currently intersects an already-filtered set and can omit required chain members; selection cannot be cleared; trader filtering is a cycle button; the In Progress set omits `FailRestartable` and lacks status filtering, progress, handover-ready, expiry, and clear trader organization; graph cards collapse every non-live gate into `Locked future`; route/edge/exclusion meaning lacks sufficient non-color cues; the selected graph quest has no direct native-action handoff; and post-mount rebuild failures do not have a tested complete-vanilla recovery path.
+- Assigned the rich persistent selected-quest pane, detailed blocker/objective/reward/exclusion content and navigation, custom native-action buttons, trader full-pane/side-pane redesign, and final detailed typography/banner treatment to M07. Profile selection, explicit refresh, profile comparison, the browser's persistent drawer, and exact mouse/DOM behavior are documented platform differences rather than in-game requirements.
+
+### Revised next step
+
+- Runtime-validate the current M06 implementation before beginning the custom detail pane: full-surface ownership and reopen cleanup; Daily/Weekly grouping; individual and combined filters; selected-chain/Focus behavior; active status/progress/handover/expiry; Notes CRUD/search; both Quest Items transfer directions; and post-mount fallback. Static validation is 31/31 core and 107/107 server/browser tests with zero-warning exact-version client/server builds.
+
+### 2026-08-06 web-parity correction pass
+
+- Expanded the owned global surface to the full width of the resolved Tasks parent and raised it above dormant native workspace branches, removing the native subheader residue/right-side dead margin by construction. Notes and Quest Items alone are raised above the graph while open.
+- Replaced root-derived side-overlay state with an explicit `None`/`Notes`/`QuestItems` owner. It invokes the real native lifecycle toggle, then settles both toggle values and real roots explicitly, so repeated clicks are mutual, deterministic, and reselect-to-close.
+- Rebuilt the global chrome around web hierarchy: Quest Map/In Progress tabs, right-bound Notes/Quest Items, left search and Future/Finished/level tools, direct All/trader portraits in web order, and canvas-local Center/zoom/Fit/Focus/Clear controls. The temporary In Progress content composition is deliberately held for the user's separate follow-up.
+- Added shared profile-aware presentation classification using web blocker priority. A targeted Gunsmith Part 2 case resolves to prerequisite-gated despite meeting its inherited level requirement, and an `AvailableForStart` quest from unavailable Lightkeeper resolves to trader-unavailable. Projection level/trader/finished behavior uses the same evaluated state.
+- Replaced raw EFT card labels with web vocabulary and added the web-equivalent objective progress percentage. Status/edge/route/selection colors now match the embedded web palette. Completed cards draw the check triangle, applicable terminal quests draw the end-of-line bar, and the old legend line is now a bottom-left swatch panel.
+- Repeated empty-canvas clicks are a no-op when no selection/focus exists. Clearing a real selection still updates projection membership where selection-only predecessor context had been restored and retains pan/zoom.
+- Static validation passes 31/31 core tests and 107/107 server/browser tests. The exact-version client build is zero-warning. Runtime acceptance remains open; Tarkov was deliberately left running at the user's request during this pass.
+- Staged and deployed the correction without terminating the Tarkov process. The next-launch client/core DLL/PDB pair was copied to `D:\Tarkov-SPT\BepInEx\plugins\SPTQuestMap` and hash-verified at client `4214E3620154C5B4124EB0AE3A028815B2E79E9C94005AB5C62BE103BCEA97F1` and core `C1BE92796E3D164E622A760D55C3562882E766406941DEF869E23C506CE6D5D4`. The changed server/core package was deployed through the guarded script; it stopped only the exact `D:\Tarkov-SPT\SPT\SPT.Server.exe` process and launched that executable hidden without startup polling, per the established runtime assumption.
+
+### 2026-08-07 authoritative-state and interaction correction
+
+- The native feed now transports the sanitized browser `DisplayState` result for every applicable static and generated quest, plus canonical default/applicable ID sets, progress percentages, and repeatable end times. The native overlay consumes these server results first; its prior live-client blocker reconstruction remains only an older-feed fallback. Reactive quest events refresh the server projection without rebuilding static topology/layout unless the generated topology version actually changed.
+- Browser and native filtering now share one pure-core ordinary visible-set calculation covering future depth, finished/level/trader/search filters, selection context, Focus, direct trader successors, and exact unmet-prerequisite context. This keeps Lightkeeper, Ref, Jaeger, and future trader unlock behavior under the server's `TraderAvailabilityEvaluator` instead of interpreting client `TradersInfo.Available` as the authority. Browser-only comparison mode remains a wrapper over its two profiles because the native client intentionally has no comparison mode.
+- Reselecting the selected quest is a no-op. A new selection rebuilds only if selected-chain membership actually changes. Double-click dispatch is separated from delayed single-click and opens Focus directly; a background click exits Focus while retaining the selected quest, while a later ordinary background click can still clear selection.
+- In Progress is the migrated default and leftmost tab. Search has an adjacent reset control, All loads the same `/files/trader/avatar/unknown.png` asset as the web UI, and quest artwork preserves aspect ratio.
+- Replaced the repeatable gray band with separate Daily and Weekly groups, each with its own header, remaining time, and underline, plus a thin separator before the ordinary graph. Weekly begins to the right of Daily with explicit spacing.
+- Static validation passes 32/32 core tests and 107/107 server/browser tests. Exact-version client/server builds remain zero-warning. Runtime verification and deployment hashes for this correction are recorded separately after deployment.
+- Deployed the server package and next-launch client pair with matching source/deployed SHA-256 values: server `F2A20B18B779885A754EF2364D9CC3023735CD8D72DCC0D012A9430A0177F13C`, client `AA00DF61BAD6C5DD67146760CE452FD5FF33F607D357D0ECB2B4645662F6D9C0`, and shared core `D870440C0971272BDCE9122E238CAACD49D66505E0796F7F728FC06410DB87E4` in both destinations. The guarded deploy restarted only the exact SPT server executable and launched it hidden without polling. No Tarkov process was present during client copy, and the deployment did not stop or launch Tarkov.
+
+### 2026-08-07 Character-tab ownership correction
+
+- Runtime evidence showed the parent-top expansion produced `surface=1920x1030` inside a `1920x1080` parent and covered the Character Gear/Health/Skills/Map/Tasks navigation. The first correction restored the native selector union (`topInset=65.79`) but left an unused strip between the Character tabs and the custom surface.
+- The global overlay now retains full parent width and raises its top edge to the measured 44-pixel Character-navigation boundary, reclaiming the complete otherwise-empty subheader strip. A 40-pixel exclusion guard remains mandatory; any resolved inset below it fails back to vanilla.
+- `QUESTMAP_M06_GEOMETRY` records both `topInset` and `topSource`, allowing runtime acceptance to distinguish the reclaimed content boundary from the conservative union fallback.
+- The latest client-only correction builds with zero warnings/errors and was deployed without stopping or launching Tarkov. Source/deployed client SHA-256 matches at `E7F501C1E3CC25D9AD315695B5E6460548B78F1B4596C8827BC2F9B0126513E7`; no server assembly changed, so the SPT server was not restarted again.
+
+### 2026-08-07 quest-art width-cover correction
+
+- Runtime review clarified that quest artwork must fill the card's complete horizontal area without changing its aspect ratio. Unity `Image.preserveAspect` produced contain/letterbox behavior instead. Quest art now uses an `AspectRatioFitter` in envelope mode inside the card's rectangular mask, producing uniform cover scaling and cropping only overflow. Trader portraits retain contain behavior.
+- The client-only correction builds with zero warnings/errors and was deployed without stopping or launching Tarkov. Source/deployed client SHA-256 matches at `1F6445D9C7A2D2DB645D62588DD3715096A283D6B11077F875AB42BCC48800B2`; no server assembly changed, so no server restart was required.
+
+### Accepted M06 architecture correction
+
+- Daily and Weekly quests require the same visibly separate band split as the web implementation; treating them as ordinary dependency nodes makes them too easy to lose. The band is now an M06 requirement rather than an intentional platform deviation.
+- Faction-only quests and active/inactive seasonal, event-`None`, and excluded-event-descendant quests must produce the same applicable set in-game as the accepted web implementation. Selection, Focus, search, trader filters, and Show All Future must not escape that set.
+- Filtering parity applies to the entire displayed quest set. With equivalent profile state and filter values, future depth, finished visibility, level eligibility, trader context, search, selection, Focus, and combined-filter precedence must produce exactly the same ordinary quest IDs and contextual additions in web and in-game. Prefer a shared pure filtering contract plus exact set-parity tests over maintaining two implementations.
+- The only filter intentionally absent in-game is the web control that hides the Daily/Weekly band. The band is always enabled in-game, while its quests continue to obey the other shared filters.
+- The global replacement must stop relabeling or repurposing EFT's regular/daily/Notes/Quest Items selectors. QuestMap owns a full-surface overlay and its own four controls while the unmodified native regular and operational lists/selectors remain hidden underneath.
+- There is no Native Tasks/Return to Map escape hatch in the accepted composition. Disabling the global replacement in plugin settings restores the vanilla UI; automatic failure fallback must do the same. The global graph stays read-only until M07 supplies the custom detail/action bridge.
+- QuestMap's custom Quest Items and Notes buttons must toggle the verified real native branches, raise and activate them so they are actually visible, preserve all EFT-owned transactions/CRUD/search/cleanup, hide the other side branch, and support reselect-to-close.

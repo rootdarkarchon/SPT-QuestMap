@@ -23,13 +23,15 @@ internal sealed class QuestGraphView : IDisposable
     private readonly QuestGraphTopology _topology;
     private readonly QuestGraphSpatialIndex _spatialIndex;
     private readonly QuestGraphNodePool _nodePool;
+    private readonly QuestAssetSpriteCache _assetCache;
     private readonly QuestGraphEdgeLayer _edgeLayer;
     private readonly GraphPanZoomHandler _input;
     private readonly Action<string> _onSelected;
+    private readonly Action<string>? _onFocusRequested;
     private readonly Action _onViewportSettled;
     private readonly ManualLogSource _log;
     private readonly bool _debugLogging;
-    private readonly Dictionary<string, QuestGraphNodeView> _activeNodes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, QuestGraphCardNodeView> _activeNodes = new(StringComparer.Ordinal);
     private QuestProfileOverlay _overlay;
     private QuestGraphSelection _selection = QuestGraphSelection.Empty;
     private int _maximumActiveNodes;
@@ -45,6 +47,7 @@ internal sealed class QuestGraphView : IDisposable
         QuestGraphTopology topology,
         QuestProfileOverlay overlay,
         Action<string> onSelected,
+        Action<string>? onFocusRequested,
         Action onViewportSettled,
         ManualLogSource log,
         bool debugLogging)
@@ -56,11 +59,16 @@ internal sealed class QuestGraphView : IDisposable
         _topology = topology;
         _overlay = overlay;
         _onSelected = onSelected;
+        _onFocusRequested = onFocusRequested;
         _onViewportSettled = onViewportSettled;
         _log = log;
         _debugLogging = debugLogging;
         _spatialIndex = new QuestGraphSpatialIndex(projection.NodesById);
-        _nodePool = new QuestGraphNodePool(content);
+        _assetCache = root.gameObject.AddComponent<QuestAssetSpriteCache>();
+        _assetCache.Bind(log);
+        _nodePool = new QuestGraphNodePool(content, _assetCache);
+        BuildRepeatableBand(content, projection, overlay);
+        BuildInProgressHeaders(content, projection);
         _edgeLayer = QuestGraphEdgeLayer.Create(content, projection, _selection, OnEdgeMeshBuilt);
         _input = viewport.gameObject.AddComponent<GraphPanZoomHandler>();
         _input.Bind(viewport, content, RefreshViewportCulling, ViewportSettled);
@@ -71,6 +79,70 @@ internal sealed class QuestGraphView : IDisposable
     public int ActiveNodeCount => _activeNodes.Count;
     public int PooledNodeCount => _nodePool.AvailableCount;
     public int CreatedNodeCount => _nodePool.TotalCreated;
+    public Vector2 ViewportSize => _viewport.rect.size;
+    public QuestAssetSpriteCache AssetCache => _assetCache;
+
+    private static void BuildRepeatableBand(RectTransform content, IQuestGraphProjection projection, QuestProfileOverlay overlay)
+    {
+        var repeatables = projection.Nodes.Where(node => node.ProfileGenerated).ToArray();
+        if (repeatables.Length == 0) return;
+        foreach (var kind in new[] { "Daily", "Weekly" })
+        {
+            var group = repeatables.Where(node => string.Equals(node.RepeatableKind, kind, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (group.Length == 0) continue;
+            var positions = group.Select(node => projection.NodesById[node.Id]).ToArray();
+            var minimumX = (float)positions.Min(position => position.X);
+            var maximumX = (float)positions.Max(position => position.X + position.Width);
+            var ends = group.Select(node => overlay.RepeatableEndTimes.TryGetValue(node.Id, out var end) ? end : 0)
+                .Where(end => end > 0).ToArray();
+            var remaining = ends.Length == 0 ? string.Empty : $"  ·  {FormatRemaining(ends.Min())}";
+
+            var header = UnityUiFactory.CreateRect($"{kind}Header", content);
+            header.anchorMin = header.anchorMax = header.pivot = new Vector2(0, 1);
+            header.anchoredPosition = new Vector2(minimumX, -2);
+            header.sizeDelta = new Vector2(Mathf.Max(180, maximumX - minimumX), 28);
+            var label = UnityUiFactory.AddText(header.gameObject, $"{kind.ToUpperInvariant()} {group.Length}{remaining}", 15,
+                TextAlignmentOptions.MidlineLeft, new Color(0.88f, 0.84f, 0.72f, 1));
+            label.fontStyle = FontStyles.Bold;
+
+            var groupSeparator = UnityUiFactory.CreateRect($"{kind}Separator", content);
+            groupSeparator.anchorMin = groupSeparator.anchorMax = groupSeparator.pivot = new Vector2(0, 1);
+            groupSeparator.anchoredPosition = new Vector2(minimumX, -31);
+            groupSeparator.sizeDelta = new Vector2(Mathf.Max(180, maximumX - minimumX), 1);
+            groupSeparator.gameObject.AddComponent<Image>().color = QuestGraphPalette.Border;
+        }
+
+        var separator = UnityUiFactory.CreateRect("RepeatableSeparator", content);
+        separator.anchorMin = separator.anchorMax = separator.pivot = new Vector2(0, 1);
+        separator.anchoredPosition = new Vector2(0, -184);
+        separator.sizeDelta = new Vector2(Mathf.Max(1, (float)projection.Width), 2);
+        separator.gameObject.AddComponent<Image>().color = QuestGraphPalette.Border;
+    }
+
+    private static string FormatRemaining(long endTime)
+    {
+        var seconds = Math.Max(0, endTime - DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        var days = seconds / 86400;
+        return days > 0
+            ? $"{days}d {(seconds % 86400) / 3600:00}:{seconds % 3600 / 60:00}"
+            : $"{seconds / 3600:00}:{seconds % 3600 / 60:00}";
+    }
+
+    private static void BuildInProgressHeaders(RectTransform content, IQuestGraphProjection projection)
+    {
+        if (projection is not GlobalQuestGraphProjection { Mode: GlobalQuestGraphMode.InProgress }) return;
+        foreach (var group in projection.Nodes.GroupBy(node => (node.TraderId, node.TraderName)))
+        {
+            var first = group.Select(node => projection.NodesById[node.Id]).OrderBy(position => position.X).First();
+            var rect = UnityUiFactory.CreateRect($"TraderHeader-{group.Key.TraderId}", content);
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0, 1);
+            rect.anchoredPosition = new Vector2((float)first.X, 0);
+            rect.sizeDelta = new Vector2((float)first.Width, 30);
+            var label = UnityUiFactory.AddText(rect.gameObject, group.Key.TraderName.ToUpperInvariant(), 16,
+                TextAlignmentOptions.MidlineLeft, new Color(0.88f, 0.84f, 0.72f, 1));
+            label.fontStyle = FontStyles.Bold;
+        }
+    }
 
     public static QuestGraphView Create(
         RectTransform mountRect,
@@ -82,24 +154,38 @@ internal sealed class QuestGraphView : IDisposable
         Action onViewportSettled,
         ManualLogSource log,
         bool debugLogging,
-        GraphViewportState? initialViewport = null)
+        GraphViewportState? initialViewport = null,
+        IReadOnlyList<QuestGraphHeaderAction>? extraActions = null,
+        bool ignoreParentLayout = false,
+        Action? onBackgroundClick = null,
+        bool globalChrome = false,
+        Action<string>? onFocusRequested = null)
     {
         var stopwatch = Stopwatch.StartNew();
         var root = UnityUiFactory.CreateRect("QuestMapGraph", mountRect.parent);
         UnityUiFactory.CopyRect(mountRect, root);
+        if (ignoreParentLayout)
+        {
+            root.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+        }
         root.gameObject.AddComponent<Image>().color = new Color(0.055f, 0.062f, 0.066f, 0.985f);
 
         var header = UnityUiFactory.CreateRect("Header", root);
         header.anchorMin = new Vector2(0, 1);
         header.anchorMax = new Vector2(1, 1);
         header.pivot = new Vector2(0.5f, 1);
-        header.offsetMin = new Vector2(12, -44);
-        header.offsetMax = new Vector2(-12, 0);
-        var title = UnityUiFactory.AddText(header.gameObject, titleText, 19, TextAlignmentOptions.MidlineLeft, new Color(0.88f, 0.84f, 0.72f, 1));
-        title.fontStyle = FontStyles.UpperCase;
+        header.offsetMin = new Vector2(0, globalChrome ? -96 : -44);
+        header.offsetMax = Vector2.zero;
+        header.gameObject.AddComponent<Image>().color = globalChrome ? new Color(0.055f, 0.07f, 0.075f, 0.99f) : Color.clear;
+        if (!globalChrome)
+        {
+            var title = UnityUiFactory.AddText(header.gameObject, titleText, 19, TextAlignmentOptions.MidlineLeft, new Color(0.88f, 0.84f, 0.72f, 1));
+            title.margin = new Vector4(12, 0, 12, 0);
+            title.fontStyle = FontStyles.UpperCase;
+        }
 
         var viewport = UnityUiFactory.CreateRect("Viewport", root);
-        UnityUiFactory.Stretch(viewport, 8, 8, 48, 8);
+        UnityUiFactory.Stretch(viewport, 8, 8, globalChrome ? 100 : 48, 8);
         viewport.gameObject.AddComponent<Image>().color = new Color(0.025f, 0.029f, 0.032f, 0.85f);
         viewport.gameObject.AddComponent<RectMask2D>();
 
@@ -110,8 +196,11 @@ internal sealed class QuestGraphView : IDisposable
         content.anchoredPosition = Vector2.zero;
         content.sizeDelta = new Vector2(Mathf.Max(1, (float)projection.Width), Mathf.Max(1, (float)projection.Height));
 
-        var view = new QuestGraphView(root, viewport, content, projection, topology, overlay, onSelected, onViewportSettled, log, debugLogging);
-        view.BuildControls(header);
+        var view = new QuestGraphView(root, viewport, content, projection, topology, overlay, onSelected, onFocusRequested, onViewportSettled, log, debugLogging);
+        view._input.Bind(viewport, content, view.RefreshViewportCulling, view.ViewportSettled, onBackgroundClick);
+        if (globalChrome) view.BuildCanvasControls(extraActions ?? Array.Empty<QuestGraphHeaderAction>());
+        else view.BuildControls(header, extraActions ?? Array.Empty<QuestGraphHeaderAction>());
+        view.BuildLegend(globalChrome);
         if (projection.Nodes.Count == 0) view.BuildEmptyState();
         Canvas.ForceUpdateCanvases();
         if (initialViewport.HasValue) view.RestoreViewportState(initialViewport.Value);
@@ -144,7 +233,7 @@ internal sealed class QuestGraphView : IDisposable
         if (string.Equals(_selection.SelectedQuestId, questId, StringComparison.Ordinal)) return;
         _selection = QuestGraphRules.BuildSelection(_topology, questId);
         _edgeLayer.SetSelection(_selection);
-        foreach (var pair in _activeNodes) pair.Value.ApplySelection(_selection.GetNodeHighlight(pair.Key));
+        foreach (var pair in _activeNodes) pair.Value.ApplySelection(_selection.GetNodeHighlight(pair.Key), _selection.SelectedQuestId is not null);
     }
 
     public GraphViewportState CaptureViewportState() => new(_content.localScale.x, _content.anchoredPosition);
@@ -174,6 +263,10 @@ internal sealed class QuestGraphView : IDisposable
         RefreshViewportCulling();
         ViewportSettled();
     }
+
+    public void ZoomIn() => _input.ZoomFromViewportCenter(1.2f);
+
+    public void ZoomOut() => _input.ZoomFromViewportCenter(0.83f);
 
     public void Dispose()
     {
@@ -240,19 +333,61 @@ internal sealed class QuestGraphView : IDisposable
                 || !_topology.NodesById.TryGetValue(questId, out var node)
                 || !_projection.NodesById.TryGetValue(questId, out var nodePosition)) continue;
             var view = _nodePool.Acquire();
-            view.BindStatic(node, nodePosition, _onSelected);
+            view.BindStatic(
+                node,
+                nodePosition,
+                _topology.CollectorPathQuestIds.Contains(node.Id),
+                _topology.LightkeeperPathQuestIds.Contains(node.Id),
+                QuestGraphRules.IsTerminalQuest(_topology, node.Id),
+                _onSelected,
+                _onFocusRequested);
             ApplyNodeState(questId, view);
+            view.SetOverview(scale < 0.42f);
             _activeNodes[questId] = view;
         }
+        foreach (var view in _activeNodes.Values) view.SetOverview(scale < 0.42f);
         _maximumActiveNodes = Math.Max(_maximumActiveNodes, _activeNodes.Count);
     }
 
-    private void ApplyNodeState(string questId, QuestGraphNodeView view)
+    private void BuildLegend(bool globalChrome)
+    {
+        var legend = UnityUiFactory.CreateRect("Legend", Root);
+        if (!globalChrome)
+        {
+            legend.anchorMin = new Vector2(0, 0);
+            legend.anchorMax = new Vector2(1, 0);
+            legend.pivot = new Vector2(0.5f, 0);
+            legend.offsetMin = new Vector2(12, 10);
+            legend.offsetMax = new Vector2(-12, 34);
+            var text = UnityUiFactory.AddText(legend.gameObject,
+                "STATUS: green available/success · blue active · gold hand-in · red failed   |   RELATIONS: green prerequisite · blue successor",
+                11, TextAlignmentOptions.MidlineLeft, new Color(0.72f, 0.74f, 0.72f, 0.9f));
+            text.enableWordWrapping = false;
+            return;
+        }
+
+        legend.anchorMin = legend.anchorMax = legend.pivot = Vector2.zero;
+        legend.anchoredPosition = new Vector2(12, 12);
+        legend.sizeDelta = new Vector2(510, 62);
+        legend.gameObject.AddComponent<Image>().color = QuestGraphPalette.Panel;
+        var outline = legend.gameObject.AddComponent<Outline>();
+        outline.effectColor = QuestGraphPalette.Border;
+        outline.effectDistance = Vector2.one;
+        AddLegendKey(legend, "AVAILABLE", QuestGraphPalette.Status(QuestMapDisplayStateKind.Available), 10, 34);
+        AddLegendKey(legend, "IN PROGRESS", QuestGraphPalette.Status(QuestMapDisplayStateKind.InProgress), 125, 34);
+        AddLegendKey(legend, "READY", QuestGraphPalette.Status(QuestMapDisplayStateKind.ReadyToFinish), 260, 34);
+        AddLegendKey(legend, "COMPLETED", QuestGraphPalette.Status(QuestMapDisplayStateKind.Completed), 360, 34);
+        AddLegendKey(legend, "COLLECTOR", QuestGraphPalette.Collector, 10, 10);
+        AddLegendKey(legend, "LIGHTKEEPER", QuestGraphPalette.Lightkeeper, 125, 10);
+        AddLegendKey(legend, "END OF LINE", QuestGraphPalette.Terminal, 260, 10);
+    }
+
+    private void ApplyNodeState(string questId, QuestGraphCardNodeView view)
     {
         var node = _topology.NodesById[questId];
         _overlay.QuestsById.TryGetValue(questId, out var liveState);
-        view.ApplyStatus(node, liveState);
-        view.ApplySelection(_selection.GetNodeHighlight(questId));
+        view.ApplyStatus(_topology, node, _overlay, liveState);
+        view.ApplySelection(_selection.GetNodeHighlight(questId), _selection.SelectedQuestId is not null);
     }
 
     private void BuildEmptyState()
@@ -262,15 +397,86 @@ internal sealed class QuestGraphView : IDisposable
         UnityUiFactory.AddText(empty.gameObject, "No quests were found for this view.", 18, TextAlignmentOptions.Center, new Color(0.65f, 0.68f, 0.69f, 1));
     }
 
-    private void BuildControls(RectTransform header)
+    private void BuildControls(RectTransform header, IReadOnlyList<QuestGraphHeaderAction> extraActions)
     {
         AddControl(header, "Fit", "FIT", 0, FitToVisible);
         AddControl(header, "ZoomIn", "+", 78, () => _input.ZoomFromViewportCenter(1.2f));
         AddControl(header, "ZoomOut", "−", 116, () => _input.ZoomFromViewportCenter(0.83f));
         AddControl(header, "CenterSelected", "CENTER", 154, CenterSelected, 72);
+
+        var rightOffset = 234f;
+        foreach (var action in extraActions)
+        {
+            AddControl(
+                header,
+                action.Name,
+                action.Label,
+                rightOffset,
+                action.Action,
+                action.Width,
+                action.Active ? new Color(0.35f, 0.29f, 0.12f, 1) : new Color(0.22f, 0.24f, 0.25f, 1));
+            rightOffset += action.Width + 8;
+        }
     }
 
-    private static void AddControl(RectTransform header, string name, string label, float rightOffset, Action action, float width = 34)
+    private void BuildCanvasControls(IReadOnlyList<QuestGraphHeaderAction> extraActions)
+    {
+        var panel = UnityUiFactory.CreateRect("CanvasControls", _viewport);
+        panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0, 1);
+        panel.anchoredPosition = new Vector2(12, -12);
+        var extraWidth = extraActions.Sum(action => action.Width + 4);
+        panel.sizeDelta = new Vector2(228 + extraWidth, 40);
+        panel.gameObject.AddComponent<Image>().color = QuestGraphPalette.Panel;
+        var outline = panel.gameObject.AddComponent<Outline>();
+        outline.effectColor = QuestGraphPalette.Border;
+        outline.effectDistance = Vector2.one;
+        AddCanvasControl(panel, "CenterSelected", "CENTER", 4, 78, CenterSelected);
+        AddCanvasControl(panel, "ZoomOut", "−", 86, 38, ZoomOut);
+        AddCanvasControl(panel, "ZoomIn", "+", 128, 38, ZoomIn);
+        AddCanvasControl(panel, "Fit", "FIT", 170, 54, FitToVisible);
+        var x = 228f;
+        foreach (var action in extraActions)
+        {
+            AddCanvasControl(panel, action.Name, action.Label, x, action.Width, action.Action, action.Active);
+            x += action.Width + 4;
+        }
+        panel.SetAsLastSibling();
+    }
+
+    private static void AddCanvasControl(RectTransform parent, string name, string label, float x, float width, Action action, bool active = false)
+    {
+        var rect = UnityUiFactory.CreateRect(name, parent);
+        rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0, 0.5f);
+        rect.anchoredPosition = new Vector2(x, 0);
+        rect.sizeDelta = new Vector2(width, 30);
+        var button = UnityUiFactory.AddButton(rect.gameObject, active ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control);
+        UnityUiFactory.AddText(rect.gameObject, label, 12, TextAlignmentOptions.Center, Color.white);
+        button.onClick.AddListener(() => action());
+    }
+
+    private static void AddLegendKey(RectTransform parent, string label, Color color, float x, float y)
+    {
+        var swatch = UnityUiFactory.CreateRect($"Swatch-{label}", parent);
+        swatch.anchorMin = swatch.anchorMax = swatch.pivot = Vector2.zero;
+        swatch.anchoredPosition = new Vector2(x, y);
+        swatch.sizeDelta = new Vector2(13, 13);
+        swatch.gameObject.AddComponent<Image>().color = color;
+        var textRect = UnityUiFactory.CreateRect($"Label-{label}", parent);
+        textRect.anchorMin = textRect.anchorMax = textRect.pivot = Vector2.zero;
+        textRect.anchoredPosition = new Vector2(x + 19, y - 1);
+        textRect.sizeDelta = new Vector2(110, 16);
+        var text = UnityUiFactory.AddText(textRect.gameObject, label, 10, TextAlignmentOptions.MidlineLeft, QuestGraphPalette.MutedText);
+        text.enableWordWrapping = false;
+    }
+
+    private static void AddControl(
+        RectTransform header,
+        string name,
+        string label,
+        float rightOffset,
+        Action action,
+        float width = 34,
+        Color? color = null)
     {
         var rect = UnityUiFactory.CreateRect(name, header);
         rect.anchorMin = new Vector2(1, 0.5f);
@@ -278,7 +484,7 @@ internal sealed class QuestGraphView : IDisposable
         rect.pivot = new Vector2(1, 0.5f);
         rect.anchoredPosition = new Vector2(-rightOffset, 0);
         rect.sizeDelta = new Vector2(width, 30);
-        var button = UnityUiFactory.AddButton(rect.gameObject, new Color(0.22f, 0.24f, 0.25f, 1));
+        var button = UnityUiFactory.AddButton(rect.gameObject, color ?? new Color(0.22f, 0.24f, 0.25f, 1));
         UnityUiFactory.AddText(rect.gameObject, label, 13, TextAlignmentOptions.Center, Color.white);
         button.onClick.AddListener(() => action());
     }
@@ -297,4 +503,22 @@ internal sealed class QuestGraphView : IDisposable
             _log.LogInfo($"QUESTMAP_M05_EDGE_MESH edges={edgeCount}; meshMs={elapsedMilliseconds:F2}; reason=geometry-or-selection");
         }
     }
+}
+
+internal sealed class QuestGraphHeaderAction
+{
+    public QuestGraphHeaderAction(string name, string label, float width, bool active, Action action)
+    {
+        Name = name;
+        Label = label;
+        Width = width;
+        Active = active;
+        Action = action;
+    }
+
+    public string Name { get; }
+    public string Label { get; }
+    public float Width { get; }
+    public bool Active { get; }
+    public Action Action { get; }
 }

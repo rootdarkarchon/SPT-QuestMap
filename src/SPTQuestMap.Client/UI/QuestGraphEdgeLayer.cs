@@ -80,7 +80,7 @@ internal sealed class ProductionQuestGraphEdgeGraphic : MaskableGraphic
         foreach (var route in _routes)
         {
             var style = EdgeStyle(route.Edge);
-            AddCurve(helper, Point(route.Start), Point(route.Control1), Point(route.Control2), Point(route.End), style.Width, style.Color);
+            AddCurve(helper, Point(route.Start), Point(route.Control1), Point(route.Control2), Point(route.End), style.Width, style.Color, style.Dashed);
         }
         stopwatch.Stop();
         _onMeshBuilt?.Invoke(stopwatch.Elapsed.TotalMilliseconds, _routes.Count);
@@ -89,7 +89,8 @@ internal sealed class ProductionQuestGraphEdgeGraphic : MaskableGraphic
     private EdgeRenderStyle EdgeStyle(QuestGraphEdge edge)
     {
         var color = BaseEdgeColor(edge.RequirementKind);
-        if (_selection.SelectedQuestId is null) return new EdgeRenderStyle(color, 3f);
+        var dashed = edge.RequirementKind == QuestEdgeRequirementKind.Failure;
+        if (_selection.SelectedQuestId is null) return new EdgeRenderStyle(color, 3f, dashed);
         var prerequisite = _selection.PrerequisiteQuestIds.Contains(edge.SourceId)
             && (_selection.PrerequisiteQuestIds.Contains(edge.TargetId)
                 || string.Equals(_selection.SelectedQuestId, edge.TargetId, StringComparison.Ordinal));
@@ -98,15 +99,15 @@ internal sealed class ProductionQuestGraphEdgeGraphic : MaskableGraphic
         if (prerequisite || successor)
         {
             color.a = 1f;
-            return new EdgeRenderStyle(color, 5f);
+            return new EdgeRenderStyle(color, 5f, dashed);
         }
         color.a = 0.18f;
-        return new EdgeRenderStyle(color, 2f);
+        return new EdgeRenderStyle(color, 2f, dashed);
     }
 
     private static Vector2 Point(QuestGraphPoint point) => new((float)point.X, (float)-point.Y);
 
-    private static void AddCurve(VertexHelper helper, Vector2 start, Vector2 control1, Vector2 control2, Vector2 end, float width, Color color)
+    private static void AddCurve(VertexHelper helper, Vector2 start, Vector2 control1, Vector2 control2, Vector2 end, float width, Color color, bool dashed)
     {
         const int segments = 20;
         var previous = start;
@@ -114,7 +115,7 @@ internal sealed class ProductionQuestGraphEdgeGraphic : MaskableGraphic
         {
             var t = segment / (float)segments;
             var point = CubicBezier(start, control1, control2, end, t);
-            AddLine(helper, previous, point, width, color);
+            if (!dashed || segment % 3 != 0) AddLine(helper, previous, point, width, color);
             previous = point;
         }
         AddArrowHead(helper, CubicBezier(start, control1, control2, end, 0.94f), end, color);
@@ -156,23 +157,19 @@ internal sealed class ProductionQuestGraphEdgeGraphic : MaskableGraphic
         helper.AddTriangle(first, first + 2, first + 3);
     }
 
-    private static Color BaseEdgeColor(QuestEdgeRequirementKind kind) => kind switch
-    {
-        QuestEdgeRequirementKind.Success => new Color(0.38f, 0.72f, 0.42f, 0.9f),
-        QuestEdgeRequirementKind.Failure => new Color(0.82f, 0.28f, 0.28f, 0.9f),
-        QuestEdgeRequirementKind.Started => new Color(0.35f, 0.58f, 0.86f, 0.9f),
-        QuestEdgeRequirementKind.AnyOutcome => new Color(0.72f, 0.48f, 0.82f, 0.9f),
-        _ => new Color(0.58f, 0.58f, 0.58f, 0.75f),
-    };
+    private static Color BaseEdgeColor(QuestEdgeRequirementKind kind) =>
+        QuestGraphPalette.Edge(kind, kind == QuestEdgeRequirementKind.Unknown ? 0.75f : 0.9f);
 
     private readonly struct EdgeRenderStyle
     {
-        public EdgeRenderStyle(Color color, float width)
+        public EdgeRenderStyle(Color color, float width, bool dashed)
         {
             Color = color;
             Width = width;
+            Dashed = dashed;
         }
         public Color Color { get; }
         public float Width { get; }
+        public bool Dashed { get; }
     }
 }

@@ -20,11 +20,14 @@ internal sealed class QuestMapDataRuntime : IDisposable
     private readonly QuestMapDataAdapter _adapter;
     private readonly QuestMapClientConfiguration _configuration;
     private readonly Dictionary<QuestsScreen, TraderGraphScreenController> _traderControllers = new();
+    private readonly Dictionary<TasksScreen, GlobalTasksScreenController> _globalControllers = new();
     private AbstractQuestControllerClass? _latestQuestController;
     private ReactiveQuestMonitor? _reactiveMonitor;
     private PendingTraderScreen? _pendingTraderScreen;
+    private PendingGlobalScreen? _pendingGlobalScreen;
     private Coroutine? _loadCoroutine;
     private Coroutine? _reactiveRefreshCoroutine;
+    private Coroutine? _globalMountCoroutine;
     private readonly HashSet<string> _reactiveReasons = new(StringComparer.Ordinal);
     private readonly HashSet<string> _reactiveQuestIds = new(StringComparer.Ordinal);
     private bool _disposed;
@@ -54,6 +57,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         {
             if (!RefreshOverlay(questController, true)) return;
             TryMountPendingTraderScreen(questController);
+            TryMountPendingGlobalScreen(questController);
             return;
         }
 
@@ -96,7 +100,59 @@ internal sealed class QuestMapDataRuntime : IDisposable
             controller.Dispose();
         }
 
-        if (_pendingTraderScreen is null && _traderControllers.Count == 0)
+        if (_pendingTraderScreen is null && _traderControllers.Count == 0
+            && _pendingGlobalScreen is null && _globalControllers.Count == 0)
+        {
+            _reactiveMonitor?.SetInventoryController(null);
+        }
+    }
+
+    public void ShowGlobalTasksScreen(TasksScreen screen, object[] arguments)
+    {
+        if (_disposed) return;
+        CloseGlobalTasksScreen(screen);
+        var questController = arguments.OfType<AbstractQuestControllerClass>().SingleOrDefault();
+        var inventoryController = arguments.OfType<InventoryController>().SingleOrDefault();
+        var session = arguments.OfType<ISession>().SingleOrDefault();
+        if (questController is null || inventoryController is null || session is null)
+        {
+            _log.LogWarning($"QUESTMAP_M06_STATE screen={screen.GetInstanceID()}; active=False; safelyDisabled=True; reason=required Show argument missing; vanillaRestored=True");
+            return;
+        }
+
+        _pendingGlobalScreen = new PendingGlobalScreen(screen, inventoryController, questController, session);
+        ObserveQuestController(questController);
+        _reactiveMonitor?.SetInventoryController(inventoryController);
+        if (!_configuration.EnableGlobalTasksGraph.Value)
+        {
+            _pendingGlobalScreen = null;
+            _log.LogInfo($"QUESTMAP_M06_STATE screen={screen.GetInstanceID()}; active=False; safelyDisabled=True; reason=feature disabled; vanillaRestored=True");
+            return;
+        }
+
+        _globalMountCoroutine = _coroutineOwner.StartCoroutine(MountPendingGlobalAfterVanillaLayout());
+    }
+
+    public void CloseGlobalTasksScreen(TasksScreen screen)
+    {
+        if (_pendingGlobalScreen is not null && ReferenceEquals(_pendingGlobalScreen.Screen, screen))
+        {
+            _pendingGlobalScreen = null;
+        }
+        if (_globalMountCoroutine is not null)
+        {
+            _coroutineOwner.StopCoroutine(_globalMountCoroutine);
+            _globalMountCoroutine = null;
+        }
+
+        if (_globalControllers.TryGetValue(screen, out var controller))
+        {
+            _globalControllers.Remove(screen);
+            controller.Dispose();
+        }
+
+        if (_pendingTraderScreen is null && _traderControllers.Count == 0
+            && _pendingGlobalScreen is null && _globalControllers.Count == 0)
         {
             _reactiveMonitor?.SetInventoryController(null);
         }
@@ -107,16 +163,21 @@ internal sealed class QuestMapDataRuntime : IDisposable
         _disposed = true;
         if (_loadCoroutine is not null) _coroutineOwner.StopCoroutine(_loadCoroutine);
         if (_reactiveRefreshCoroutine is not null) _coroutineOwner.StopCoroutine(_reactiveRefreshCoroutine);
+        if (_globalMountCoroutine is not null) _coroutineOwner.StopCoroutine(_globalMountCoroutine);
         _loadCoroutine = null;
         _reactiveRefreshCoroutine = null;
+        _globalMountCoroutine = null;
         _reactiveMonitor?.Dispose();
         _reactiveMonitor = null;
         _reactiveReasons.Clear();
         _reactiveQuestIds.Clear();
         _latestQuestController = null;
         _pendingTraderScreen = null;
+        _pendingGlobalScreen = null;
         foreach (var controller in _traderControllers.Values) controller.Dispose();
         _traderControllers.Clear();
+        foreach (var controller in _globalControllers.Values) controller.Dispose();
+        _globalControllers.Clear();
     }
 
     private IEnumerator LoadAndOverlay(int liveQuestCountBefore)
@@ -159,6 +220,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
             "QUESTMAP_M02_STATE active=True; safelyDisabled=False; " +
             $"topologyVersion={_adapter.Topology?.Version}; layoutNodes={_adapter.Layout?.NodesById.Count ?? 0}");
         TryMountPendingTraderScreen(controller);
+        TryMountPendingGlobalScreen(controller);
     }
 
     private bool RefreshOverlay(AbstractQuestControllerClass controller, bool repeated)
@@ -243,6 +305,34 @@ internal sealed class QuestMapDataRuntime : IDisposable
                 yield break;
             }
         }
+        else
+        {
+            Task<bool> profileTask;
+            try
+            {
+                profileTask = _adapter.RefreshServerProfileAsync();
+            }
+            catch (Exception exception)
+            {
+                _log.LogError($"QUESTMAP_M04_ERROR phase=server-profile-refresh; reasons={string.Join(",", reasons)}; {exception}");
+                CompleteReactiveRefresh();
+                yield break;
+            }
+
+            while (!profileTask.IsCompleted) yield return null;
+            if (_disposed)
+            {
+                CompleteReactiveRefresh();
+                yield break;
+            }
+            if (profileTask.IsFaulted)
+            {
+                _log.LogError($"QUESTMAP_M04_ERROR phase=server-profile-refresh; reasons={string.Join(",", reasons)}; {profileTask.Exception?.GetBaseException()}");
+                CompleteReactiveRefresh();
+                yield break;
+            }
+            topologyReloaded = profileTask.Result;
+        }
 
         QuestProfileOverlay newOverlay;
         try
@@ -269,6 +359,9 @@ internal sealed class QuestMapDataRuntime : IDisposable
             .Select(graph => topologyReloaded
                 ? graph.RebuildTopology(topology, layout, newOverlay)
                 : graph.RefreshOverlay(newOverlay))
+            .Concat(_globalControllers.Values.Select(graph => topologyReloaded
+                ? graph.RebuildTopology(topology, layout, newOverlay)
+                : graph.RefreshOverlay(newOverlay)))
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
@@ -354,6 +447,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         _log.LogError($"QUESTMAP_M02_ERROR {exception}");
         _log.LogWarning("QUESTMAP_M02_STATE active=False; safelyDisabled=True; reason=read-only data adapter failed; vanilla UI retained");
         FailPendingTraderScreen("read-only data adapter failed", exception);
+        FailPendingGlobalScreen("read-only data adapter failed", exception);
     }
 
     private void TryMountPendingTraderScreen(AbstractQuestControllerClass questController)
@@ -407,6 +501,69 @@ internal sealed class QuestMapDataRuntime : IDisposable
         _log.LogWarning($"QUESTMAP_M03_STATE screen={pending.Screen.GetInstanceID()}; trader={pending.Trader.Id}; active=False; safelyDisabled=True; reason={reason}; vanillaRestored=True");
     }
 
+    private void TryMountPendingGlobalScreen(AbstractQuestControllerClass questController)
+    {
+        var pending = _pendingGlobalScreen;
+        if (pending is null
+            || !ReferenceEquals(pending.QuestController, questController)
+            || !pending.VanillaLayoutReady
+            || !_configuration.EnableGlobalTasksGraph.Value)
+        {
+            return;
+        }
+
+        var topology = _adapter.Topology;
+        var layout = _adapter.Layout;
+        var overlay = _adapter.Overlay;
+        if (topology is null || layout is null || overlay is null) return;
+
+        _pendingGlobalScreen = null;
+        var controller = new GlobalTasksScreenController(
+            pending.Screen,
+            pending.InventoryController,
+            pending.QuestController,
+            pending.Session,
+            _log,
+            _configuration.EnableDebugLogging.Value);
+        try
+        {
+            controller.Mount(
+                topology,
+                layout,
+                overlay,
+                _configuration.ForceGlobalTasksGraphInitializationFailure.Value);
+            _globalControllers[pending.Screen] = controller;
+            _log.LogInfo($"QUESTMAP_M06_STATE screen={pending.Screen.GetInstanceID()}; active=True; safelyDisabled=False; vanillaRestored=False");
+        }
+        catch (Exception exception)
+        {
+            controller.Dispose();
+            _log.LogError($"QUESTMAP_M06_ERROR screen={pending.Screen.GetInstanceID()}; {exception}");
+            _log.LogWarning($"QUESTMAP_M06_STATE screen={pending.Screen.GetInstanceID()}; active=False; safelyDisabled=True; reason=graph initialization failed; vanillaRestored=True");
+        }
+    }
+
+    private void FailPendingGlobalScreen(string reason, Exception exception)
+    {
+        var pending = _pendingGlobalScreen;
+        if (pending is null) return;
+        _pendingGlobalScreen = null;
+        _log.LogError($"QUESTMAP_M06_ERROR screen={pending.Screen.GetInstanceID()}; reason={reason}; {exception}");
+        _log.LogWarning($"QUESTMAP_M06_STATE screen={pending.Screen.GetInstanceID()}; active=False; safelyDisabled=True; reason={reason}; vanillaRestored=True");
+    }
+
+    private IEnumerator MountPendingGlobalAfterVanillaLayout()
+    {
+        yield return null;
+        yield return new WaitForEndOfFrame();
+        _globalMountCoroutine = null;
+        if (_disposed) yield break;
+        var pending = _pendingGlobalScreen;
+        if (pending is null) yield break;
+        pending.VanillaLayoutReady = true;
+        TryMountPendingGlobalScreen(pending.QuestController);
+    }
+
     private sealed class PendingTraderScreen
     {
         public PendingTraderScreen(
@@ -432,5 +589,30 @@ internal sealed class QuestMapDataRuntime : IDisposable
         public AbstractQuestControllerClass QuestController { get; }
 
         public TraderClass Trader { get; }
+    }
+
+    private sealed class PendingGlobalScreen
+    {
+        public PendingGlobalScreen(
+            TasksScreen screen,
+            InventoryController inventoryController,
+            AbstractQuestControllerClass questController,
+            ISession session)
+        {
+            Screen = screen;
+            InventoryController = inventoryController;
+            QuestController = questController;
+            Session = session;
+        }
+
+        public TasksScreen Screen { get; }
+
+        public InventoryController InventoryController { get; }
+
+        public AbstractQuestControllerClass QuestController { get; }
+
+        public ISession Session { get; }
+
+        public bool VanillaLayoutReady { get; set; }
     }
 }

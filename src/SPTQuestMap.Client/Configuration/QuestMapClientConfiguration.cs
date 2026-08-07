@@ -10,7 +10,8 @@ internal sealed class QuestMapClientConfiguration
         ConfigEntry<bool> enableCustomQuestDetails,
         ConfigEntry<bool> enableDebugLogging,
         ConfigEntry<bool> forceCompatibilityFailure,
-        ConfigEntry<bool> forceTraderGraphInitializationFailure)
+        ConfigEntry<bool> forceTraderGraphInitializationFailure,
+        ConfigEntry<bool> forceGlobalTasksGraphInitializationFailure)
     {
         EnableTraderQuestGraph = enableTraderQuestGraph;
         EnableGlobalTasksGraph = enableGlobalTasksGraph;
@@ -18,6 +19,7 @@ internal sealed class QuestMapClientConfiguration
         EnableDebugLogging = enableDebugLogging;
         ForceCompatibilityFailure = forceCompatibilityFailure;
         ForceTraderGraphInitializationFailure = forceTraderGraphInitializationFailure;
+        ForceGlobalTasksGraphInitializationFailure = forceGlobalTasksGraphInitializationFailure;
     }
 
     public ConfigEntry<bool> EnableTraderQuestGraph { get; }
@@ -32,6 +34,8 @@ internal sealed class QuestMapClientConfiguration
 
     public ConfigEntry<bool> ForceTraderGraphInitializationFailure { get; }
 
+    public ConfigEntry<bool> ForceGlobalTasksGraphInitializationFailure { get; }
+
     public static QuestMapClientConfiguration Bind(ConfigFile config)
     {
         return new QuestMapClientConfiguration(
@@ -44,7 +48,7 @@ internal sealed class QuestMapClientConfiguration
                 "Features",
                 "EnableGlobalTasksGraph",
                 false,
-                "Reserved for the global Tasks graph. Milestone 1 remains inert."),
+                "Replace the global Tasks quest views with In Progress and full QuestMap graphs while retaining native Notes and Quest Items."),
             config.Bind(
                 "Features",
                 "EnableCustomQuestDetails",
@@ -64,6 +68,11 @@ internal sealed class QuestMapClientConfiguration
                 "Diagnostics",
                 "ForceTraderGraphInitializationFailure",
                 false,
-                "Force the trader graph mount to fail before the vanilla list is hidden, for fallback testing."));
+                "Force the trader graph mount to fail before the vanilla list is hidden, for fallback testing."),
+            config.Bind(
+                "Diagnostics",
+                "ForceGlobalTasksGraphInitializationFailure",
+                false,
+                "Force the global Tasks graph mount to fail before native task content is hidden, for fallback testing."));
     }
 }

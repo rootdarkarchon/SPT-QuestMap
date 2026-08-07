@@ -5,6 +5,20 @@ public sealed class QuestTopologyFeed
     public QuestTopologyPayload Topology { get; set; } = new();
 
     public QuestNodePayload[] ProfileGeneratedQuests { get; set; } = [];
+
+    public Dictionary<string, string> RepeatableKinds { get; set; } = new(StringComparer.Ordinal);
+
+    public string[] DefaultVisibleQuestIds { get; set; } = [];
+
+    public string[] AllApplicableQuestIds { get; set; } = [];
+
+    public Dictionary<string, string> DisplayStates { get; set; } = new(StringComparer.Ordinal);
+
+    public Dictionary<string, double?> ProgressPercentages { get; set; } = new(StringComparer.Ordinal);
+
+    public Dictionary<string, long> RepeatableEndTimes { get; set; } = new(StringComparer.Ordinal);
+
+    public Dictionary<string, string[]> PrerequisiteBlockerIds { get; set; } = new(StringComparer.Ordinal);
 }
 
 public sealed class QuestTopologyPayload
@@ -16,6 +30,10 @@ public sealed class QuestTopologyPayload
     public QuestEdgePayload[] Edges { get; set; } = [];
 
     public QuestTraderPayload[] Traders { get; set; } = [];
+
+    public string[] CollectorPathQuestIds { get; set; } = [];
+
+    public string[] LightkeeperPathQuestIds { get; set; } = [];
 }
 
 public sealed class QuestTraderPayload

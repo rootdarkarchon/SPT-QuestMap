@@ -137,7 +137,7 @@ public sealed class QuestGraphCoreTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(QuestGraphRules.FilterActive(topology, overlay).Select(node => node.Id), Is.EqualTo(new[] { "active" }));
+            Assert.That(QuestGraphRules.FilterActive(topology, overlay).Select(node => node.Id), Is.EqualTo(new[] { "active", "retry" }));
             Assert.That(QuestGraphRules.FilterFinishedAndFailed(topology, overlay, true).Select(node => node.Id), Is.EquivalentTo(new[] { "active", "retry" }));
         });
     }
@@ -226,6 +226,175 @@ public sealed class QuestGraphCoreTests
         });
     }
 
+    [Test]
+    public void GlobalProjection_UsesAuthoritativeFrontierAndApplicableSets()
+    {
+        var feed = Feed(
+            [Node("known", "Prapor", "Any"), Node("frontier", "Prapor", "Any"), Node("future", "Therapist", "Any")],
+            [Edge("known", "frontier", "Success"), Edge("frontier", "future", "Success")]);
+        feed.DefaultVisibleQuestIds = ["known", "frontier"];
+        feed.AllApplicableQuestIds = ["known", "frontier", "future"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(Quest("known", "Started")));
+
+        var frontier = GlobalQuestGraphProjectionBuilder.Build(
+            topology,
+            DeterministicGraphLayout.Build(topology),
+            overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.Full, false, false, false, null, null, null, null, QuestRouteFilter.None));
+        var allFuture = GlobalQuestGraphProjectionBuilder.Build(
+            topology,
+            DeterministicGraphLayout.Build(topology),
+            overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.Full, true, false, false, null, null, null, null, QuestRouteFilter.None));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(frontier.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { "known", "frontier" }));
+            Assert.That(allFuture.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { "known", "frontier", "future" }));
+            Assert.That(frontier.Edges.Select(edge => (edge.SourceId, edge.TargetId)), Is.EqualTo(new[] { ("known", "frontier") }));
+        });
+    }
+
+    [Test]
+    public void GlobalProjection_AppliesActiveSearchTraderRouteAndFocusFilters()
+    {
+        var root = Node("root", "Prapor", "Any");
+        var selected = Node("selected", "Prapor", "Any");
+        var direct = Node("direct", "Therapist", "Any");
+        var unrelated = Node("unrelated", "Therapist", "Any");
+        var feed = Feed(
+            [root, selected, direct, unrelated],
+            [Edge("root", "selected", "Success"), Edge("selected", "direct", "Success")]);
+        feed.DefaultVisibleQuestIds = ["root", "selected", "direct", "unrelated"];
+        feed.AllApplicableQuestIds = ["root", "selected", "direct", "unrelated"];
+        feed.Topology.CollectorPathQuestIds = ["root", "selected", "direct"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("root", "Success"),
+            Quest("selected", "Started"),
+            Quest("direct", "AvailableForFinish"),
+            Quest("unrelated", "Started")));
+        var layout = DeterministicGraphLayout.Build(topology);
+
+        var active = GlobalQuestGraphProjectionBuilder.Build(
+            topology,
+            layout,
+            overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false, null, "therapist", "unrelated", null, QuestRouteFilter.None));
+        var focusedRoute = GlobalQuestGraphProjectionBuilder.Build(
+            topology,
+            layout,
+            overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.Full, true, false, false, null, null, null, "selected", QuestRouteFilter.Collector));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(active.Nodes.Select(node => node.Id), Is.EqualTo(new[] { "unrelated" }));
+            Assert.That(focusedRoute.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { "root", "selected", "direct" }));
+            Assert.That(focusedRoute.Edges, Has.Count.EqualTo(2));
+            Assert.That(topology.CollectorPathQuestIds, Is.EquivalentTo(new[] { "root", "selected", "direct" }));
+        });
+    }
+
+    [Test]
+    public void GlobalProjection_SelectedQuestRestoresApplicablePredecessorChainAcrossFilters()
+    {
+        var feed = Feed(
+            [Node("root", "Prapor", "Any"), Node("middle", "Therapist", "Any"), Node("selected", "Skier", "Any"), Node("other", "Skier", "Any")],
+            [Edge("root", "middle", "Success"), Edge("middle", "selected", "Success")]);
+        feed.DefaultVisibleQuestIds = ["selected", "other"];
+        feed.AllApplicableQuestIds = ["root", "middle", "selected", "other"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("root", "Success"),
+            Quest("middle", "Success"),
+            Quest("selected", "Started"),
+            Quest("other", "Started")));
+
+        var projection = GlobalQuestGraphProjectionBuilder.Build(
+            topology,
+            DeterministicGraphLayout.Build(topology),
+            overlay,
+            new GlobalQuestGraphOptions(
+                GlobalQuestGraphMode.Full,
+                false,
+                true,
+                false,
+                null,
+                "skier",
+                "selected",
+                null,
+                QuestRouteFilter.None,
+                "selected"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(projection.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { "root", "middle", "selected" }));
+            Assert.That(projection.Edges.Select(edge => (edge.SourceId, edge.TargetId)),
+                Is.EqualTo(new[] { ("middle", "selected"), ("root", "middle") }));
+        });
+    }
+
+    [Test]
+    public void GlobalProjection_HideFinishedPreservesRestartableFailure()
+    {
+        var feed = Feed(
+            [Node("done", "Prapor", "Any"), Node("retry", "Prapor", "Any"), Node("active", "Prapor", "Any")],
+            []);
+        feed.DefaultVisibleQuestIds = ["done", "retry", "active"];
+        feed.AllApplicableQuestIds = ["done", "retry", "active"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("done", "Success"),
+            Quest("retry", "FailRestartable"),
+            Quest("active", "Started")));
+
+        var projection = GlobalQuestGraphProjectionBuilder.Build(
+            topology,
+            DeterministicGraphLayout.Build(topology),
+            overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.Full, false, true, false, null, null, null, null, QuestRouteFilter.None));
+
+        Assert.That(projection.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { "retry", "active" }));
+    }
+
+    [Test]
+    public void GlobalProjection_MatchesLevelFocusActiveAndRepeatableBandContract()
+    {
+        var root = Node("root", "Prapor", "Any");
+        var selected = Node("selected", "Prapor", "Any");
+        var gated = Node("gated", "Therapist", "Any");
+        gated.EffectiveRequirements = [new QuestRequirementPayload { Kind = "Level", Compare = ">=", Value = 30 }];
+        var daily = Node("daily", "Prapor", "Any");
+        var feed = Feed([root, selected, gated], [Edge("root", "selected", "Success"), Edge("selected", "gated", "Success")]);
+        feed.ProfileGeneratedQuests = [daily];
+        feed.RepeatableKinds["daily"] = "Daily";
+        feed.DefaultVisibleQuestIds = ["root", "selected", "gated", "daily"];
+        feed.AllApplicableQuestIds = ["root", "selected", "gated", "daily"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, new LiveProfileSnapshot("profile", "USEC", 20,
+            [Quest("root", "Success"), Quest("selected", "Started"), Quest("gated", "FailRestartable"), Quest("daily", "Started")], []));
+        var layout = DeterministicGraphLayout.Build(topology);
+
+        var level = GlobalQuestGraphProjectionBuilder.Build(topology, layout, overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.Full, false, false, true, null, null, null, null, QuestRouteFilter.None));
+        var focus = GlobalQuestGraphProjectionBuilder.Build(topology, layout, overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.Full, false, true, true, null, "therapist", "no-match", "selected", QuestRouteFilter.None));
+        var retry = GlobalQuestGraphProjectionBuilder.Build(topology, layout, overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false, "RETRY", null, null, null, QuestRouteFilter.None));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(level.Nodes.Select(node => node.Id), Does.Contain("gated"),
+                "An active restartable failure is not a level-gated presentation state and must remain visible.");
+            Assert.That(focus.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { "root", "selected", "gated" }));
+            Assert.That(retry.Nodes.Select(node => node.Id), Is.EqualTo(new[] { "gated" }));
+            Assert.That(level.NodesById["daily"].Y, Is.LessThan(level.NodesById["root"].Y));
+            Assert.That(topology.NodesById["daily"].RepeatableKind, Is.EqualTo("Daily"));
+        });
+    }
+
     [TestCase(null, false, false, QuestDisplayStateKind.LockedFuture)]
     [TestCase("Started", true, false, QuestDisplayStateKind.Started)]
     [TestCase("Fail", true, true, QuestDisplayStateKind.FailRestartable)]
@@ -237,6 +406,88 @@ public sealed class QuestGraphCoreTests
         QuestDisplayStateKind expected)
     {
         Assert.That(QuestGraphRules.ClassifyDisplayState(status, hasLiveQuest, restartable), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void ProfileDisplayState_MatchesBrowserBlockerPriorityAndProgress()
+    {
+        var prerequisite = Node("gunsmith-1", "Mechanic", "Any");
+        var gunsmith = Node("gunsmith-2", "Mechanic", "Any");
+        gunsmith.EffectiveRequirements = [new QuestRequirementPayload { Kind = "Level", Compare = ">=", Value = 5 }];
+        var lightkeeper = Node("lightkeeper", "Lightkeeper", "Any");
+        var feed = Feed([prerequisite, gunsmith, lightkeeper], [Edge("gunsmith-1", "gunsmith-2", "Success")]);
+        feed.DefaultVisibleQuestIds = ["gunsmith-1", "gunsmith-2", "lightkeeper"];
+        feed.AllApplicableQuestIds = ["gunsmith-1", "gunsmith-2", "lightkeeper"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var progress = new[]
+        {
+            new QuestObjectiveProgress("one", true, 1, 1, true),
+            new QuestObjectiveProgress("two", false, 1, 2, true),
+        };
+        var snapshot = new LiveProfileSnapshot("profile", "USEC", 20,
+            [Quest("gunsmith-1", "Started"), Quest("gunsmith-2", "AvailableForStart"),
+                new LiveQuestSnapshot("lightkeeper", "AvailableForStart", true, progress, null, false)],
+            [new LiveTraderSnapshot("mechanic", true, 4, 1, 0),
+                new LiveTraderSnapshot("lightkeeper", false, 1, 0, 0)]);
+        var overlay = QuestOverlayBuilder.Build(topology, snapshot);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(QuestGraphRules.ClassifyProfileDisplayState(topology, topology.NodesById["gunsmith-2"], overlay),
+                Is.EqualTo(QuestMapDisplayStateKind.PrerequisiteGated));
+            Assert.That(QuestGraphRules.ClassifyProfileDisplayState(topology, topology.NodesById["lightkeeper"], overlay),
+                Is.EqualTo(QuestMapDisplayStateKind.TraderUnavailable));
+            Assert.That(QuestGraphRules.CalculateObjectiveProgressPercent(progress), Is.EqualTo(75));
+            Assert.That(QuestGraphRules.IsTerminalQuest(topology, "gunsmith-2"), Is.True);
+            Assert.That(QuestGraphRules.IsTerminalQuest(topology, "gunsmith-1"), Is.False);
+        });
+    }
+
+    [Test]
+    public void ServerProfileProjection_IsAuthoritativeForStateVisibilityAndRepeatableLayout()
+    {
+        var lightkeeper = Node("lightkeeper", "Lightkeeper", "Any");
+        var ordinary = Node("ordinary", "Prapor", "Any");
+        var daily = Node("daily", "Prapor", "Any");
+        var weekly = Node("weekly", "Therapist", "Any");
+        var feed = Feed([lightkeeper, ordinary], []);
+        feed.ProfileGeneratedQuests = [daily, weekly];
+        feed.RepeatableKinds["daily"] = "Daily";
+        feed.RepeatableKinds["weekly"] = "Weekly";
+        feed.DefaultVisibleQuestIds = ["lightkeeper", "ordinary", "daily", "weekly"];
+        feed.AllApplicableQuestIds = ["lightkeeper", "ordinary", "daily", "weekly"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, new LiveProfileSnapshot("profile", "USEC", 60,
+            [Quest("lightkeeper", "AvailableForStart"), Quest("ordinary", "Started"), Quest("daily", "Started"), Quest("weekly", "Started")],
+            [new LiveTraderSnapshot("lightkeeper", true, 4, 1, 0)])) with
+        {
+            AuthoritativeDisplayStates = new Dictionary<string, QuestMapDisplayStateKind>(StringComparer.Ordinal)
+            {
+                ["lightkeeper"] = QuestMapDisplayStateKind.TraderUnavailable,
+                ["ordinary"] = QuestMapDisplayStateKind.InProgress,
+                ["daily"] = QuestMapDisplayStateKind.InProgress,
+                ["weekly"] = QuestMapDisplayStateKind.InProgress,
+            },
+            DefaultVisibleQuestIds = ["ordinary", "daily", "weekly"],
+            ApplicableQuestIds = ["lightkeeper", "ordinary", "daily", "weekly"],
+            RepeatableEndTimes = new Dictionary<string, long>(StringComparer.Ordinal)
+            {
+                ["daily"] = 1000,
+                ["weekly"] = 2000,
+            },
+        };
+
+        var projection = GlobalQuestGraphProjectionBuilder.Build(topology, DeterministicGraphLayout.Build(topology), overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.Full, false, false, false, null, null, null, null, QuestRouteFilter.None));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(QuestGraphRules.ClassifyProfileDisplayState(topology, topology.NodesById["lightkeeper"], overlay),
+                Is.EqualTo(QuestMapDisplayStateKind.TraderUnavailable));
+            Assert.That(projection.Nodes.Select(node => node.Id), Does.Not.Contain("lightkeeper"));
+            Assert.That(projection.NodesById["weekly"].X, Is.GreaterThan(projection.NodesById["daily"].X));
+            Assert.That(overlay.RepeatableEndTimes["weekly"], Is.EqualTo(2000));
+        });
     }
 
     [Test]

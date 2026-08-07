@@ -30,8 +30,58 @@ public sealed class QuestMapClientStaticRouter(
                         .Select(entry => entry.Node)
                         .OrderBy(node => node.Id, StringComparer.Ordinal)
                         .ToArray() ?? [];
+                    var repeatableKinds = (profileState?.RepeatableQuestGroups ?? [])
+                        .SelectMany(group => group.Quests.Select(entry => (entry.Node.Id, group.Kind)))
+                        .GroupBy(entry => entry.Id, StringComparer.Ordinal)
+                        .ToDictionary(group => group.Key, group => group.First().Kind, StringComparer.Ordinal);
+                    var generatedIds = generated.Select(node => node.Id).ToArray();
+                    var defaultVisibleQuestIds = (profileState?.DefaultVisibleQuestIds ?? [])
+                        .Concat(generatedIds)
+                        .Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal)
+                        .ToArray();
+                    var allApplicableQuestIds = (profileState?.AllApplicableQuestIds ?? [])
+                        .Concat(generatedIds)
+                        .Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal)
+                        .ToArray();
+                    var stateEntries = (profileState?.Quests ?? [])
+                        .Concat((profileState?.RepeatableQuestGroups ?? []).SelectMany(group => group.Quests.Select(entry => entry.State)))
+                        .GroupBy(state => state.QuestId, StringComparer.Ordinal)
+                        .Select(group => group.Last())
+                        .ToArray();
+                    var displayStates = stateEntries.ToDictionary(
+                        state => state.QuestId,
+                        state => state.DisplayState,
+                        StringComparer.Ordinal);
+                    var progressPercentages = stateEntries.ToDictionary(
+                        state => state.QuestId,
+                        state => state.ProgressPercent,
+                        StringComparer.Ordinal);
+                    var repeatableEndTimes = (profileState?.RepeatableQuestGroups ?? [])
+                        .SelectMany(group => group.Quests.Select(entry => (entry.Node.Id, group.EndTime)))
+                        .GroupBy(entry => entry.Id, StringComparer.Ordinal)
+                        .ToDictionary(group => group.Key, group => group.Last().EndTime, StringComparer.Ordinal);
+                    var prerequisiteBlockerIds = stateEntries.ToDictionary(
+                        state => state.QuestId,
+                        state => state.Blockers
+                            .Where(blocker => blocker.Kind == "Prerequisite" && blocker.SubjectId is not null)
+                            .Select(blocker => blocker.SubjectId!)
+                            .Distinct(StringComparer.Ordinal)
+                            .Order(StringComparer.Ordinal)
+                            .ToArray(),
+                        StringComparer.Ordinal);
                     return new ValueTask<string>(httpResponseUtil.NoBody(
-                        new QuestMapClientTopologyFeedDto(topology, generated)));
+                        new QuestMapClientTopologyFeedDto(
+                            topology,
+                            generated,
+                            repeatableKinds,
+                            defaultVisibleQuestIds,
+                            allApplicableQuestIds,
+                            displayStates,
+                            progressPercentages,
+                            repeatableEndTimes,
+                            prerequisiteBlockerIds)));
                 })
         ])
 {

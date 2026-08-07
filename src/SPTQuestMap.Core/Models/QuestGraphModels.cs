@@ -26,6 +26,30 @@ public enum QuestDisplayStateKind
     Unknown,
 }
 
+/// <summary>
+/// Profile-aware presentation states shared by the native renderer and the
+/// browser QuestMap contract. Unlike <see cref="QuestDisplayStateKind"/>,
+/// these values include evaluated blockers rather than only EFT's exact status.
+/// </summary>
+public enum QuestMapDisplayStateKind
+{
+    Locked,
+    PrerequisiteGated,
+    LevelGated,
+    TraderGated,
+    TraderUnavailable,
+    Available,
+    InProgress,
+    ReadyToFinish,
+    Completed,
+    Failed,
+    Excluded,
+    RestartableFailure,
+    Expired,
+    Pending,
+    Unknown,
+}
+
 public enum QuestNodeHighlightKind
 {
     None,
@@ -86,7 +110,8 @@ public sealed record QuestGraphNode(
     IReadOnlyList<QuestExclusionRule> ExclusionRules,
     IReadOnlyList<QuestReward> Rewards,
     IReadOnlyList<QuestUnknownCondition> UnknownConditions,
-    bool ProfileGenerated);
+    bool ProfileGenerated,
+    string? RepeatableKind);
 
 public sealed record QuestGraphEdge(
     string SourceId,
@@ -109,12 +134,20 @@ public sealed class QuestGraphTopology
         IReadOnlyList<QuestGraphNode> nodes,
         IReadOnlyList<QuestGraphEdge> edges,
         IReadOnlyList<QuestTrader> traders,
+        IReadOnlyCollection<string> defaultVisibleQuestIds,
+        IReadOnlyCollection<string> applicableQuestIds,
+        IReadOnlyCollection<string> collectorPathQuestIds,
+        IReadOnlyCollection<string> lightkeeperPathQuestIds,
         QuestTopologyDiagnostics diagnostics)
     {
         Version = version;
         Nodes = nodes;
         Edges = edges;
         Traders = traders;
+        DefaultVisibleQuestIds = defaultVisibleQuestIds;
+        ApplicableQuestIds = applicableQuestIds;
+        CollectorPathQuestIds = collectorPathQuestIds;
+        LightkeeperPathQuestIds = lightkeeperPathQuestIds;
         Diagnostics = diagnostics;
 
         NodesById = new ReadOnlyDictionary<string, QuestGraphNode>(
@@ -132,6 +165,14 @@ public sealed class QuestGraphTopology
     public IReadOnlyList<QuestGraphEdge> Edges { get; }
 
     public IReadOnlyList<QuestTrader> Traders { get; }
+
+    public IReadOnlyCollection<string> DefaultVisibleQuestIds { get; }
+
+    public IReadOnlyCollection<string> ApplicableQuestIds { get; }
+
+    public IReadOnlyCollection<string> CollectorPathQuestIds { get; }
+
+    public IReadOnlyCollection<string> LightkeeperPathQuestIds { get; }
 
     public IReadOnlyDictionary<string, QuestGraphNode> NodesById { get; }
 
@@ -205,7 +246,32 @@ public sealed record QuestProfileOverlay(
     int Level,
     IReadOnlyDictionary<string, QuestLiveState> QuestsById,
     IReadOnlyDictionary<string, LiveTraderSnapshot> TradersById,
-    IReadOnlyList<string> MissingLiveQuestIds);
+    IReadOnlyList<string> MissingLiveQuestIds)
+{
+    public IReadOnlyDictionary<string, QuestMapDisplayStateKind> AuthoritativeDisplayStates { get; init; }
+        = new ReadOnlyDictionary<string, QuestMapDisplayStateKind>(new Dictionary<string, QuestMapDisplayStateKind>(StringComparer.Ordinal));
+
+    public IReadOnlyDictionary<string, double?> AuthoritativeProgressPercentages { get; init; }
+        = new ReadOnlyDictionary<string, double?>(new Dictionary<string, double?>(StringComparer.Ordinal));
+
+    public IReadOnlyDictionary<string, long> RepeatableEndTimes { get; init; }
+        = new ReadOnlyDictionary<string, long>(new Dictionary<string, long>(StringComparer.Ordinal));
+
+    public IReadOnlyDictionary<string, IReadOnlyCollection<string>> PrerequisiteBlockerIds { get; init; }
+        = new ReadOnlyDictionary<string, IReadOnlyCollection<string>>(new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal));
+
+    public IReadOnlyCollection<string> DefaultVisibleQuestIds { get; init; } = [];
+
+    public IReadOnlyCollection<string> ApplicableQuestIds { get; init; } = [];
+}
+
+public sealed record QuestServerProfileProjection(
+    IReadOnlyDictionary<string, QuestMapDisplayStateKind> DisplayStates,
+    IReadOnlyDictionary<string, double?> ProgressPercentages,
+    IReadOnlyDictionary<string, long> RepeatableEndTimes,
+    IReadOnlyDictionary<string, IReadOnlyCollection<string>> PrerequisiteBlockerIds,
+    IReadOnlyCollection<string> DefaultVisibleQuestIds,
+    IReadOnlyCollection<string> ApplicableQuestIds);
 
 public sealed record QuestNodePosition(string QuestId, int Rank, double X, double Y, double Width, double Height);
 
@@ -226,6 +292,39 @@ public interface IQuestGraphProjection
 
 public sealed record TraderGraphProjection(
     string TraderId,
+    IReadOnlyList<QuestGraphNode> Nodes,
+    IReadOnlyList<QuestGraphEdge> Edges,
+    IReadOnlyDictionary<string, QuestNodePosition> NodesById,
+    double Width,
+    double Height) : IQuestGraphProjection;
+
+public enum GlobalQuestGraphMode
+{
+    InProgress,
+    Full,
+}
+
+public enum QuestRouteFilter
+{
+    None,
+    Collector,
+    Lightkeeper,
+}
+
+public sealed record GlobalQuestGraphOptions(
+    GlobalQuestGraphMode Mode,
+    bool ShowAllFuture,
+    bool HideFinished,
+    bool LevelEligibleOnly,
+    string? ActiveStatusFilter,
+    string? TraderId,
+    string? Search,
+    string? FocusQuestId,
+    QuestRouteFilter RouteFilter,
+    string? SelectedQuestId = null);
+
+public sealed record GlobalQuestGraphProjection(
+    GlobalQuestGraphMode Mode,
     IReadOnlyList<QuestGraphNode> Nodes,
     IReadOnlyList<QuestGraphEdge> Edges,
     IReadOnlyDictionary<string, QuestNodePosition> NodesById,
