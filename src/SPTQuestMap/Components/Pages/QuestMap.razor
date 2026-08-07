@@ -36,7 +36,7 @@
                 <QuestLegend State="@State" Localizer="@Localizer" />
                 <div class="metrics" aria-live="polite" @ref="MetricsElement"></div>
             </section>
-            <QuestDetails State="@State" Localizer="@Localizer" QuestSelected="SelectRelationAsync" />
+            <QuestDetails State="@State" Localizer="@Localizer" QuestSelected="SelectRelationAsync" DetailTextTabChanged="SetDetailTextTabAsync" />
         </main>
     </div>
 }
@@ -202,6 +202,11 @@
     private Task FocusAsync() => ChangeViewAsync(State.ActivateFocus);
     private Task ClearFocusAsync() => ChangeViewAsync(State.ClearFocus);
     private Task ClearSelectionAsync() => ChangeViewAsync(State.ClearSelection);
+    private async Task SetDetailTextTabAsync(QuestDetailTextTab value)
+    {
+        State.SetDetailTextTab(value);
+        await SaveSettingsAsync();
+    }
     private async Task FitAsync() { if (Module is not null) await Module.InvokeVoidAsync("fitVisible"); }
     private async Task ZoomAsync(double factor) { if (Module is not null) await Module.InvokeVoidAsync("zoom", factor); }
 

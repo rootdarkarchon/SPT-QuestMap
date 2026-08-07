@@ -20,7 +20,25 @@
                 <img src="@(node.Location.BannerImageUrl ?? "/files/banners/norvinskzone.png")" alt=""><strong>@LocationName(node)</strong>
             </div>
         </div>
-        @if (!string.IsNullOrWhiteSpace(node.Description))
+        @if (!string.IsNullOrWhiteSpace(node.Summary))
+        {
+            <div class="detail-text-tabs" role="tablist" aria-label="@Localizer["details.textTabs"]">
+                <button type="button" role="tab" class="@(State.DetailTextTab == QuestDetailTextTab.Description ? "active" : null)" aria-selected="@(State.DetailTextTab == QuestDetailTextTab.Description ? "true" : "false")" @onclick="() => SelectTextTabAsync(QuestDetailTextTab.Description)">@Localizer["details.description"]</button>
+                <button type="button" role="tab" class="@(State.DetailTextTab == QuestDetailTextTab.Summary ? "active" : null)" aria-selected="@(State.DetailTextTab == QuestDetailTextTab.Summary ? "true" : "false")" @onclick="() => SelectTextTabAsync(QuestDetailTextTab.Summary)">@Localizer["details.summary"]</button>
+            </div>
+            @if (State.DetailTextTab == QuestDetailTextTab.Summary)
+            {
+                <div role="tabpanel" class="summary-panel">
+                    <RichTextBlock Value="@node.Summary" Localizer="@Localizer" />
+                    <p class="summary-disclaimer">@Localizer["details.summaryDisclaimer"]</p>
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(node.Description))
+            {
+                <div role="tabpanel"><RichTextBlock Value="@node.Description" Localizer="@Localizer" /></div>
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(node.Description))
         {
             <RichTextBlock Value="@node.Description" Localizer="@Localizer" />
         }
@@ -85,6 +103,7 @@
     [Parameter, EditorRequired] public QuestMapPageState State { get; set; } = default!;
     [Parameter, EditorRequired] public QuestMapLocalizer Localizer { get; set; } = default!;
     [Parameter] public EventCallback<string> QuestSelected { get; set; }
+    [Parameter] public EventCallback<QuestDetailTextTab> DetailTextTabChanged { get; set; }
 
     private CultureInfo NumberCulture { get { try { return CultureInfo.GetCultureInfo(Localizer.BrowserLocale); } catch { return CultureInfo.InvariantCulture; } } }
     private string Number(double? value) => value is null ? "?" : value.Value.ToString("0.##", NumberCulture);
@@ -359,6 +378,7 @@
     };
 
     private Task SelectRelation(string id) => QuestSelected.InvokeAsync(id);
+    private Task SelectTextTabAsync(QuestDetailTextTab value) => DetailTextTabChanged.InvokeAsync(value);
 
     private sealed record ComparisonRow(string Label, string PrimaryValue, string ComparisonValue, bool Different);
     private sealed record ComparisonObjective(ObjectiveDefinitionDto Objective, ObjectiveProgressDto? Primary, ObjectiveProgressDto? Comparison, bool Different, int Index);

@@ -18,6 +18,7 @@ SPT-QuestMap is an independent community project. It is not affiliated with or e
 - Explains effective blockers such as player level, trader availability, loyalty level, standing, and prior quests.
 - Displays ordered objectives and known progress, including partial counter progress.
 - Shows quest descriptions, locations, rewards, prerequisites, and direct successors.
+- Adds Description/Summary tabs when a static localized summary exists, with the preferred tab remembered across quests and reloads.
 - Marks Collector and Lightkeeper routes.
 - Uses the quest, trader, item, and location artwork already served by SPT; no game artwork is copied into the mod.
 - Filters automatically for faction and active seasonal/event applicability.
@@ -67,6 +68,23 @@ Your browser may warn about SPT's local TLS certificate until you trust that cer
 - Open **Quests In Progress** on the left for a filter-independent progress list. Selecting an entry also selects and centers it in the graph.
 - Daily and Weekly operational quests appear above the graph in trader order. Available, accepted, ready-to-finish, completed, and expired entries use the same state styling and details panel as ordinary quests; trader, search, and finished filters also apply. A default-on calendar filter toggles the complete band. Scav dailies are intentionally excluded.
 - Press the circular refresh button after changing profile progress in-game. QuestMap never refreshes automatically.
+
+### Custom summaries for modded traders
+
+QuestMap includes English summaries for the standard quest catalog. Server mods can add summaries for their traders beneath:
+
+```text
+SPT/user/mods/SPT-QuestMap/Summaries/
+```
+
+Each JSON file is an object whose keys are quest IDs and whose values are summary strings. Name a trader's default catalog `<traderId>.json`; if that file is absent, `<traderId>.en.json` is the English/default fallback. A localized `<traderId>.<language>.json` overrides the default per quest for that SPT language code. For example, German uses the SPT code `ge`:
+
+```text
+54cb50c76803fa8b248b4571.json
+54cb50c76803fa8b248b4571.ge.json
+```
+
+Missing summaries simply leave that quest's ordinary description visible without tabs. Restart the SPT server after adding or changing summary files. QuestMap's deployment script preserves files in this directory.
 
 ## Local-server warning
 

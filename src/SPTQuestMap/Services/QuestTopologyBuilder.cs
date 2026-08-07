@@ -16,6 +16,7 @@ internal sealed class QuestTopologyBuilder(
     QuestHelper questHelper,
     SeasonalEventService seasonalEventService,
     QuestConfig questConfig,
+    QuestSummaryCatalog summaryCatalog,
     ISptLogger<QuestMapDataService> logger
 )
 {
@@ -116,7 +117,10 @@ internal sealed class QuestTopologyBuilder(
                     items,
                     traders
                 )
-            ));
+            )
+            {
+                Summary = summaryCatalog.Get(questId, quest.TraderId.ToString(), language),
+            });
         }
 
         nodes = QuestGraphRules.PropagateSeasonalEventTypes(nodes, edges);
