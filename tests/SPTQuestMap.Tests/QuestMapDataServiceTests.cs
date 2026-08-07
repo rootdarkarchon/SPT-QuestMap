@@ -419,10 +419,10 @@ public sealed class QuestMapDataServiceTests
     }
 
     [Test]
-    public void DuplicateProfileQuestIdsMatchSptFirstEntryBehavior()
+    public void IdenticalDuplicateProfileQuestIdsMatchSptFirstEntryBehavior()
     {
         var questId = new MongoId("6a74f9b2a4da0da5c05eadc5");
-        var first = ProfileQuest(questId, QuestStatusEnum.Started);
+        var first = ProfileQuest(questId, QuestStatusEnum.Success);
         var duplicate = ProfileQuest(questId, QuestStatusEnum.Success);
         var duplicates = new List<(string Id, QuestStatus Kept, QuestStatus Ignored)>();
 
@@ -439,6 +439,38 @@ public sealed class QuestMapDataServiceTests
             Assert.That(duplicates[0].Id, Is.EqualTo(questId.ToString()));
             Assert.That(duplicates[0].Kept, Is.SameAs(first));
             Assert.That(duplicates[0].Ignored, Is.SameAs(duplicate));
+        });
+    }
+
+    [Test]
+    public void RepeatableQuestIdsDoNotCollideWithTopologyOrEarlierRepeatables()
+    {
+        var staticCollision = RepeatableEntry("static", "Static collision");
+        var firstDaily = RepeatableEntry("daily", "First daily");
+        var duplicateDaily = RepeatableEntry("daily", "Duplicate daily");
+        var collisions = new List<(string Id, string Source)>();
+        RepeatableQuestGroupDto[] groups =
+        [
+            new("Daily", 100, [staticCollision, firstDaily]),
+            new("Weekly", 200, [duplicateDaily]),
+        ];
+
+        var result = QuestProfileStateBuilder.EnsureUniqueRepeatableQuestIds(
+            groups,
+            ["static"],
+            (entry, source) => collisions.Add((entry.Node.Id, source))
+        );
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Has.Length.EqualTo(1));
+            Assert.That(result[0].Kind, Is.EqualTo("Daily"));
+            Assert.That(result[0].Quests.Select(entry => entry.Node.Id), Is.EqualTo(new[] { "daily" }));
+            Assert.That(collisions, Is.EqualTo(new[]
+            {
+                ("static", "the static quest topology"),
+                ("daily", "an earlier Daily/Weekly entry"),
+            }));
         });
     }
 
@@ -716,6 +748,11 @@ public sealed class QuestMapDataServiceTests
         Status = status,
         StatusTimers = [],
     };
+
+    private static RepeatableQuestEntryDto RepeatableEntry(string id, string name) => new(
+        Node(id, null) with { Name = name },
+        State("Available") with { QuestId = id }
+    );
 
     private static QuestTopologyDto Topology(QuestNodeDto[] nodes, QuestEdgeDto[] edges) => new("test", nodes, edges, [], [], []);
 

@@ -144,6 +144,11 @@ internal sealed class QuestProfileStateBuilder(
                 profileTrader?.SalesSum
             );
         }).ToArray();
+        var repeatableGroups = EnsureUniqueRepeatableQuestIds(
+            BuildRepeatableQuestGroups(pmc, profileQuests, language, generatedAt),
+            topology.Quests.Select(quest => quest.Id),
+            (entry, collision) => logger.Warning($"SPT-QuestMap: repeatable quest '{entry.Node.Name}' ({entry.Node.Id}) from trader '{entry.Node.TraderName}' ({entry.Node.TraderId}) collides with {collision}; keeping the earlier canonical entry.")
+        );
 
         return new ProfileStateDto(
             profileId.ToString(),
@@ -159,7 +164,7 @@ internal sealed class QuestProfileStateBuilder(
             applicable.Order(StringComparer.Ordinal).ToArray()
         )
         {
-            RepeatableQuestGroups = BuildRepeatableQuestGroups(pmc, profileQuests, language, generatedAt),
+            RepeatableQuestGroups = repeatableGroups,
         };
     }
 
@@ -177,6 +182,38 @@ internal sealed class QuestProfileStateBuilder(
         }
 
         return result;
+    }
+
+    internal static RepeatableQuestGroupDto[] EnsureUniqueRepeatableQuestIds(
+        IEnumerable<RepeatableQuestGroupDto> groups,
+        IEnumerable<string> reservedQuestIds,
+        Action<RepeatableQuestEntryDto, string>? onCollision = null
+    )
+    {
+        var reserved = reservedQuestIds.ToHashSet(StringComparer.Ordinal);
+        var occupied = new HashSet<string>(reserved, StringComparer.Ordinal);
+        var result = new List<RepeatableQuestGroupDto>();
+        foreach (var group in groups)
+        {
+            var unique = new List<RepeatableQuestEntryDto>();
+            foreach (var entry in group.Quests)
+            {
+                if (occupied.Add(entry.Node.Id))
+                {
+                    unique.Add(entry);
+                    continue;
+                }
+
+                onCollision?.Invoke(
+                    entry,
+                    reserved.Contains(entry.Node.Id) ? "the static quest topology" : "an earlier Daily/Weekly entry"
+                );
+            }
+
+            if (unique.Count > 0) result.Add(group with { Quests = unique });
+        }
+
+        return result.ToArray();
     }
 
     private RepeatableQuestGroupDto[] BuildRepeatableQuestGroups(
