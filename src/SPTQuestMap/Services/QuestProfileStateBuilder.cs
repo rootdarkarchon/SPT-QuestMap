@@ -33,7 +33,17 @@ internal sealed class QuestProfileStateBuilder(
         if (pmc?.Info is null) return null;
 
         var generatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var profileQuests = (pmc.Quests ?? []).ToDictionary(quest => quest.QId.ToString(), StringComparer.Ordinal);
+        var profileQuests = BuildProfileQuestLookup(
+            pmc.Quests ?? [],
+            (questId, kept, ignored) =>
+            {
+                var node = topology.Quests.FirstOrDefault(quest => quest.Id == questId);
+                var description = node is null
+                    ? $"unknown quest {questId}"
+                    : $"'{node.Name}' ({questId}) from trader '{node.TraderName}' ({node.TraderId})";
+                logger.Warning($"SPT-QuestMap: profile {profileId} contains duplicate status rows for {description}; keeping first status {kept.Status} and ignoring later status {ignored.Status} to match SPT 4.0.13.");
+            }
+        );
         var profileQuestStatuses = profileQuests.ToDictionary(
             pair => pair.Key,
             pair => pair.Value.Status.ToString(),
@@ -43,9 +53,15 @@ internal sealed class QuestProfileStateBuilder(
         Dictionary<string, QuestStatusEnum?> authoritative;
         lock (_availabilityLock)
         {
-            authoritative = questHelper
-                .GetClientQuests(profileId)
-                .ToDictionary(quest => quest.Id.ToString(), quest => quest.SptStatus, StringComparer.Ordinal);
+            authoritative = new Dictionary<string, QuestStatusEnum?>(StringComparer.Ordinal);
+            foreach (var quest in questHelper.GetClientQuests(profileId))
+            {
+                var questId = quest.Id.ToString();
+                if (!authoritative.TryAdd(questId, quest.SptStatus))
+                {
+                    logger.Warning($"SPT-QuestMap: SPT returned quest {questId} more than once for profile {profileId}; keeping the first authoritative result.");
+                }
+            }
         }
 
         var noneExcluded = QuestGraphRules.BuildNoneEventExclusionSet(topology);
@@ -145,6 +161,22 @@ internal sealed class QuestProfileStateBuilder(
         {
             RepeatableQuestGroups = BuildRepeatableQuestGroups(pmc, profileQuests, language, generatedAt),
         };
+    }
+
+    internal static Dictionary<string, QuestStatus> BuildProfileQuestLookup(
+        IEnumerable<QuestStatus> quests,
+        Action<string, QuestStatus, QuestStatus>? onDuplicate = null
+    )
+    {
+        var result = new Dictionary<string, QuestStatus>(StringComparer.Ordinal);
+        foreach (var quest in quests)
+        {
+            var questId = quest.QId.ToString();
+            if (result.TryAdd(questId, quest)) continue;
+            onDuplicate?.Invoke(questId, result[questId], quest);
+        }
+
+        return result;
     }
 
     private RepeatableQuestGroupDto[] BuildRepeatableQuestGroups(

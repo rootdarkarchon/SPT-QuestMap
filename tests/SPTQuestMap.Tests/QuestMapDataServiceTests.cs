@@ -418,6 +418,30 @@ public sealed class QuestMapDataServiceTests
         });
     }
 
+    [Test]
+    public void DuplicateProfileQuestIdsMatchSptFirstEntryBehavior()
+    {
+        var questId = new MongoId("6a74f9b2a4da0da5c05eadc5");
+        var first = ProfileQuest(questId, QuestStatusEnum.Started);
+        var duplicate = ProfileQuest(questId, QuestStatusEnum.Success);
+        var duplicates = new List<(string Id, QuestStatus Kept, QuestStatus Ignored)>();
+
+        var result = QuestProfileStateBuilder.BuildProfileQuestLookup(
+            [first, duplicate],
+            (id, kept, ignored) => duplicates.Add((id, kept, ignored))
+        );
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[questId.ToString()], Is.SameAs(first));
+            Assert.That(duplicates, Has.Count.EqualTo(1));
+            Assert.That(duplicates[0].Id, Is.EqualTo(questId.ToString()));
+            Assert.That(duplicates[0].Kept, Is.SameAs(first));
+            Assert.That(duplicates[0].Ignored, Is.SameAs(duplicate));
+        });
+    }
+
     [TestCase(QuestStatusEnum.Success, "Completed")]
     [TestCase(QuestStatusEnum.AvailableForFinish, "ReadyToFinish")]
     [TestCase(QuestStatusEnum.Started, "InProgress")]
@@ -683,6 +707,14 @@ public sealed class QuestMapDataServiceTests
         Index = index,
         DynamicLocale = false,
         ConditionType = "CounterCreator",
+    };
+
+    private static QuestStatus ProfileQuest(MongoId id, QuestStatusEnum status) => new()
+    {
+        QId = id,
+        StartTime = 0,
+        Status = status,
+        StatusTimers = [],
     };
 
     private static QuestTopologyDto Topology(QuestNodeDto[] nodes, QuestEdgeDto[] edges) => new("test", nodes, edges, [], [], []);
