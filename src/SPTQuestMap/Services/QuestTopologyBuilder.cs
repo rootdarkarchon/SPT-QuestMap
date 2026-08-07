@@ -104,7 +104,11 @@ internal sealed class QuestTopologyBuilder(
                 quest.Restartable,
                 requirements,
                 [],
-                QuestTemplateMapper.OrderObjectives(quest.Conditions?.AvailableForFinish ?? [], locale).ToArray(),
+                QuestTemplateMapper.OrderObjectives(
+                    quest.Conditions?.AvailableForFinish ?? [],
+                    locale,
+                    duplicateId => logger.Warning($"SPT-QuestMap: duplicate objective condition ID '{duplicateId}' on quest {questId}; keeping its first definition.")
+                ).ToArray(),
                 exclusions,
                 QuestTemplateMapper.BuildRewards(
                     quest.Rewards?.GetValueOrDefault(QuestStatusEnum.Success.ToString()) ?? [],

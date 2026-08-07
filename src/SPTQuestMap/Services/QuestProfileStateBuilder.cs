@@ -4,6 +4,7 @@ using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Enums;
 using SPTarkov.Server.Core.Models.Spt.Config;
+using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Services;
 
@@ -15,7 +16,8 @@ internal sealed class QuestProfileStateBuilder(
     SaveServer saveServer,
     QuestHelper questHelper,
     SeasonalEventService seasonalEventService,
-    QuestConfig questConfig
+    QuestConfig questConfig,
+    ISptLogger<QuestMapDataService> logger
 )
 {
     private readonly object _availabilityLock = new();
@@ -191,7 +193,7 @@ internal sealed class QuestProfileStateBuilder(
             .ToArray();
     }
 
-    private static RepeatableQuestEntryDto BuildRepeatableQuestEntry(
+    private RepeatableQuestEntryDto BuildRepeatableQuestEntry(
         RepeatableQuest quest,
         QuestStatus? profileQuest,
         Dictionary<string, string> locale,
@@ -209,7 +211,11 @@ internal sealed class QuestProfileStateBuilder(
         var location = QuestTemplateMapper.BuildLocation(quest.Location, locale, locationsById);
         var typeName = QuestTemplateMapper.Localize(locale, $"DailyQuestName/{quest.Type}", quest.Type.ToString());
         var finishConditions = quest.Conditions?.AvailableForFinish ?? [];
-        var objectives = QuestTemplateMapper.OrderObjectives(finishConditions, locale)
+        var objectives = QuestTemplateMapper.OrderObjectives(
+                finishConditions,
+                locale,
+                duplicateId => logger.Warning($"SPT-QuestMap: duplicate objective condition ID '{duplicateId}' on repeatable quest {questId}; keeping its first definition.")
+            )
             .Select(objective => objective with
             {
                 Text = RepeatableObjectiveText(

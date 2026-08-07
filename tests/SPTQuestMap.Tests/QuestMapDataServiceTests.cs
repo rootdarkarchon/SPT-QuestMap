@@ -398,6 +398,25 @@ public sealed class QuestMapDataServiceTests
         Assert.That(result.Text, Is.EqualTo("Eliminate Scavs on any location"));
     }
 
+    [Test]
+    public void DuplicateObjectiveIdsUseFirstDefinitionWithoutThrowing()
+    {
+        var first = Condition("6917c82760dbbed68c3cc90f", 2) with { Value = 10 };
+        var duplicate = Condition("6917c82760dbbed68c3cc90f", 0) with { Value = 20 };
+        var duplicateIds = new List<string>();
+
+        var result = QuestTemplateMapper.OrderObjectives([first, duplicate], [], duplicateIds.Add).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Has.Length.EqualTo(1));
+            Assert.That(result[0].Id, Is.EqualTo(first.Id.ToString()));
+            Assert.That(result[0].Index, Is.EqualTo(first.Index));
+            Assert.That(result[0].RequiredValue, Is.EqualTo(first.Value));
+            Assert.That(duplicateIds, Is.EqualTo(new[] { first.Id.ToString() }));
+        });
+    }
+
     [TestCase(QuestStatusEnum.Success, "Completed")]
     [TestCase(QuestStatusEnum.AvailableForFinish, "ReadyToFinish")]
     [TestCase(QuestStatusEnum.Started, "InProgress")]
