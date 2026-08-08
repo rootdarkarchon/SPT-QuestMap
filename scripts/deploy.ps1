@@ -140,7 +140,7 @@ Write-Host "DLL changed: $dllChanged"
 if ($dllChanged) {
     if ($useDefaultRestart -and $defaultServerWasRunning) {
         if ($PSCmdlet.ShouldProcess($defaultServerExecutable, 'Start SPT server after DLL deployment')) {
-            Start-Process -FilePath $defaultServerExecutable -WorkingDirectory (Split-Path -Parent $defaultServerExecutable) -WindowStyle Hidden
+            Start-Process -FilePath $defaultServerExecutable -WorkingDirectory (Split-Path -Parent $defaultServerExecutable)
         }
     }
     elseif ($useDefaultRestart) {

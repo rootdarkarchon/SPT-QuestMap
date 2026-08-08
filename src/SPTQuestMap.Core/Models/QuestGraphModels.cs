@@ -311,6 +311,25 @@ public enum QuestRouteFilter
     Lightkeeper,
 }
 
+public enum QuestTableSortColumn
+{
+    Trader,
+    Quest,
+    Location,
+    Status,
+    Progress,
+}
+
+public enum QuestTableSortDirection
+{
+    Ascending,
+    Descending,
+}
+
+public sealed record QuestTableSortCriterion(
+    QuestTableSortColumn Column,
+    QuestTableSortDirection Direction);
+
 public sealed record GlobalQuestGraphOptions(
     GlobalQuestGraphMode Mode,
     bool ShowAllFuture,
@@ -321,7 +340,8 @@ public sealed record GlobalQuestGraphOptions(
     string? Search,
     string? FocusQuestId,
     QuestRouteFilter RouteFilter,
-    string? SelectedQuestId = null);
+    string? SelectedQuestId = null,
+    IReadOnlyCollection<string>? LocationIds = null);
 
 public sealed record GlobalQuestGraphProjection(
     GlobalQuestGraphMode Mode,

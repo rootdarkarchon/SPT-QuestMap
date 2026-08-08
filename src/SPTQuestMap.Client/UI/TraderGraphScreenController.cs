@@ -29,6 +29,7 @@ internal sealed class TraderGraphScreenController : IDisposable
     private readonly TraderClass _trader;
     private readonly ManualLogSource _log;
     private readonly bool _debugLogging;
+    private readonly QuestAssetSpriteCache _assetCache;
     private QuestsListView? _vanillaList;
     private QuestView? _nativeQuestView;
     private ScrollRect? _vanillaScroll;
@@ -51,7 +52,8 @@ internal sealed class TraderGraphScreenController : IDisposable
         AbstractQuestControllerClass questController,
         TraderClass trader,
         ManualLogSource log,
-        bool debugLogging)
+        bool debugLogging,
+        QuestAssetSpriteCache assetCache)
     {
         _screen = screen;
         _session = session;
@@ -60,6 +62,7 @@ internal sealed class TraderGraphScreenController : IDisposable
         _trader = trader;
         _log = log;
         _debugLogging = debugLogging;
+        _assetCache = assetCache;
     }
 
     public void Mount(
@@ -111,6 +114,7 @@ internal sealed class TraderGraphScreenController : IDisposable
             PersistCurrentState,
             _log,
             _debugLogging,
+            _assetCache,
             hasPersistedState ? persistedState.Viewport : null);
         _futureView = ReadonlyFutureQuestView.Create(nativeDetailRect);
         PlaceGraphBehindNativeDetail();
@@ -190,6 +194,14 @@ internal sealed class TraderGraphScreenController : IDisposable
         return "selection-cleared-live-removed";
     }
 
+    public string RefreshQuest(QuestProfileOverlay overlay, string questId)
+    {
+        if (_disposed || !_mounted || _graphView is null) return "screen-inactive";
+        _overlay = overlay;
+        _graphView.RefreshQuest(overlay, questId);
+        return "trader-quest-refreshed";
+    }
+
     public string RebuildTopology(
         QuestGraphTopology topology,
         QuestGraphLayout layout,
@@ -215,6 +227,7 @@ internal sealed class TraderGraphScreenController : IDisposable
             PersistCurrentState,
             _log,
             _debugLogging,
+            _assetCache,
             viewportState);
         PlaceGraphBehindNativeDetail();
         if (selectedQuestId is not null && projection.NodesById.ContainsKey(selectedQuestId))

@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-The server/Blazor Milestone 4 migration and difference-first profile comparison 1.3.0 are complete and remain the accepted web baseline. In-game client Milestones 0 through 5 are **Complete**. In-game Milestone 6 implementation is **runtime validation pending**: the superseded relabeled-native-toggle/Native Tasks composition has been replaced by a QuestMap-owned full-surface overlay, Daily/Weekly band, web-equivalent projection rules, and custom controls over the real native Notes/Quest Items roots.
+The server/Blazor Milestone 4 migration and difference-first profile comparison 1.3.0 are complete and remain the accepted web baseline. In-game client Milestones 0 through 6 are **Complete**. Milestone 6 was user-accepted on 2026-08-08 after the full-surface replacement, In Progress redesign, pinning/tracking, raid monitor/notifications, performance corrections, and retained Tasks-screen lifecycle. In-game Milestone 7 — the custom quest detail pane and native action bridge — is now active.
 
 ## SPT 4.0.13 integration audit
 
@@ -190,7 +190,7 @@ The server/Blazor Milestone 4 migration and difference-first profile comparison 
 
 ## Next concrete step
 
-Runtime-verify the current M06 native client implementation, including the quest-art width-cover correction, and verify the merged Description/Summary tab rendering, persistence, and disclaimer at `/questmap`. Continue collecting specialized native-action, runtime overlay-refresh, and uncommon quest-state evidence opportunistically.
+Begin M07 behind `EnableCustomQuestDetails`: establish the shared QuestMap-owned detail model/pane and full-pane trader composition while retaining the untouched native `QuestView` and action controllers as fallback. Continue collecting deferred M06 edge-case evidence during final polish without reopening the completed milestone by default.
 
 ## In-game client milestone 0 — installed-client investigation
 
@@ -534,6 +534,49 @@ The following gate described the first deployed slice. It is retained as impleme
 
 - Runtime-validate the current M06 implementation before beginning the custom detail pane: full-surface ownership and reopen cleanup; Daily/Weekly grouping; individual and combined filters; selected-chain/Focus behavior; active status/progress/handover/expiry; Notes CRUD/search; both Quest Items transfer directions; and post-mount fallback. Static validation is 31/31 core and 107/107 server/browser tests with zero-warning exact-version client/server builds.
 
+### 2026-08-08 In Progress table redesign
+
+- Replaced the In Progress graph renderer with a separate vertically scrolling table. It has no dependency edges, horizontal scrolling, pan/zoom, Center, Fit, or Focus controls. Quest Map continues to use the production graph renderer unchanged.
+- Added fixed Trader, Quest, Location, Status, Progress, and Tasks columns. Trader and Quest sort independently while sharing one artwork-backed row cell. Sortable headers cycle ascending, descending, and inactive; multiple keys retain activation order and persist per profile. The inactive stable order is Trader, Location, Quest.
+- Daily and Weekly are independent leading sections under every sort and have their own count/time delimiters. Rows show quest/trader art, location banner, authoritative state, known overall percentage, and every ordered objective with numerical progress and a bar where the feed makes that progress knowable.
+- Existing search, trader, status, and OR-based map filters continue to own membership. In Progress trader filtering was corrected to remain a strict active-task intersection instead of importing full-map graph context.
+- Exact-version client and server Release builds pass with zero warnings/errors; shared-core coverage is 36/36 and server/browser coverage is 113/113. The guarded deployment updated the server package and invoked the configured visible `SPT.Server.exe` restart without startup polling. Client DLL/PDB and shared-core DLL/PDB were copied after stopping only the exact Tarkov process if present. Source/deployed hashes match at client `0541A9D683675D40B65F2E464F653CB56576EFD29930860DF2ED661CB1A906BA`, server `0F8E63D7BE96AEFC6254D7B150C23E9A5E77143D638C1FC98A4D30C44740130E`, and shared core `A1EDCD0C1E1A1416AB71042487E9E7E3DC04A675BB83540DE327299ED4611940` in both destinations. Runtime table refinement remains open.
+
+### 2026-08-08 In Progress table refinement 1
+
+- Aligned the fixed header to the scrollbar-adjusted row width and removed the visual divider between the separately sortable Trader/Quest headers because those values deliberately share one row cell. Reallocated the table to 27% quest identity, 12% location, 10% status, 9% progress, and 42% tasks.
+- Quest cards no longer repeat the trader name. The trader portrait and quest title share one vertically centered identity row; location text remains centered. Quest and location artwork is now width-driven: it always fills its column horizontally at source aspect ratio, remains vertically centered, and never stretches to consume the height of an expanded task row.
+- Objective lists show at most four entries by default. Quests with more matching objectives expose `Show N more tasks`/`Collapse tasks`; expansion remains stable across controller-driven table rebuilds for the current Tasks-screen lifetime. A persisted In Progress filter can hide completed objective rows.
+- Completed objectives have no progress bar. A completed `1 / 1` objective is reduced to a checkmark; other completed numeric objectives show a leading checkmark followed by their numerical result. Ready-to-turn-in quests report 100% overall progress.
+- Exact-version client Release build passes with zero warnings/errors, shared-core regression remains 36/36, and `git diff --check` passes apart from line-ending notices. The client-only DLL/PDB and unchanged shared-core DLL/PDB were deployed after stopping only the exact Tarkov process if present. Source/deployed hashes match at client `E48445E672D6730F8201CE46E4399733DCEE2797782C25B1C0000EB6A1A1C1F6` and shared core `A1EDCD0C1E1A1416AB71042487E9E7E3DC04A675BB83540DE327299ED4611940`; no server restart was required.
+
+### 2026-08-08 In Progress table refinement 2
+
+- Expanded rows now keep Quest, Location, Status, and Progress inside one top-anchored fixed band. Its 112-pixel height is exactly the usable inner height of the 116-pixel minimum row after cell insets; it never grows with the Tasks column. Quest and location images retain their width-derived aspect ratio but are clipped to this shared minimum-row band, so quest artwork cannot exceed the map-banner boundary.
+- Removed cell-wide dark artwork shades. Shading now covers only the actual image, while the remainder of a tall expanded row uses the neutral shared row background. Portrait/title, location label, status, progress percentage, and overall bar stay aligned within the fixed top band.
+- Objective current values are capped to their required value before numerical formatting. Overall authoritative percentages are also clamped to 0–100. Exact-version client build remains zero-warning and shared-core tests remain 36/36. The client-only deployment hash matches at `06418D1C4A74D0EAB8B0A910440820D0403C95B168AD4AADB2A989FB83A822AE`; shared core remains `A1EDCD0C1E1A1416AB71042487E9E7E3DC04A675BB83540DE327299ED4611940`, so no server restart was required.
+
+### 2026-08-08 In Progress table refinement 3
+
+- Reduced the minimum row from 116 to 82 pixels (approximately 29%) and the shared non-task content band from 112 to 78 pixels. Expanded objective rows retain that fixed top boundary.
+- The In Progress canvas background is now 90% transparent and uses a neutral blue-gray tint instead of opaque black. The expanded remainder of Quest/Location/Status/Progress cells uses a neutral translucent row surface, while Tasks owns an opaque full-height background for readability.
+- Non-task column separators stop at the 78-pixel top band rather than extending through a large expanded row. Location labels explicitly render with fully opaque face/outline colors above the banner.
+- Exact-version client build passes with zero warnings/errors and shared-core regression remains 36/36. The client-only deployment hash matches at `C1B95A0496B8FDDAAADB90D0BC22B3579477E68283EC5A0AA284AE2C3E6C72DB`; shared core remains unchanged, so no server restart was required.
+
+### 2026-08-08 In Progress table refinement 4
+
+- Objective entries now consume 30 pixels only when they render a progress bar and 20 pixels otherwise. Completed, hidden-bar, and non-numeric objectives no longer reserve an empty progress-bar lane.
+- Removed the inter-objective vertical gap and brightened both the shared row surface and the full-height Tasks surface, producing one uniform background through unused row/task space.
+- Location labels now live in a dedicated final foreground layer above the banner image and shade, preventing the banner from tinting otherwise opaque text.
+- Exact-version client Release build passes with zero warnings/errors, shared-core regression remains 36/36, and `git diff --check` passes apart from existing line-ending notices. Source/deployed hashes match at client `CDF3A77279A870531C1ACC47ADE2E1C9D43BE28D60C9222491C8705CA492736F` and unchanged shared core `A1EDCD0C1E1A1416AB71042487E9E7E3DC04A675BB83540DE327299ED4611940`; no server restart was required.
+
+### 2026-08-08 In Progress table refinement 5
+
+- Row underlay, Status, Progress, and Tasks now use the same accepted text-surface color, eliminating differing strips around cell insets and objective entries.
+- Binary objectives with a required value of one never display a numerical counter or progress bar. Completed objectives place their checkmark after the task text; non-binary objectives retain their useful numerical prefix.
+- Quest titles now use the same opaque black TMP outline and shadow treatment as location labels for consistent legibility over artwork.
+- Exact-version client Release build passes with zero warnings/errors and shared-core regression remains 36/36. Source/deployed hashes match at client `7BB83277E1833D7EC368319CADF3B8BC757FE300F744130B351216B725DB8750` and unchanged shared core `A1EDCD0C1E1A1416AB71042487E9E7E3DC04A675BB83540DE327299ED4611940`; no server restart was required.
+
 ### 2026-08-06 web-parity correction pass
 
 - Expanded the owned global surface to the full width of the resolved Tasks parent and raised it above dormant native workspace branches, removing the native subheader residue/right-side dead margin by construction. Notes and Quest Items alone are raised above the graph while open.
@@ -567,6 +610,24 @@ The following gate described the first deployed slice. It is retained as impleme
 - Runtime review clarified that quest artwork must fill the card's complete horizontal area without changing its aspect ratio. Unity `Image.preserveAspect` produced contain/letterbox behavior instead. Quest art now uses an `AspectRatioFitter` in envelope mode inside the card's rectangular mask, producing uniform cover scaling and cropping only overflow. Trader portraits retain contain behavior.
 - The client-only correction builds with zero warnings/errors and was deployed without stopping or launching Tarkov. Source/deployed client SHA-256 matches at `1F6445D9C7A2D2DB645D62588DD3715096A283D6B11077F875AB42BCC48800B2`; no server assembly changed, so no server restart was required.
 
+### Native Notes and Quest Items canvas-bound presentation
+
+- Runtime screenshots showed that the functional real Notes and Quest Items branches still retained their near-full-height vanilla geometry: Notes search overlapped QuestMap's top-right controls, both fixed-width panels were offset from the canvas right edge, and their intentionally translucent EFT surfaces exposed graph cards and edges underneath.
+- QuestMap now snapshots the original Notes, Quest Items, and native Notes-search transforms, bounds both fixed-width native panels to the graph viewport height, aligns them to its right edge, and places the real Notes search inside the same top-right canvas boundary. Disposal restores every captured native transform.
+- Each native panel receives a QuestMap-owned, non-raycasting opaque horizontal gradient as its first child. The native grids, note controls, search behavior, transfer controllers, warnings, and lifecycle remain unchanged above that backdrop.
+- Exact-client Release build passes with zero warnings/errors; shared core remains 32/32 and server/browser regression remains 113/113. The follow-up moves Notes search to the left of its title bar, promotes each opaque gradient into the stacking layer between graph and native branch, and bounds overflowing Quest Items scroll roots with restored layouts plus a root mask. Runtime review then caught that the separate Notes search had been positioned from the full graph viewport's left edge; its placement now derives from the transformed Notes panel bounds so it sits inside that panel's top-left title bar. Deployment hashes are recorded after each runtime candidate; visual and interaction verification remains pending.
+
+### In Progress redesign started
+
+- In Progress is being separated from Quest Map as a non-graph, vertically scrolling table; the table content itself remains unchanged pending the next design step.
+- Its first dedicated control is a third-row multi-select map filter. It lists only locations represented by the currently relevant In Progress quests, keeps `Any` as the real location category rather than a clear-all action, sorts named maps alphabetically, and uses fixed landscape banner toggles with dark readable overlays and explicit active outlines.
+- Every currently relevant location toggle starts active. Toggles combine with OR semantics, an explicitly empty selection shows no quests, and the selection persists per profile. Quest Map does not receive the location filter.
+- In Progress no longer displays graph-only Center, zoom, Fit, Focus, or Clear controls. The existing temporary graph/card canvas remains otherwise unchanged until the table-layout follow-up.
+- Static validation passes 33/33 core tests and 113/113 server/browser tests; the exact-version client build has zero warnings and errors. Runtime layout and interaction validation remains open.
+- Deployed the runtime candidate with matching source/deployed SHA-256 values: client `0CA2E1717FBB4E4980DD933912A7FD23271588134AFC5CF38B87D0BEC7947642` and client-side shared core `BFD234BF458491C07B8B52E962EF3C6EF515F7DDB895C5B532F33626D6390788`. Tarkov was not running. The server package already matched (`DLL changed: False`), so the visible running SPT server did not require a restart.
+- Map filters whose SPT location has no banner—most notably `Any` and the `marathon`/Transition location type—reuse the web UI's Norvinsk-zone fallback background rather than rendering as flat buttons.
+- Built, tested, and deployed that fallback correction. Source/deployed SHA-256 matches at client `BD2E7B3FD769299B94B92C84581CE978F7A5EAF2F5BD8298804C6169611C7589`, server `68B1AB82DB6032CEA4C08757028928E71BBD24CB3B43A64C9B30B4B339BB6DC7`, and shared core `69AB1314B5A8ABD2B8F2B831718091C2342294EF186507DF818855430538DACF`; the guarded deployment invoked the visible SPT server restart because its DLL changed.
+
 ### Accepted M06 architecture correction
 
 - Daily and Weekly quests require the same visibly separate band split as the web implementation; treating them as ordinary dependency nodes makes them too easy to lose. The band is now an M06 requirement rather than an intentional platform deviation.
@@ -576,3 +637,100 @@ The following gate described the first deployed slice. It is retained as impleme
 - The global replacement must stop relabeling or repurposing EFT's regular/daily/Notes/Quest Items selectors. QuestMap owns a full-surface overlay and its own four controls while the unmodified native regular and operational lists/selectors remain hidden underneath.
 - There is no Native Tasks/Return to Map escape hatch in the accepted composition. Disabling the global replacement in plugin settings restores the vanilla UI; automatic failure fallback must do the same. The global graph stays read-only until M07 supplies the custom detail/action bridge.
 - QuestMap's custom Quest Items and Notes buttons must toggle the verified real native branches, raise and activate them so they are actually visible, preserve all EFT-owned transactions/CRUD/search/cleanup, hide the other side branch, and support reselect-to-close.
+### In Progress table refinement 6
+
+- Restored visual separation between the translucent canvas/expanded-row underlay and the shared Status, Progress, and Tasks content surface. The row root no longer uses the opaque task-cell color, while text-bearing cells retain a consistent, brighter neutral background.
+
+### 2026-08-08 In Progress interaction performance pass
+
+- Removed the full replacement-view teardown from In Progress sorting, filtering, completed-task visibility, and per-quest task expansion. The table root, scroll view, loaded sprite cache, static quest cells, and already-created rows now remain alive across those interactions.
+- Sorting and ordinary filters update the projection, active cached-row set, row positions, section headers, and sort indicators in place. Rows that return after a filter change are reused rather than recreated or re-requesting artwork.
+- Expanding or collapsing a quest rebuilds only that quest's Tasks cell and row height. Completed-task visibility rebuilds task cells without reconstructing static quest/location/status/progress content.
+- `QUESTMAP_M06_TABLE_UPDATE`, `QUESTMAP_M06_TABLE_EXPAND`, and `QUESTMAP_M06_PRESENTATION_UPDATE` record row counts, cache size, operation type, and elapsed milliseconds. Full row reconstruction remains limited to authoritative overlay/topology refreshes where displayed state and progress can change.
+- Exact-version Release build passes with zero warnings/errors and shared-core regression remains 36/36. Runtime timing and interaction acceptance remain open against the deployed client candidate.
+- Client-only deployment was performed directly without checking or stopping Tarkov. Source/deployed SHA-256 matches at client `1162CCCD59AD2E4043D513381A6A5254E022BD87492A1A9D87F5E66777918BAF` and unchanged shared core `A1EDCD0C1E1A1416AB71042487E9E7E3DC04A675BB83540DE327299ED4611940`; no server assembly changed, so no server restart was required.
+
+### 2026-08-08 permanent in-raid progression monitor
+
+- Added a screen-independent 100 ms raid monitor around the exact 4.0.13 local player's `AbstractQuestControllerClass`. EFT quest/progress events remain primary; an active-quest progress fingerprint covers objective mutations that do not reliably emit those events and exposes a reusable progression-change seam for later QuestTracker-style notifications.
+- In-raid reactive refreshes now use live EFT status/objective data without consulting the stale server profile projection. Dynamic `Started`, ready-to-finish, completed/failed, and live objective percentages take precedence, while the sanitized server feed remains authoritative for static topology/applicability, unavailable-trader and other gate states, routes, repeatable metadata, and assets.
+- The In Progress filter strips are now faceted: traders and locations with no matching quests under the other filters are omitted. A screen first mounted in raid defaults to trader All with Any, Transit, current map, and the applicable Factory/Ground Zero aliases independently enabled.
+- Reference implementation audit uses the SPT 4.0-compatible SPT-QuestTracker tag `1.6.0` (commit `35100f026ae03bb62e1f3ec6a55b9da233db4168`) under `reference/SPT-QuestTracker`, not the 4.1-oriented repository head. Its `GameWorld.OnGameStarted` lifecycle, 100 ms `QuestClass.Progress` hash fallback, Any/Marathon handling, and one-way Factory-night/Ground-Zero-high aliases informed the design. QuestMap additionally requires `GameStatus.Started` and uses the public controller/property access proven by the installed 4.0.13 compile. Exact client Release build passes with zero warnings/errors and shared-core regression is 37/37. Runtime raid validation remains open.
+- Full validation passes with zero warnings/errors, 37/37 shared-core tests, and 113/113 server/browser tests. Client and server deployments are hash-verified at client `7D426054DC28B97B74F358F317C8909F947282749080A779B70E88267379DF38`, shared core `ED185785E78F200B24A412CB4B0350B167E3B81D4E1DD0BA029D29D31CC87D96`, and server `CEA7A71616FAFA3398627780F5EAA562ADF3651D41A20C714988772C893D30FE`. Client files were copied directly without checking or stopping Tarkov. The changed server/shared-core DLLs were deployed after stopping the exact running SPT process, and `SPT.Server.exe` was relaunched in its normal visible console without startup polling.
+
+### 2026-08-08 in-raid quest progression notifications
+
+- Added a permanent QuestMap raid-progression notification feature over the live change stream. Every changed quest currently qualifies; the event retains quest/objective identity for later per-quest configuration.
+- One reusable top-right card displays the quest background, trader portrait, quest name, changed task, capped current/required count, and progress bar where numerical progress exists. It fades in, remains for four seconds, and fades out. A newer update replaces the content and resets the lifetime, so cards never stack.
+- Notification artwork uses one persistent async sprite cache with stale-callback version guards. It is independent of the Tasks screen and does not intercept input. Exact-version runtime validation remains open for rapid updates, status transitions, missing artwork, and supported resolution/UI-scale placement.
+- Exact-version client Release build passes with zero warnings/errors, shared-core regression remains 37/37, and `git diff --check` passes. Notifications are also cleared as soon as the raid context ends. Client-only deployment was performed directly without checking or stopping Tarkov; source/deployed hashes match at client `A0179231BE88DCA80F3F0C57973DF42EE1C06965F2FBAA5B75538E81AD6A8D4F` and unchanged shared core `ED185785E78F200B24A412CB4B0350B167E3B81D4E1DD0BA029D29D31CC87D96`. No server assembly changed, so the visible SPT server was not restarted.
+
+### 2026-08-08 raid notification selection and performance correction
+
+- Runtime evidence showed one action could mutate an aggregate objective and a more-specific child objective in the same overlay refresh. The single-card publisher no longer emits every changed condition sequentially; it selects one candidate per quest, prioritizing leaf objectives and then real positive numerical progress. `QUESTMAP_M06_RAID_NOTIFICATION` records the selected objective ID, candidate count, leaf classification, and delta for the next runtime check.
+- The broad `ReactiveQuestMonitor` is now menu-only. Entering a raid detaches its condition subscriptions, and even a later Tasks-screen lifecycle callback cannot reattach them while the raid monitor is active. This first correction retained a 100 ms full active-quest fingerprint and added `QUESTMAP_M06_RAID_PERF` so its actual cost could be measured.
+- The top-right notification is reduced from 480x126 to 390x94 reference pixels, omits the status label, and renders capped current/required text directly over its progress bar. `Notifications.RaidNotificationOpacity` exposes a live 0.2-1.0 overall-opacity setting with a 0.92 default.
+- Exact-version client Release build passes with zero warnings/errors, shared-core regression remains 37/37, and `git diff --check` passes. Client-only deployment was performed directly without checking or stopping Tarkov. Source/deployed SHA-256 matches at client `5519FEF864E51B65515E040968A777F1048B3A02BBEBB9DB85D40C4B0D50268C` and unchanged shared core `ED185785E78F200B24A412CB4B0350B167E3B81D4E1DD0BA029D29D31CC87D96`; no server assembly changed, so no server restart was required. Runtime confirmation of selected child objectives and raid timings remains open.
+
+### 2026-08-08 bounded raid polling and overlapping-objective correction
+
+- Runtime telemetry confirmed QuestMap itself was consuming about 12.1-12.5 ms every 100 ms, with a 47.1 ms maximum, even across intervals with zero quest changes. The cost came from calling `QuestClass.Progress.GetHashCode()` across every active quest; the 1.6.0 QuestTracker reference only hashes its much smaller tracked/current-map subset, so copying that operation to QuestMap's global active set was not acceptable.
+- Replaced the full-book fingerprint with `RaidQuestProgressMonitor`. Exact active-checker events are value-deduplicated and retain quest/objective IDs. A permanent 100 ms fallback rotates through at most 16 cached `CurrentValue` reads per tick, providing bounded event-gap coverage without traversing every quest progress tree. Broad menu-time reactive subscriptions remain disabled in raid.
+- The reported Ref-friendly quest has six independent top-level weapon counters, so both changed candidates were valid leaves. Notification selection now prefers a still-progressing numeric objective over a simultaneously completed overlapping 50/50 counter, then uses the exact signaled checker ID as the next tie-break. The notification log includes every candidate's ID, index, delta, completion flag, and preferred-signal flag for direct confirmation.
+- Exact-version client Release build passes with zero warnings/errors, shared-core regression remains 37/37, and `git diff --check` passes. Client-only deployment was performed directly without checking or stopping Tarkov. Source/deployed SHA-256 matches at client `0162DB6694C9DBC5A7D322ADDC90CF8EC03C4A36E242B05ECF5C512AB5B0CE6D` and unchanged shared core `ED185785E78F200B24A412CB4B0350B167E3B81D4E1DD0BA029D29D31CC87D96`; no server assembly changed, so no server restart was required. Runtime timing and overlapping-counter selection remain open for confirmation.
+
+### 2026-08-08 targeted raid quest patches
+
+- Objective and ordinary status events no longer invoke `EftLiveSnapshotAdapter.Capture` for the complete live quest book, `QuestOverlayBuilder.Build` for every topology node, the global projection builder, or every-node UI refresh. The signaled quest is captured once, its existing overlay dictionary entry is replaced in place, and only that quest's visible graph card or In Progress row is refreshed.
+- Quest-book add/remove/reset signals remain deliberately distinct and retain the broad fallback because they can change generated topology or projection membership. Static server authority and topology/layout are untouched by the targeted path.
+- `QUESTMAP_M06_RAID_PATCH` records requested/changed quest counts plus model/UI time. `QUESTMAP_M06_RAID_PERF` now reports targeted patch and targeted UI averages/maxima separately; `overlayRefreshes` should remain zero during ordinary raid objective/status changes.
+- Exact-version client Release build passes with zero warnings/errors, shared-core regression remains 37/37, and `git diff --check` passes. Client-only deployment was performed directly without checking or stopping Tarkov. Source/deployed SHA-256 matches at client `626825CF2B33FD19C6BC24DB454C1F343301A41B88BDAD311C817FBEA616B3D0` and unchanged shared core `ED185785E78F200B24A412CB4B0350B167E3B81D4E1DD0BA029D29D31CC87D96`; no server assembly changed, so no server restart was required. Runtime confirmation of targeted model/UI timing remains open.
+
+### 2026-08-08 raid UI asset reuse and notification stacking
+
+- Promoted `QuestAssetSpriteCache` to the client-runtime lifetime. In Progress, the full Quest Map, trader graphs, filter portraits/banners, and raid notification cards now share the same decoded sprites and pending requests, so closing/reopening Tasks no longer discards the cache or redownloads identical artwork. `QUESTMAP_M06_MOUNT` reports cumulative cached/pending/network/hit counts for runtime confirmation.
+- A Tasks screen mounted in raid always forces In Progress regardless of the persisted out-of-raid mode. The Quest Map tab remains visible but disabled and `ShowMode(Full)` has a second guard, preventing the full graph from being built in raid.
+- Raid notifications are now stacked by trader/quest identity. Simultaneous changes across different quests remain visible underneath one another; a later update for the same quest replaces/resets that quest's existing card. Within one quest, overlapping counters still select one representative objective.
+- Notification progress uses an effective value capped at the objective requirement. Reaching `50/50` remains a valid completion update, while a later raw `50/50 -> 51/50` mutation is suppressed. Shared-core coverage includes this boundary and now passes 38/38.
+- Final validation passes with zero-warning exact client/server builds, 38/38 shared-core tests, 113/113 server/browser tests, and `git diff --check`. Client files were copied directly without checking or stopping Tarkov. Source/deployed SHA-256 matches at client `42C93D66C47CD7A9BF19150E5D293168C93440CDE59392886C6E6772BD44353E`, shared core `9D774F4BEBB3CB9448F47C1A571A2CEACB5ED8EDCAE3ECE95C5E89FFF35A9B16` in both destinations, and server `50FB92486E15D1F9BDB90F2057FCC29D38895053C037F795177DC9E1766EFD19`. The changed server/shared-core package was deployed and the exact SPT server was restarted in its normal visible console without startup polling.
+
+### 2026-08-08 native quest pinning
+
+- Exact profile inspection confirmed quest favorites are not fields on `characters.pmc.Quests`; the similarly named profile `pinned` values belong to messenger dialogues. SPT's native task favorite set is profile-scoped in `SPT/user/sptRegistry/registry.json` under `favorite_quests_<profileId>`.
+- The In Progress table resolves the exact-build `TasksPanel.gclass3794_0` service and uses its native `IsFavorite`/`ToggleFavorite` contract. A narrow left star column now pins or unpins without introducing a QuestMap-owned persistence store.
+- Already-filtered rows are partitioned into Pinned, Daily, Weekly, and Quests sections. Pinned quests appear only in the first section, remain subject to every projection filter, and use the active multi-key ordering across both repeatable and ordinary quests. Pin changes only update star visuals and row/section positions; they do not rebuild topology, projection, rows, or artwork.
+- Final validation passes with zero-warning exact client/server builds, 39/39 shared-core tests, 113/113 server/browser tests, and `git diff --check`. Client files were copied directly without checking or stopping Tarkov. Source/deployed SHA-256 matches at client `08BEBABBBDD493D86C0633DB50B8A1B5B741F77C8530D48A5800C82248670CFA`, shared core `57F96C02AC6CA4F1E775564A92A0017160F5FEBE6E92CCB2A6BD62A7A29B7C3D` in both client and server destinations, and server `F17D31F3BBE8637A9804F3F41CB54573CDD7299C3E3AF7C86E3AC4192D4EC25E`. The changed server/shared-core package was deployed and the exact running SPT server was restarted in its normal visible console without startup polling.
+
+### 2026-08-08 exclusive map-filter shortcut
+
+- In Progress map filters keep their independent left-click behavior. Right-clicking any map toggle, including the real `Any` category, now disables every other location and leaves only the clicked location active. Repeating the right-click while that location is already exclusive is a no-op.
+- The shortcut uses the existing incremental projection/table update path and retains the mounted table, cached rows, and artwork. The exact client Release build passes with zero warnings/errors and `git diff --check` passes. Client-only deployment was performed directly without checking or stopping Tarkov; source/deployed SHA-256 matches at `3AF9A3D35611D0537F9574AAF04E8446703D1429F66ABC40368E30D47D4F3241`. No server assembly changed, so no server restart was required.
+
+### 2026-08-08 profile-scoped quest tracking
+
+- Added QuestMap-owned manual tracking without adding per-quest entries to the F12 configuration surface. Manual IDs are stored per profile in `BepInEx/config/SPTQuestMap/tracking-state.json`; clicking an In Progress row's Status cell toggles that manual membership and updates only the existing status visual.
+- F12 now exposes `Tracking.AutoTrackNewQuests`, `Tracking.TrackFavoriteQuests`, and `Tracking.AutoTrackMapRelatedQuests`. A newly accepted quest transition becomes manually tracked when enabled. Native favorite and current-map matches are implicit overrides: they render italic `(Tracked)`, remain effective after manual untracking, and react to live configuration changes.
+- Current-map implicit tracking is deliberately strict. It includes the current location and equivalent Factory/Ground Zero variants only; `Any`, transit, and marathon quests are excluded. Native favorites are refreshed from the profile-scoped SPT registry at raid entry and synchronized immediately when the custom pin control changes them.
+- Raid progression notifications now stop before card construction for effectively untracked quests. Manual, enabled-native-favorite, or enabled-current-map tracking each qualifies a quest; the bounded objective monitor and targeted per-quest overlay/UI patch remain unchanged.
+- Final validation passes with a zero-warning exact client build, 39/39 shared-core tests, and `git diff --check`. Client-only deployment was performed directly without checking or stopping Tarkov. Source/deployed SHA-256 matches at client `BE6A48A2908CAC5E0614F8963AC368C9AFA2FD7794FFB82FB3BF7E838DC9561F` and PDB `E00CD7855E88A1A00933F619BA95D81B2AE154328D56AE17236272447DC90352`. No server or shared-core assembly changed, so no server restart was required.
+
+### 2026-08-08 retained Tasks screen and deterministic first-filter state
+
+- The global Tasks controller now suspends its owned root on native `Close` and resumes the same root/table on the next `Show` for the same screen instance. Current inventory, quest, session, favorite-service, raid-mode, and overlay bindings are refreshed on resume; a topology or raid-mode change remains an explicit content-view rebuild boundary.
+- The initial In Progress mount prewarms row objects for every active quest without applying persisted trader/search/status/location filters. A filter that was inactive across restart therefore reveals already-built rows instead of synchronously constructing artwork-backed rows while its toggle chrome is being replaced.
+- In Progress map toggles now update button, banner, shade, and outline state in place before applying the incremental projection. The filter bar is no longer destroyed merely to confirm a left-click or exclusive right-click state change.
+- Retained controllers remain registered for targeted quest patches while hidden, keeping cached table rows synchronized during navigation and raids. Out-of-raid reopen still requests the ordinary authoritative refresh and applies it without discarding the table when topology is unchanged.
+- Final validation passes with a zero-warning exact client build, 39/39 shared-core tests, and `git diff --check`. Client-only deployment was performed directly without checking or stopping Tarkov. Source/deployed SHA-256 matches at client `658D58F2E1EEE07B9D82979EBB97AB7205054E52BBFAC46FCEF1ECC48ECAFCCB` and PDB `D7DC77794F981E3F7C47B3915A68E4AF66970F0F1A37D0A1B2ACE759841283B5`. No server or shared-core assembly changed, so no server restart was required.
+
+### 2026-08-08 M06 scope reconciliation
+
+- M06 has expanded from a four-view global Tasks replacement into the In Progress table, pinning, profile-local tracking policies, permanent raid-local monitoring, tracked progression notifications, targeted live patches, shared artwork caching, raid-only view policy, and retained Tasks-screen lifecycle. These are now documented as implemented M06 behavior; no additional unrelated feature work is required for closure.
+- Most original audit discrepancies are resolved in code. M06 is nevertheless not accepted yet. Two non-runtime gaps remain: transactional complete-vanilla recovery after a post-mount rebuild failure, and one explicit end-to-end browser/native adapter-equivalence fixture around the shared visibility rules.
+- Remaining manual evidence is limited to the persisted-inactive-filter restart reproduction; cached suspend/resume behavior; final Notes/Quest Items lifecycle and transfers; representative web/client gate/filter parity including Lightkeeper/Ref/Jaeger; table pin/sort/filter/tracking/reactive behavior; raid defaults/live updates/tracked notification correctness/performance/teardown; and common-resolution/all-future/fallback coverage.
+- Rich details, native action bridges, trader full-pane redesign, detailed blocker/reward/exclusion presentation, and final typography/localization remain M07. Browser profile/comparison/refresh controls and exact DOM/hover behavior remain intentional platform differences.
+
+### 2026-08-08 M06 acceptance and M07 handoff
+
+- The user accepted M06 as complete after extensive live refinement. The retained-screen/filter correction is considered satisfactory; the explicit browser/native adapter-equivalence fixture was not required as a closure blocker because both surfaces already consume the shared visibility contract and observed behavior was acceptable.
+- Remaining uncommon filter/gate cases, resolution variants, notification combinations, and post-mount failure evidence move to the final-polish/regression ledger. They are not presumed defects and do not block M07; any reproduced functional regression will still be corrected at its owning layer.
+- M07 is active. Its first boundary is a feature-gated QuestMap-owned detail pane with native `QuestView` fallback, followed by the intended full-width trader graph plus narrow selection-driven side pane. Native accept/restart/complete/reroll/handover controllers remain authoritative throughout.

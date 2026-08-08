@@ -192,9 +192,7 @@ internal sealed class QuestGraphCardNodeView
         _completedMarker.gameObject.SetActive(kind == QuestMapDisplayStateKind.Completed);
         var status = StateLabel(kind);
         var progressPercent = kind == QuestMapDisplayStateKind.InProgress
-            ? overlay.AuthoritativeProgressPercentages.TryGetValue(node.Id, out var authoritativeProgress)
-                ? authoritativeProgress
-                : state is not null ? QuestGraphRules.CalculateObjectiveProgressPercent(state.Objectives) : null
+            ? QuestGraphRules.ResolveProfileProgressPercent(node.Id, overlay)
             : null;
         var progress = progressPercent.HasValue ? $" · ~{progressPercent.Value:0.#}%" : string.Empty;
         var handover = state?.HandoverReady == true ? " · HANDOVER READY" : string.Empty;

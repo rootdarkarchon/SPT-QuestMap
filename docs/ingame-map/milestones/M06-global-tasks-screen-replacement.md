@@ -27,7 +27,7 @@ The replacement does not need a Native Tasks escape hatch or Return to Map contr
 
 ## In Progress view
 
-Show a graph derived from the source-backed active quest set, likely including:
+Show a vertically scrollable table derived from the source-backed active quest set, including:
 
 - `Started`;
 - `AvailableForFinish`;
@@ -45,9 +45,15 @@ Support:
 - useful trader/status filtering;
 - stable selection after updates.
 
-Edges render only where both active endpoints are visible.
+This view is not a dependency graph. It has no edges, pan, zoom, Fit, Center, horizontal scrolling, or topology-rank positioning. Its fixed columns are Trader, Quest, Location, Status, Progress, and Tasks. Trader and Quest are distinct sort keys but share one quest-card cell in each row. Location uses the existing SPT banner, Status distinguishes active from ready-to-finish/restartable states, Progress uses the authoritative server percentage where available, and Tasks lists every ordered objective with truthful numeric and bar progress where known.
 
-Present this as a dense task-card surface comparable to EFT's quests-in-progress list, not as a sparsely ranked dependency graph. It may reuse the shared card renderer, but dependency rank must not create empty columns for unrelated active tasks.
+Trader, Quest, Location, Status, and Progress headers cycle inactive -> ascending -> descending -> inactive. Multiple active keys retain click order as sort priority. With no manual keys, the internal stable order is Trader, Location, Quest. Daily and Weekly are independent leading sections regardless of sorting, use the same active sort criteria within their own section, and are visibly separated from ordinary active quests. Sort state and vertical scroll position persist per profile/topology In Progress scope.
+
+Objective density is bounded: the table shows four matching tasks per quest by default and provides an explicit row expander for the remainder. A persisted filter hides completed tasks. Completed objectives use a checkmark and omit redundant full progress bars; `1 / 1` completion omits the numerical duplicate. Ready-to-turn-in quests report 100% overall progress. Quest and location images are width-driven at their original aspect ratio and vertically centered, so expanding a row never stretches its artwork to the row height.
+
+Quest, Location, Status, and Progress share a fixed top band equal to the usable inner height of the minimum row. Expanding Tasks never enlarges or vertically recenters that band. Aspect-correct quest/map images are clipped to it, image shading does not spill into the neutral remainder of the row, and displayed objective current values never exceed their requirements.
+
+The accepted refinement uses an 82-pixel minimum row with a 78-pixel non-task top band. The In Progress canvas is 90% transparent over EFT's background. Expanded non-task remainders and their absent separators remain neutral/translucent, while Tasks retains a full-height opaque reading surface.
 
 ## Full Quest Map view
 
@@ -181,6 +187,12 @@ Tab switching must not:
 - break back navigation;
 - leave an invisible panel intercepting input.
 
+The active-task replacement is not allowed to depend on the Tasks screen being open for freshness. During a raid, QuestMap permanently observes the raid-local quest controller with exact active-checker value-change events and a 100 ms incremental fallback poll. Broad menu-time subscriptions must be detached, and the fallback must scan a bounded checker batch rather than hashing the complete active quest set on Unity's update thread. Live EFT quest status and objective progress are authoritative during the raid; the server feed remains authoritative for static topology, applicability, trader availability/gates, routes, and metadata. Do not poll the server profile during a raid because that state is not guaranteed to reflect unsynchronized raid progress. The monitor must expose exact changed objective IDs, a reusable change seam, and periodic performance telemetry.
+
+QuestMap also owns in-raid quest-progression notifications as a product feature. Notifications are limited to effectively tracked quests. Manual tracking is profile-scoped in QuestMap's private `BepInEx/config/SPTQuestMap/tracking-state.json` document and is not represented by an F12 entry. F12 exposes live policies for automatically tracking newly accepted quests, implicitly tracking native favorites, and implicitly tracking quests assigned to the current raid map. Current-map tracking does not include `Any`, transit, or marathon quests. Removing manual tracking cannot override an enabled favorite/current-map policy. Reuse compact fading top-right cards grouped by trader/quest; a newer update replaces its quest/task/count/progress content and resets the visible duration. When aggregate and child objectives mutate together, show the most-specific changed leaf task. Paint numerical progress on the bar, omit redundant status text, and expose overall notification opacity in plugin settings. Preserve quest and objective IDs at the policy boundary.
+
+When the In Progress view is first opened in raid, its default filters are trader All plus the independently enabled Any, Transit, and current-map location toggles. Trader and map choices with no corresponding quests under the other active filters are omitted from their respective filter strips.
+
 ## Fallback
 
 If the global replacement fails, restore the complete vanilla `TasksScreen`, not just the old task list.
@@ -199,6 +211,12 @@ Test:
 - faction and event/seasonal/`None` applicability parity with the web graph;
 - quest item transfers in both directions;
 - raid restrictions/warnings;
+- live in-raid objective/status updates with the Tasks screen both open and closed;
+- tracked-quest in-raid progression notifications, including per-quest replacement/timer reset and simultaneous cards for different quests;
+- raid-default All/Any/Transit/current-map filters, including Factory night and Ground Zero high-level aliases;
+- native profile-scoped quest favorites: pin/unpin from the narrow left column, persistence after closing/reopening Tasks, and a filtered/sorted Pinned section above Daily/Weekly/ordinary quests without duplicates;
+- manual tracking by clicking the row Status cell, profile-scoped persistence, normal `(Tracked)` labeling, and italic implicit tracking from favorite/current-map policies;
+- live F12 policy changes, auto-tracking on a newly accepted quest transition, strict current-map implicit tracking excluding Any/transit, and raid notifications suppressed for every effectively untracked quest;
 - Notes CRUD and search;
 - repeated open/close;
 - replacement disabled;
@@ -224,6 +242,7 @@ Milestone 6 is complete when:
 - ordinary and Daily/Weekly visible membership matches the accepted web filtering result, with only the documented absence of the Daily/Weekly visibility filter;
 - faction and event applicability matches the accepted web result;
 - lifecycle and fallback are reliable;
+- in-raid status/progress remains live without consulting a stale server profile, and the permanent monitor cleanly stops at raid end;
 - the listed graph interactions have browser parity or a documented in-game-specific deviation;
 - the shared graph visual system is usable at the tested resolutions and UI scales;
 - the M06-owned discrepancies in `M06-native-web-parity-audit.md` are closed, while every retained platform difference is recorded explicitly.
@@ -241,4 +260,56 @@ The latest parity correction is implemented and statically validated, but M06 is
 - Gunsmith Part 2-like cases show prerequisite gating when the profile already meets the inherited level gate, and unavailable-trader quests do not present as available;
 - web vocabulary/progress percentage, completion triangles, end-of-line markers, and Collector/Lightkeeper colors match the browser reference.
 
-The In Progress content arrangement remains open by explicit user direction. Do not redesign it until the user's separate suggestions are captured; do not treat this hold as acceptance of the current horizontal trader spread.
+The first In Progress table redesign is implemented and awaiting runtime refinement. Verify fixed-width columns at supported resolutions, vertical-only scrolling, all three section boundaries, multi-key sort cycling/priority/persistence, objective row sizing, progress truthfulness, and selection retention during reactive updates.
+
+The table also reuses EFT's native favorite-quest service. SPT stores that set outside `characters.pmc.Quests`, under the profile-scoped sptRegistry key `favorite_quests_<profileId>`. The custom pin buttons must round-trip through that native service, and the Pinned section must be first while still obeying the current projection filters and selected multi-key sort.
+
+In Progress location filters retain independent left-click toggles. Right-clicking a location is an exclusive-selection shortcut: it leaves only that location active, including `Any` as an ordinary location category.
+
+Sorting, trader/status/search/location filtering, completed-task visibility, and per-quest expansion must remain incremental after the initial table render. These interactions must retain the table root and image cache; ordinary filtering/sorting reuses cached rows, while expansion is scoped to the selected row's Tasks cell. Use the M06 table/presentation timing markers in the runtime log to compare repeated operations with first-render cost.
+
+The mounted In Progress controller and table are retained when EFT closes the Tasks screen for navigation. Closing suspends the owned root without disposing its rows; reopening the same native screen resumes that root, rebinds current EFT controllers, and applies any changed overlay state. The first mount prewarms rows for every currently active quest, independent of the persisted trader/search/status/location filters, so enabling a previously inactive filter never triggers a large lazy construction pass. Map-filter selection visuals update in place before the incremental projection update. Hidden retained rows continue to receive targeted quest patches, while a genuine topology or raid-mode transition may rebuild only the content view. Runtime acceptance should show `QUESTMAP_M06_SUSPEND` followed by `QUESTMAP_M06_RESUME ... rootReused=True`, with stable `cachedRows`, across ordinary Tasks navigation.
+
+Ordinary in-raid objective and status changes must also remain incremental. They capture and replace only the signaled quest's live state and refresh only that visible row/card; they must not recapture the full quest book, rebuild the topology overlay, recalculate the global projection, or iterate every visible card. Quest-book membership changes are the explicit exception because they can change generated topology and visible membership. Runtime acceptance should show `QUESTMAP_M06_RAID_PATCH` for normal changes and zero broad `overlayRefreshes` in the corresponding `QUESTMAP_M06_RAID_PERF` interval.
+
+While in raid, In Progress is the only enabled Tasks content mode. Persisted Quest Map state must not cause the full graph to render, and the Quest Map tab must remain disabled until the raid ends. Artwork is cached at client-runtime scope rather than Tasks-screen scope so repeated opens reuse decoded sprites and in-flight requests. Simultaneous objective progress across different quests is presented as a stack with one card per trader/quest identity; effective progress is capped at the requirement so over-cap raw increments are ignored.
+
+## M06 scope and closure ledger — 2026-08-08
+
+M06 grew beyond the original four-view replacement. The following additions are now implemented M06 product behavior and must be preserved, but they must not be used to justify further unrelated expansion:
+
+- the vertically scrollable sortable In Progress table, map/status/trader/search filtering, objective expansion, completed-task filtering, repeatable sections, and native favorites/pinning;
+- profile-local manual tracking plus the new-quest, favorite, and strict current-map implicit tracking policies;
+- the permanent bounded raid-local objective monitor and targeted per-quest UI patches;
+- tracked-quest raid progression notifications, including stacked different-quest cards, capped progress, shared artwork caching, and configurable opacity;
+- raid-only In Progress mode/default filters; and
+- retention of the In Progress controller, controls, prewarmed rows, scroll state, and artwork across ordinary Tasks-screen navigation.
+
+M06 was **accepted complete by the user on 2026-08-08** after extensive live refinement. The items below are retained as final-polish/regression follow-ups rather than milestone blockers. A reproduced functional regression still belongs to its owning layer, but speculative or uncommon coverage does not block M07.
+
+### Deferred final-polish/test follow-ups
+
+1. Add transactional recovery for a failure during a post-mount mode/projection/content rebuild. The existing early forced-initialization failure is not sufficient; after QuestMap owns the surface, a failed rebuild must dispose the owned UI and restore the complete vanilla Tasks screen.
+2. Add one explicit cross-surface parity fixture that drives equivalent applicability/profile/filter inputs through the browser and native adapter boundaries and compares ordinary visible IDs, repeatable IDs, selection context, and Focus membership. Both surfaces now call the shared `QuestVisibilityRules`, and existing core tests cover its behaviors indirectly, but adapter-equivalence is not asserted end to end.
+
+### Deferred runtime coverage
+
+- Reproduce the restart case with persisted inactive map filters and confirm first-load toggles remain visually and functionally synchronized before every quest has ever been displayed.
+- Confirm `QUESTMAP_M06_SUSPEND`/`QUESTMAP_M06_RESUME` reuse the same table/root/rows across Tasks navigation, with stable scroll/filter/sort/selection state and no duplicate listeners.
+- Recheck Notes and Quest Items bounds, backdrops, search/count placement, repeated toggle-off/direct switching, Notes CRUD, and both quest-item transfer directions.
+- Compare representative prerequisite, level, loyalty/standing, pending, excluded, and unavailable-trader states—especially Lightkeeper, Ref, and Jaeger—against the web UI using individual and combined filters.
+- Exercise pinning, multi-sort persistence, map-filter left/right clicks, tracking state/policies, repeatable sections/timers, objective expansion, and targeted reactive row updates.
+- In raid, confirm current-map defaults, hidden-screen live updates, tracking-only notification eligibility, simultaneous different-quest notifications, correct overlapping-objective selection, bounded performance telemetry, and clean monitor teardown at raid end.
+- Complete common-resolution/UI-scale, full/all-future graph, and forced-fallback coverage and archive a clean acceptance log.
+
+### Explicitly not required to close M06
+
+The persistent rich quest-detail pane, native action bridges, trader-screen full-pane redesign, detailed blocker/reward/exclusion explanations, and final fine-grained styling/localization remain M07. Browser-only profile selection/comparison/explicit refresh and exact DOM/mouse-hover behavior remain intentional platform differences.
+
+### Final acceptance record
+
+- User acceptance: 2026-08-08.
+- Status: Complete.
+- The reported retained-screen/filter-state issue was corrected and accepted.
+- The browser/native adapter-equivalence fixture and post-mount failure injection remain useful hardening work, not prerequisites for starting M07.
+- Further M06-adjacent bugs may be corrected during final polish if they are reproducible.

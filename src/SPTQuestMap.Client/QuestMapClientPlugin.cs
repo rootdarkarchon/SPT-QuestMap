@@ -30,6 +30,8 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
         StartupDiagnostics.Log(Logger, assemblyVersion, configuration, compatibility, registration);
     }
 
+    private void Update() => _dataRuntime?.UpdateRaidMonitor();
+
     private void OnDestroy()
     {
         _patchRegistration?.Dispose();

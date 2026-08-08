@@ -10,6 +10,21 @@ namespace SPTQuestMap.Core.Tests;
 [TestFixture]
 public sealed class QuestGraphCoreTests
 {
+    [Test]
+    public void ProgressIncrease_UsesRequiredValueAsNotificationCap()
+    {
+        var beforeCap = new QuestObjectiveProgress("objective", false, 49, 50, true);
+        var reachesCap = new QuestObjectiveProgress("objective", true, 50, 50, true);
+        var beyondCap = new QuestObjectiveProgress("objective", true, 51, 50, true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(QuestProgressRules.HasEffectiveIncrease(reachesCap, beforeCap), Is.True);
+            Assert.That(QuestProgressRules.HasEffectiveIncrease(beyondCap, reachesCap), Is.False);
+            Assert.That(QuestProgressRules.EffectiveValue(beyondCap), Is.EqualTo(50));
+        });
+    }
+
     [TestCase(new[] { "Success" }, QuestEdgeRequirementKind.Success)]
     [TestCase(new[] { "Fail" }, QuestEdgeRequirementKind.Failure)]
     [TestCase(new[] { "FailRestartable" }, QuestEdgeRequirementKind.Failure)]
@@ -298,6 +313,160 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
+    public void GlobalProjection_InProgressLocationTogglesUseOrSemanticsIncludingAnyLocation()
+    {
+        var woods = Node("woods", "Prapor", "Woods");
+        woods.Location = new QuestLocationPayload { Id = "woods", Name = "Woods", Any = false, BannerImageUrl = "/woods.png" };
+        var customs = Node("customs", "Prapor", "Customs");
+        customs.Location = new QuestLocationPayload { Id = "customs", Name = "Customs", Any = false, BannerImageUrl = "/customs.png" };
+        var anywhere = Node("anywhere", "Prapor", "Any");
+        var feed = Feed([woods, customs, anywhere], []);
+        feed.DefaultVisibleQuestIds = ["woods", "customs", "anywhere"];
+        feed.AllApplicableQuestIds = ["woods", "customs", "anywhere"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("woods", "Started"), Quest("customs", "Started"), Quest("anywhere", "Started")));
+
+        var projection = GlobalQuestGraphProjectionBuilder.Build(
+            topology,
+            DeterministicGraphLayout.Build(topology),
+            overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false, null, null, null, null,
+                QuestRouteFilter.None, null, ["woods", "customs", "any"]));
+
+        var noneSelected = GlobalQuestGraphProjectionBuilder.Build(
+            topology,
+            DeterministicGraphLayout.Build(topology),
+            overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false, null, null, null, null,
+                QuestRouteFilter.None, null, []));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(projection.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { "woods", "customs", "anywhere" }));
+            Assert.That(noneSelected.Nodes, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void InProgressTableSort_KeepsRepeatableSectionsFirstAndSupportsOrderedCriteria()
+    {
+        var daily = Node("daily", "Therapist", "Any");
+        daily.Name = "Daily task";
+        var weekly = Node("weekly", "Prapor", "Any");
+        weekly.Name = "Weekly task";
+        var customs = Node("customs", "Prapor", "Any");
+        customs.Name = "Alpha";
+        customs.Location = new QuestLocationPayload { Id = "customs", Name = "Customs" };
+        var woods = Node("woods", "Prapor", "Any");
+        woods.Name = "Zulu";
+        woods.Location = new QuestLocationPayload { Id = "woods", Name = "Woods" };
+        var therapist = Node("therapist", "Therapist", "Any");
+        therapist.Name = "Bravo";
+        therapist.Location = new QuestLocationPayload { Id = "woods", Name = "Woods" };
+        var feed = Feed([customs, woods, therapist], []);
+        feed.ProfileGeneratedQuests = [daily, weekly];
+        feed.RepeatableKinds["daily"] = "Daily";
+        feed.RepeatableKinds["weekly"] = "Weekly";
+        feed.DefaultVisibleQuestIds = ["daily", "weekly", "customs", "woods", "therapist"];
+        feed.AllApplicableQuestIds = ["daily", "weekly", "customs", "woods", "therapist"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("daily", "Started"), Quest("weekly", "Started"), Quest("customs", "Started"),
+            Quest("woods", "Started"), Quest("therapist", "Started"))) with
+        {
+            AuthoritativeProgressPercentages = new Dictionary<string, double?>(StringComparer.Ordinal)
+            {
+                ["daily"] = 50,
+                ["weekly"] = 50,
+                ["customs"] = 10,
+                ["woods"] = 90,
+                ["therapist"] = 80,
+            },
+        };
+
+        var defaultOrder = InProgressQuestTableSorter.Sort(topology.Nodes, topology, overlay, []);
+        var manualOrder = InProgressQuestTableSorter.Sort(topology.Nodes, topology, overlay,
+        [
+            new QuestTableSortCriterion(QuestTableSortColumn.Trader, QuestTableSortDirection.Ascending),
+            new QuestTableSortCriterion(QuestTableSortColumn.Progress, QuestTableSortDirection.Descending),
+        ]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(defaultOrder.Select(node => node.Id),
+                Is.EqualTo(new[] { "daily", "weekly", "customs", "woods", "therapist" }));
+            Assert.That(manualOrder.Select(node => node.Id),
+                Is.EqualTo(new[] { "daily", "weekly", "woods", "customs", "therapist" }));
+        });
+    }
+
+    [Test]
+    public void InProgressTableSortToggle_CyclesAndRetainsCriterionPriority()
+    {
+        IReadOnlyList<QuestTableSortCriterion> criteria = [];
+        criteria = InProgressQuestTableSorter.Toggle(criteria, QuestTableSortColumn.Trader);
+        criteria = InProgressQuestTableSorter.Toggle(criteria, QuestTableSortColumn.Progress);
+        criteria = InProgressQuestTableSorter.Toggle(criteria, QuestTableSortColumn.Progress);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(criteria.Select(criterion => criterion.Column),
+                Is.EqualTo(new[] { QuestTableSortColumn.Trader, QuestTableSortColumn.Progress }));
+            Assert.That(criteria[0].Direction, Is.EqualTo(QuestTableSortDirection.Ascending));
+            Assert.That(criteria[1].Direction, Is.EqualTo(QuestTableSortDirection.Descending));
+        });
+
+        criteria = InProgressQuestTableSorter.Toggle(criteria, QuestTableSortColumn.Progress);
+        Assert.That(criteria.Select(criterion => criterion.Column), Is.EqualTo(new[] { QuestTableSortColumn.Trader }));
+    }
+
+    [Test]
+    public void InProgressTableSortWithinSection_AppliesSelectedSortAcrossRepeatableKinds()
+    {
+        var daily = Node("daily", "Therapist", "Any");
+        daily.Name = "Zulu";
+        var ordinary = Node("ordinary", "Prapor", "Any");
+        ordinary.Name = "Alpha";
+        var feed = Feed([daily, ordinary], []);
+        feed.ProfileGeneratedQuests = [daily];
+        feed.RepeatableKinds["daily"] = "Daily";
+        feed.DefaultVisibleQuestIds = ["daily", "ordinary"];
+        feed.AllApplicableQuestIds = ["daily", "ordinary"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(Quest("daily", "Started"), Quest("ordinary", "Started")));
+
+        var ordered = InProgressQuestTableSorter.SortWithinSection(topology.Nodes, topology, overlay,
+        [
+            new QuestTableSortCriterion(QuestTableSortColumn.Quest, QuestTableSortDirection.Ascending),
+        ]);
+
+        Assert.That(ordered.Select(node => node.Id), Is.EqualTo(new[] { "ordinary", "daily" }));
+    }
+
+    [Test]
+    public void GlobalProjection_InProgressTraderFilterDoesNotAddFutureGraphContext()
+    {
+        var feed = Feed(
+            [Node("active", "Prapor", "Any"), Node("future", "Prapor", "Any"), Node("other", "Therapist", "Any")],
+            [Edge("active", "future", "Success")]);
+        feed.DefaultVisibleQuestIds = ["active", "future", "other"];
+        feed.AllApplicableQuestIds = ["active", "future", "other"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("active", "Started"), Quest("future", "AvailableForStart"), Quest("other", "Started")));
+
+        var projection = GlobalQuestGraphProjectionBuilder.Build(
+            topology,
+            DeterministicGraphLayout.Build(topology),
+            overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false, null, "prapor",
+                null, null, QuestRouteFilter.None));
+
+        Assert.That(projection.Nodes.Select(node => node.Id), Is.EqualTo(new[] { "active" }));
+    }
+
+    [Test]
     public void GlobalProjection_SelectedQuestRestoresApplicablePredecessorChainAcrossFilters()
     {
         var feed = Feed(
@@ -440,6 +609,51 @@ public sealed class QuestGraphCoreTests
             Assert.That(QuestGraphRules.CalculateObjectiveProgressPercent(progress), Is.EqualTo(75));
             Assert.That(QuestGraphRules.IsTerminalQuest(topology, "gunsmith-2"), Is.True);
             Assert.That(QuestGraphRules.IsTerminalQuest(topology, "gunsmith-1"), Is.False);
+        });
+    }
+
+    [Test]
+    public void LiveRaidState_OverridesStaleDynamicServerStateButRetainsServerGateAuthority()
+    {
+        var active = Node("active", "Prapor", "Any");
+        var gated = Node("gated", "Lightkeeper", "Any");
+        var feed = Feed([active, gated], []);
+        feed.DefaultVisibleQuestIds = ["active", "gated"];
+        feed.AllApplicableQuestIds = ["active", "gated"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var progress = new[]
+        {
+            new QuestObjectiveProgress("one", false, 1, 4, true),
+            new QuestObjectiveProgress("two", true, 1, 1, true),
+        };
+        var overlay = QuestOverlayBuilder.Build(topology, new LiveProfileSnapshot(
+            "profile",
+            "USEC",
+            60,
+            [
+                new LiveQuestSnapshot("active", "Started", true, progress, null, false),
+                Quest("gated", "AvailableForStart"),
+            ],
+            [])) with
+        {
+            AuthoritativeDisplayStates = new Dictionary<string, QuestMapDisplayStateKind>(StringComparer.Ordinal)
+            {
+                ["active"] = QuestMapDisplayStateKind.Available,
+                ["gated"] = QuestMapDisplayStateKind.TraderUnavailable,
+            },
+            AuthoritativeProgressPercentages = new Dictionary<string, double?>(StringComparer.Ordinal)
+            {
+                ["active"] = 0,
+            },
+        };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(QuestGraphRules.ClassifyProfileDisplayState(topology, topology.NodesById["active"], overlay),
+                Is.EqualTo(QuestMapDisplayStateKind.InProgress));
+            Assert.That(QuestGraphRules.ResolveProfileProgressPercent("active", overlay), Is.EqualTo(62.5));
+            Assert.That(QuestGraphRules.ClassifyProfileDisplayState(topology, topology.NodesById["gated"], overlay),
+                Is.EqualTo(QuestMapDisplayStateKind.TraderUnavailable));
         });
     }
 

@@ -12,7 +12,7 @@ using UnityEngine.UI;
 
 namespace SPTQuestMap.Client.UI;
 
-internal sealed class QuestGraphView : IDisposable
+internal sealed class QuestGraphView : IGlobalTasksContentView
 {
     private const float MinimumScale = 0.2f;
     private const float MaximumScale = 1.8f;
@@ -50,7 +50,8 @@ internal sealed class QuestGraphView : IDisposable
         Action<string>? onFocusRequested,
         Action onViewportSettled,
         ManualLogSource log,
-        bool debugLogging)
+        bool debugLogging,
+        QuestAssetSpriteCache assetCache)
     {
         Root = root;
         _viewport = viewport;
@@ -64,8 +65,7 @@ internal sealed class QuestGraphView : IDisposable
         _log = log;
         _debugLogging = debugLogging;
         _spatialIndex = new QuestGraphSpatialIndex(projection.NodesById);
-        _assetCache = root.gameObject.AddComponent<QuestAssetSpriteCache>();
-        _assetCache.Bind(log);
+        _assetCache = assetCache;
         _nodePool = new QuestGraphNodePool(content, _assetCache);
         BuildRepeatableBand(content, projection, overlay);
         BuildInProgressHeaders(content, projection);
@@ -154,6 +154,7 @@ internal sealed class QuestGraphView : IDisposable
         Action onViewportSettled,
         ManualLogSource log,
         bool debugLogging,
+        QuestAssetSpriteCache assetCache,
         GraphViewportState? initialViewport = null,
         IReadOnlyList<QuestGraphHeaderAction>? extraActions = null,
         bool ignoreParentLayout = false,
@@ -174,7 +175,8 @@ internal sealed class QuestGraphView : IDisposable
         header.anchorMin = new Vector2(0, 1);
         header.anchorMax = new Vector2(1, 1);
         header.pivot = new Vector2(0.5f, 1);
-        header.offsetMin = new Vector2(0, globalChrome ? -96 : -44);
+        var globalHeaderHeight = projection is GlobalQuestGraphProjection { Mode: GlobalQuestGraphMode.InProgress } ? 140 : 96;
+        header.offsetMin = new Vector2(0, globalChrome ? -globalHeaderHeight : -44);
         header.offsetMax = Vector2.zero;
         header.gameObject.AddComponent<Image>().color = globalChrome ? new Color(0.055f, 0.07f, 0.075f, 0.99f) : Color.clear;
         if (!globalChrome)
@@ -185,7 +187,7 @@ internal sealed class QuestGraphView : IDisposable
         }
 
         var viewport = UnityUiFactory.CreateRect("Viewport", root);
-        UnityUiFactory.Stretch(viewport, 8, 8, globalChrome ? 100 : 48, 8);
+        UnityUiFactory.Stretch(viewport, 8, 8, globalChrome ? globalHeaderHeight + 4 : 48, 8);
         viewport.gameObject.AddComponent<Image>().color = new Color(0.025f, 0.029f, 0.032f, 0.85f);
         viewport.gameObject.AddComponent<RectMask2D>();
 
@@ -196,10 +198,18 @@ internal sealed class QuestGraphView : IDisposable
         content.anchoredPosition = Vector2.zero;
         content.sizeDelta = new Vector2(Mathf.Max(1, (float)projection.Width), Mathf.Max(1, (float)projection.Height));
 
-        var view = new QuestGraphView(root, viewport, content, projection, topology, overlay, onSelected, onFocusRequested, onViewportSettled, log, debugLogging);
+        var view = new QuestGraphView(root, viewport, content, projection, topology, overlay, onSelected, onFocusRequested,
+            onViewportSettled, log, debugLogging, assetCache);
         view._input.Bind(viewport, content, view.RefreshViewportCulling, view.ViewportSettled, onBackgroundClick);
-        if (globalChrome) view.BuildCanvasControls(extraActions ?? Array.Empty<QuestGraphHeaderAction>());
-        else view.BuildControls(header, extraActions ?? Array.Empty<QuestGraphHeaderAction>());
+        if (globalChrome)
+        {
+            if (projection is not GlobalQuestGraphProjection { Mode: GlobalQuestGraphMode.InProgress })
+                view.BuildCanvasControls(extraActions ?? Array.Empty<QuestGraphHeaderAction>());
+        }
+        else
+        {
+            view.BuildControls(header, extraActions ?? Array.Empty<QuestGraphHeaderAction>());
+        }
         view.BuildLegend(globalChrome);
         if (projection.Nodes.Count == 0) view.BuildEmptyState();
         Canvas.ForceUpdateCanvases();
@@ -226,6 +236,12 @@ internal sealed class QuestGraphView : IDisposable
         {
             _log.LogInfo($"QUESTMAP_M05_OVERLAY activeNodes={_activeNodes.Count}; totalNodes={_projection.Nodes.Count}; overlayMs={stopwatch.Elapsed.TotalMilliseconds:F2}; layoutRebuilt=False");
         }
+    }
+
+    public void RefreshQuest(QuestProfileOverlay overlay, string questId)
+    {
+        _overlay = overlay;
+        if (_activeNodes.TryGetValue(questId, out var view)) ApplyNodeState(questId, view);
     }
 
     public void SetSelected(string? questId)

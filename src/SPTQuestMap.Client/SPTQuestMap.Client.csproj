@@ -22,6 +22,8 @@
            Text="EftInstallRoot does not contain EscapeFromTarkov.exe: $(EftInstallRoot)" />
     <Error Condition="!Exists('$(ManagedRoot)\Assembly-CSharp.dll')"
            Text="Required client assembly is missing: $(ManagedRoot)\Assembly-CSharp.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\Comfort.dll')"
+           Text="Required EFT assembly is missing: $(ManagedRoot)\Comfort.dll" />
     <Error Condition="!Exists('$(ManagedRoot)\Sirenix.Serialization.dll')"
            Text="Required EFT serialization assembly is missing: $(ManagedRoot)\Sirenix.Serialization.dll" />
     <Error Condition="!Exists('$(ManagedRoot)\Newtonsoft.Json.dll')"
@@ -64,6 +66,10 @@
     </Reference>
     <Reference Include="BepInEx">
       <HintPath>$(BepInExCoreRoot)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Comfort">
+      <HintPath>$(ManagedRoot)\Comfort.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Sirenix.Serialization">

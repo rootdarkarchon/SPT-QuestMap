@@ -36,7 +36,7 @@ internal static class EftLiveSnapshotAdapter
             traders);
     }
 
-    private static LiveQuestSnapshot CaptureQuest(QuestClass quest)
+    internal static LiveQuestSnapshot CaptureQuest(QuestClass quest)
     {
         var objectiveProgress = quest.Conditions.Values
             .SelectMany(conditions => conditions)

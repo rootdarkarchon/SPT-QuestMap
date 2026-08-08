@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using BepInEx.Logging;
 using EFT;
@@ -14,6 +16,7 @@ internal sealed class QuestMapDataAdapter
 {
     private readonly IQuestTopologySource _topologySource;
     private readonly ManualLogSource _log;
+    private Dictionary<string, QuestLiveState>? _liveQuestStates;
 
     public QuestMapDataAdapter(IQuestTopologySource topologySource, ManualLogSource log)
     {
@@ -40,6 +43,7 @@ internal sealed class QuestMapDataAdapter
         Layout = layout;
         ServerProfile = loaded.Profile;
         Overlay = null;
+        _liveQuestStates = null;
         _log.LogInfo(
             "QUESTMAP_M02_TOPOLOGY " +
             $"rawTemplates={loaded.RawTemplateCount}; nodes={Topology.Nodes.Count}; edges={Topology.Edges.Count}; " +
@@ -90,6 +94,11 @@ internal sealed class QuestMapDataAdapter
             };
         }
         stopwatch.Stop();
+        _liveQuestStates = new Dictionary<string, QuestLiveState>(overlay.QuestsById, StringComparer.Ordinal);
+        overlay = overlay with
+        {
+            QuestsById = new ReadOnlyDictionary<string, QuestLiveState>(_liveQuestStates),
+        };
         Overlay = overlay;
         if (logDiagnostics)
         {
@@ -98,6 +107,43 @@ internal sealed class QuestMapDataAdapter
                 $"liveQuests={snapshot.Quests.Count}; missingLiveQuests={overlay.MissingLiveQuestIds.Count}; " +
                 $"overlayMs={stopwatch.Elapsed.TotalMilliseconds:F2}");
         }
+        return overlay;
+    }
+
+    public QuestProfileOverlay RefreshLiveQuests(
+        IEnumerable<QuestClass> liveQuests,
+        out IReadOnlyDictionary<string, QuestLiveState?> previousStates)
+    {
+        var overlay = Overlay ?? throw new InvalidOperationException("QuestMap overlay must be loaded before a targeted live-quest refresh.");
+        var topology = Topology ?? throw new InvalidOperationException("QuestMap topology must be loaded before a targeted live-quest refresh.");
+        var states = _liveQuestStates ?? throw new InvalidOperationException("QuestMap live-state cache must be loaded before a targeted live-quest refresh.");
+        var replacements = liveQuests
+            .Select(EftLiveSnapshotAdapter.CaptureQuest)
+            .GroupBy(quest => quest.QuestId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
+        if (replacements.Count == 0)
+        {
+            previousStates = new Dictionary<string, QuestLiveState?>(StringComparer.Ordinal);
+            return overlay;
+        }
+
+        var prior = new Dictionary<string, QuestLiveState?>(StringComparer.Ordinal);
+        foreach (var live in replacements.Values)
+        {
+            if (!topology.NodesById.ContainsKey(live.QuestId))
+                throw new InvalidOperationException($"Targeted live quest '{live.QuestId}' is absent from the loaded topology.");
+            prior[live.QuestId] = states.GetValueOrDefault(live.QuestId);
+            states[live.QuestId] = new QuestLiveState(
+                live.QuestId,
+                live.ExactStatus,
+                true,
+                live.Visible,
+                live.Objectives,
+                live.ExpirationTime,
+                live.HandoverReady);
+        }
+
+        previousStates = new ReadOnlyDictionary<string, QuestLiveState?>(prior);
         return overlay;
     }
 }

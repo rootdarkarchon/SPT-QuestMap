@@ -90,6 +90,14 @@ public static class GlobalQuestGraphProjectionBuilder
                     options.ActiveStatusFilter!));
         }
 
+        if (options.Mode == GlobalQuestGraphMode.InProgress && options.LocationIds is not null)
+        {
+            var locationIds = options.LocationIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            visible.RemoveWhere(id => !topology.NodesById.TryGetValue(id, out var node)
+                || (node.Location.Any && !locationIds.Contains("any"))
+                || (!node.Location.Any && !locationIds.Contains(node.Location.Id)));
+        }
+
         // Focus is a chain projection, not another filter. Match the browser by
         // ignoring future, finished, level, trader, and search constraints here.
         if (!string.IsNullOrWhiteSpace(options.FocusQuestId)
@@ -117,31 +125,40 @@ public static class GlobalQuestGraphProjectionBuilder
 
         if (!string.IsNullOrWhiteSpace(options.TraderId))
         {
-            var traderVisible = visible.Intersect(topology.Nodes
-                .Where(node => string.Equals(node.TraderId, options.TraderId, StringComparison.Ordinal))
-                .Select(node => node.Id)).ToHashSet(StringComparer.Ordinal);
-            var boundaries = traderVisible.Where(id => topology.NodesById.TryGetValue(id, out var node)
-                && QuestGraphRules.IsTraderBoundaryForFilter(
-                    QuestGraphRules.ClassifyProfileDisplayState(topology, node, overlay))).ToArray();
-            foreach (var source in boundaries)
+            if (options.Mode == GlobalQuestGraphMode.InProgress)
             {
-                if (!topology.OutgoingEdgesBySource.TryGetValue(source, out var outgoing)) continue;
-                foreach (var edge in outgoing)
-                {
-                    if (applicable.Contains(edge.TargetId) && PassesCommonFilters(topology, overlay, options, edge.TargetId))
-                        traderVisible.Add(edge.TargetId);
-                }
+                visible.IntersectWith(topology.Nodes
+                    .Where(node => string.Equals(node.TraderId, options.TraderId, StringComparison.Ordinal))
+                    .Select(node => node.Id));
             }
-            foreach (var target in traderVisible.ToArray())
+            else
             {
-                if (!topology.IncomingEdgesByTarget.TryGetValue(target, out var incoming)) continue;
-                foreach (var edge in incoming)
+                var traderVisible = visible.Intersect(topology.Nodes
+                    .Where(node => string.Equals(node.TraderId, options.TraderId, StringComparison.Ordinal))
+                    .Select(node => node.Id)).ToHashSet(StringComparer.Ordinal);
+                var boundaries = traderVisible.Where(id => topology.NodesById.TryGetValue(id, out var node)
+                    && QuestGraphRules.IsTraderBoundaryForFilter(
+                        QuestGraphRules.ClassifyProfileDisplayState(topology, node, overlay))).ToArray();
+                foreach (var source in boundaries)
                 {
-                    if (!applicable.Contains(edge.SourceId) || IsRequirementSatisfied(edge, overlay)) continue;
-                    traderVisible.Add(edge.SourceId);
+                    if (!topology.OutgoingEdgesBySource.TryGetValue(source, out var outgoing)) continue;
+                    foreach (var edge in outgoing)
+                    {
+                        if (applicable.Contains(edge.TargetId) && PassesCommonFilters(topology, overlay, options, edge.TargetId))
+                            traderVisible.Add(edge.TargetId);
+                    }
                 }
+                foreach (var target in traderVisible.ToArray())
+                {
+                    if (!topology.IncomingEdgesByTarget.TryGetValue(target, out var incoming)) continue;
+                    foreach (var edge in incoming)
+                    {
+                        if (!applicable.Contains(edge.SourceId) || IsRequirementSatisfied(edge, overlay)) continue;
+                        traderVisible.Add(edge.SourceId);
+                    }
+                }
+                visible = traderVisible;
             }
-            visible = traderVisible;
         }
 
         var search = options.Search?.Trim();

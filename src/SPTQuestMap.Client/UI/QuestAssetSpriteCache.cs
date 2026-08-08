@@ -15,6 +15,15 @@ internal sealed class QuestAssetSpriteCache : MonoBehaviour
     private readonly List<Texture2D> _ownedTextures = new();
     private readonly List<Sprite> _ownedSprites = new();
     private ManualLogSource? _log;
+    private int _cacheHits;
+    private int _pendingHits;
+    private int _networkRequests;
+
+    public int CachedCount => _sprites.Count;
+    public int PendingCount => _pending.Count;
+    public int CacheHits => _cacheHits;
+    public int PendingHits => _pendingHits;
+    public int NetworkRequests => _networkRequests;
 
     public void Bind(ManualLogSource log)
     {
@@ -31,17 +40,20 @@ internal sealed class QuestAssetSpriteCache : MonoBehaviour
         }
         if (_sprites.TryGetValue(url, out var cached))
         {
+            _cacheHits++;
             completed(cached);
             return;
         }
         if (_pending.TryGetValue(url, out var pending))
         {
+            _pendingHits++;
             pending.Callbacks.Add(completed);
             return;
         }
 
         try
         {
+            _networkRequests++;
             _pending[url] = new PendingSprite(RequestHandler.GetDataAsync(url), completed);
         }
         catch (Exception exception)

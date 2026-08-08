@@ -61,18 +61,12 @@ public static class QuestGraphRules
         QuestGraphNode node,
         QuestProfileOverlay overlay)
     {
-        if (overlay.AuthoritativeDisplayStates.TryGetValue(node.Id, out var authoritative)) return authoritative;
-
         overlay.QuestsById.TryGetValue(node.Id, out var state);
         var exact = ClassifyDisplayState(state?.ExactStatus, state?.HasLiveQuest == true, node.Restartable);
+        if (TryClassifyLiveDynamicState(exact, out var liveDynamic)) return liveDynamic;
+        if (overlay.AuthoritativeDisplayStates.TryGetValue(node.Id, out var authoritative)) return authoritative;
 
-        if (exact == QuestDisplayStateKind.Success) return QuestMapDisplayStateKind.Completed;
         if (IsExcluded(node, overlay)) return QuestMapDisplayStateKind.Excluded;
-        if (exact == QuestDisplayStateKind.AvailableForFinish) return QuestMapDisplayStateKind.ReadyToFinish;
-        if (exact == QuestDisplayStateKind.Started) return QuestMapDisplayStateKind.InProgress;
-        if (exact == QuestDisplayStateKind.FailRestartable) return QuestMapDisplayStateKind.RestartableFailure;
-        if (exact == QuestDisplayStateKind.Expired) return QuestMapDisplayStateKind.Expired;
-        if (exact is QuestDisplayStateKind.Fail or QuestDisplayStateKind.MarkedAsFailed) return QuestMapDisplayStateKind.Failed;
         if (HasUnavailableTrader(node, overlay)) return QuestMapDisplayStateKind.TraderUnavailable;
         if (exact == QuestDisplayStateKind.AvailableAfter) return QuestMapDisplayStateKind.Pending;
         if (HasUnmetLevel(node, overlay.Level)) return QuestMapDisplayStateKind.LevelGated;
@@ -116,6 +110,23 @@ public static class QuestGraphRules
         return Math.Round(completedShare / objectives.Count * 100d, 1, MidpointRounding.AwayFromZero);
     }
 
+    public static double? ResolveProfileProgressPercent(string questId, QuestProfileOverlay overlay)
+    {
+        if (overlay.QuestsById.TryGetValue(questId, out var live) && live.HasLiveQuest)
+        {
+            var exact = ClassifyDisplayState(live.ExactStatus, true, false);
+            if (exact == QuestDisplayStateKind.AvailableForFinish) return 100d;
+            if (exact == QuestDisplayStateKind.Started && live.Objectives.Count > 0
+                && live.Objectives.All(objective => objective.Complete || objective.ProgressKnown))
+            {
+                return CalculateObjectiveProgressPercent(live.Objectives);
+            }
+        }
+        return overlay.AuthoritativeProgressPercentages.TryGetValue(questId, out var authoritative)
+            ? authoritative.HasValue ? Math.Clamp(authoritative.Value, 0d, 100d) : null
+            : null;
+    }
+
     public static bool IsTerminalQuest(QuestGraphTopology topology, string questId) =>
         !topology.NodesById.TryGetValue(questId, out var node) || node.ProfileGenerated
             ? false
@@ -126,6 +137,25 @@ public static class QuestGraphRules
         node.ExclusionRules.Any(rule => overlay.QuestsById.TryGetValue(rule.CausedByQuestId, out var cause)
             && cause.ExactStatus is not null
             && rule.RequiredStatuses.Contains(cause.ExactStatus));
+
+    private static bool TryClassifyLiveDynamicState(
+        QuestDisplayStateKind exact,
+        out QuestMapDisplayStateKind state)
+    {
+        state = exact switch
+        {
+            QuestDisplayStateKind.Success => QuestMapDisplayStateKind.Completed,
+            QuestDisplayStateKind.AvailableForFinish => QuestMapDisplayStateKind.ReadyToFinish,
+            QuestDisplayStateKind.Started => QuestMapDisplayStateKind.InProgress,
+            QuestDisplayStateKind.FailRestartable => QuestMapDisplayStateKind.RestartableFailure,
+            QuestDisplayStateKind.Expired => QuestMapDisplayStateKind.Expired,
+            QuestDisplayStateKind.Fail or QuestDisplayStateKind.MarkedAsFailed => QuestMapDisplayStateKind.Failed,
+            _ => default,
+        };
+        return exact is QuestDisplayStateKind.Success or QuestDisplayStateKind.AvailableForFinish
+            or QuestDisplayStateKind.Started or QuestDisplayStateKind.FailRestartable
+            or QuestDisplayStateKind.Expired or QuestDisplayStateKind.Fail or QuestDisplayStateKind.MarkedAsFailed;
+    }
 
     private static bool HasUnavailableTrader(QuestGraphNode node, QuestProfileOverlay overlay)
     {

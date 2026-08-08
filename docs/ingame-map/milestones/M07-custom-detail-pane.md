@@ -6,7 +6,25 @@ Add a QuestMap-owned quest detail pane with better graph navigation and item han
 
 ## Prerequisite
 
-Milestone 6 global and trader graph screens must be stable.
+Milestone 6 global and trader graph screens must be stable. M06 was user-accepted complete on 2026-08-08; reproducible M06 regressions may still be corrected during final polish without reopening its feature scope.
+
+## Status
+
+Active as of 2026-08-08. Start with the feature-gated detail model/pane and native `QuestView` fallback before changing trader-screen composition or action ownership.
+
+### Existing handoff assets
+
+- `EnableCustomQuestDetails` already exists as a default-off compatibility flag, but patch registration currently rejects it because no M07 UI is installed yet.
+- `TraderGraphScreenController` already resolves the exact-build native `_questView`, shows it for live quests, and uses `ReadonlyFutureQuestView` for topology-only future quests. This is the proven fallback/action boundary to preserve.
+- Global selection currently owns only the temporary M06 two-line summary. M07 should replace that summary with one shared detail model/pane rather than growing it further.
+- Existing topology/overlay models already carry names, trader/location, status/display state, requirements, ordered objective definitions/live progress, repeatable expiry, route membership, and relationship data. Audit missing reward, exclusion-cause, inventory-eligibility, and native-action capability data before expanding transport contracts.
+
+### First implementation slice
+
+1. Build a runtime-neutral selected-quest detail model from the existing topology and overlay without adding action behavior.
+2. Render that model in a default-off QuestMap pane for global and trader selections, with explicit unsupported/unknown fields and native `QuestView` fallback.
+3. Only after read-only parity is stable, widen the trader graph and introduce the responsive narrow side-pane composition.
+4. Bridge native actions one at a time, beginning with opening EFT's native handover picker; do not replace native validation or mutations.
 
 ## Rollout strategy
 

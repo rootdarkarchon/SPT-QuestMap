@@ -5,17 +5,27 @@ namespace SPTQuestMap.Client.Configuration;
 internal sealed class QuestMapClientConfiguration
 {
     private QuestMapClientConfiguration(
+        string configFilePath,
         ConfigEntry<bool> enableTraderQuestGraph,
         ConfigEntry<bool> enableGlobalTasksGraph,
         ConfigEntry<bool> enableCustomQuestDetails,
+        ConfigEntry<bool> autoTrackNewQuests,
+        ConfigEntry<bool> trackFavoriteQuests,
+        ConfigEntry<bool> autoTrackMapRelatedQuests,
+        ConfigEntry<float> raidNotificationOpacity,
         ConfigEntry<bool> enableDebugLogging,
         ConfigEntry<bool> forceCompatibilityFailure,
         ConfigEntry<bool> forceTraderGraphInitializationFailure,
         ConfigEntry<bool> forceGlobalTasksGraphInitializationFailure)
     {
+        ConfigFilePath = configFilePath;
         EnableTraderQuestGraph = enableTraderQuestGraph;
         EnableGlobalTasksGraph = enableGlobalTasksGraph;
         EnableCustomQuestDetails = enableCustomQuestDetails;
+        AutoTrackNewQuests = autoTrackNewQuests;
+        TrackFavoriteQuests = trackFavoriteQuests;
+        AutoTrackMapRelatedQuests = autoTrackMapRelatedQuests;
+        RaidNotificationOpacity = raidNotificationOpacity;
         EnableDebugLogging = enableDebugLogging;
         ForceCompatibilityFailure = forceCompatibilityFailure;
         ForceTraderGraphInitializationFailure = forceTraderGraphInitializationFailure;
@@ -24,9 +34,19 @@ internal sealed class QuestMapClientConfiguration
 
     public ConfigEntry<bool> EnableTraderQuestGraph { get; }
 
+    public string ConfigFilePath { get; }
+
     public ConfigEntry<bool> EnableGlobalTasksGraph { get; }
 
     public ConfigEntry<bool> EnableCustomQuestDetails { get; }
+
+    public ConfigEntry<bool> AutoTrackNewQuests { get; }
+
+    public ConfigEntry<bool> TrackFavoriteQuests { get; }
+
+    public ConfigEntry<bool> AutoTrackMapRelatedQuests { get; }
+
+    public ConfigEntry<float> RaidNotificationOpacity { get; }
 
     public ConfigEntry<bool> EnableDebugLogging { get; }
 
@@ -39,6 +59,7 @@ internal sealed class QuestMapClientConfiguration
     public static QuestMapClientConfiguration Bind(ConfigFile config)
     {
         return new QuestMapClientConfiguration(
+            config.ConfigFilePath,
             config.Bind(
                 "Features",
                 "EnableTraderQuestGraph",
@@ -54,6 +75,28 @@ internal sealed class QuestMapClientConfiguration
                 "EnableCustomQuestDetails",
                 false,
                 "Reserved for custom quest details. Milestone 1 remains inert."),
+            config.Bind(
+                "Tracking",
+                "AutoTrackNewQuests",
+                true,
+                "Automatically add newly accepted quests to QuestMap's manual tracking list."),
+            config.Bind(
+                "Tracking",
+                "TrackFavoriteQuests",
+                true,
+                "Implicitly track quests pinned with Tarkov's native favorite control."),
+            config.Bind(
+                "Tracking",
+                "AutoTrackMapRelatedQuests",
+                true,
+                "Implicitly track active quests assigned to the current raid map. Any and transit quests are not included."),
+            config.Bind(
+                "Notifications",
+                "RaidNotificationOpacity",
+                0.92f,
+                new ConfigDescription(
+                    "Overall opacity of QuestMap's in-raid quest progress notification.",
+                    new AcceptableValueRange<float>(0.2f, 1f))),
             config.Bind(
                 "Diagnostics",
                 "EnableDebugLogging",

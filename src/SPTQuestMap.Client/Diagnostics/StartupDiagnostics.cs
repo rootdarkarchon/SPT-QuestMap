@@ -43,6 +43,9 @@ internal static class StartupDiagnostics
             $"traderGraph={configuration.EnableTraderQuestGraph.Value}; " +
             $"globalGraph={configuration.EnableGlobalTasksGraph.Value}; " +
             $"customDetails={configuration.EnableCustomQuestDetails.Value}; " +
+            $"autoTrackNew={configuration.AutoTrackNewQuests.Value}; " +
+            $"trackFavorites={configuration.TrackFavoriteQuests.Value}; " +
+            $"autoTrackMap={configuration.AutoTrackMapRelatedQuests.Value}; " +
             $"debug={configuration.EnableDebugLogging.Value}; " +
             $"forceCompatibilityFailure={configuration.ForceCompatibilityFailure.Value}; " +
             $"forceTraderGraphInitializationFailure={configuration.ForceTraderGraphInitializationFailure.Value}; " +
