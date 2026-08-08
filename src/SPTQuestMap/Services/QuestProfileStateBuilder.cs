@@ -4,6 +4,7 @@ using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Enums;
 using SPTarkov.Server.Core.Models.Spt.Config;
+using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Services;
 
@@ -15,7 +16,8 @@ internal sealed class QuestProfileStateBuilder(
     SaveServer saveServer,
     QuestHelper questHelper,
     SeasonalEventService seasonalEventService,
-    QuestConfig questConfig
+    QuestConfig questConfig,
+    ISptLogger<QuestMapDataService> logger
 )
 {
     private readonly object _availabilityLock = new();
@@ -31,7 +33,17 @@ internal sealed class QuestProfileStateBuilder(
         if (pmc?.Info is null) return null;
 
         var generatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var profileQuests = (pmc.Quests ?? []).ToDictionary(quest => quest.QId.ToString(), StringComparer.Ordinal);
+        var profileQuests = BuildProfileQuestLookup(
+            pmc.Quests ?? [],
+            (questId, kept, ignored) =>
+            {
+                var node = topology.Quests.FirstOrDefault(quest => quest.Id == questId);
+                var description = node is null
+                    ? $"unknown quest {questId}"
+                    : $"'{node.Name}' ({questId}) from trader '{node.TraderName}' ({node.TraderId})";
+                logger.Warning($"SPT-QuestMap: profile {profileId} contains duplicate status rows for {description}; keeping first status {kept.Status} and ignoring later status {ignored.Status} to match SPT 4.0.13.");
+            }
+        );
         var profileQuestStatuses = profileQuests.ToDictionary(
             pair => pair.Key,
             pair => pair.Value.Status.ToString(),
@@ -41,9 +53,15 @@ internal sealed class QuestProfileStateBuilder(
         Dictionary<string, QuestStatusEnum?> authoritative;
         lock (_availabilityLock)
         {
-            authoritative = questHelper
-                .GetClientQuests(profileId)
-                .ToDictionary(quest => quest.Id.ToString(), quest => quest.SptStatus, StringComparer.Ordinal);
+            authoritative = new Dictionary<string, QuestStatusEnum?>(StringComparer.Ordinal);
+            foreach (var quest in questHelper.GetClientQuests(profileId))
+            {
+                var questId = quest.Id.ToString();
+                if (!authoritative.TryAdd(questId, quest.SptStatus))
+                {
+                    logger.Warning($"SPT-QuestMap: SPT returned quest {questId} more than once for profile {profileId}; keeping the first authoritative result.");
+                }
+            }
         }
 
         var noneExcluded = QuestGraphRules.BuildNoneEventExclusionSet(topology);
@@ -126,6 +144,11 @@ internal sealed class QuestProfileStateBuilder(
                 profileTrader?.SalesSum
             );
         }).ToArray();
+        var repeatableGroups = EnsureUniqueRepeatableQuestIds(
+            BuildRepeatableQuestGroups(pmc, profileQuests, language, generatedAt),
+            topology.Quests.Select(quest => quest.Id),
+            (entry, collision) => logger.Warning($"SPT-QuestMap: repeatable quest '{entry.Node.Name}' ({entry.Node.Id}) from trader '{entry.Node.TraderName}' ({entry.Node.TraderId}) collides with {collision}; keeping the earlier canonical entry.")
+        );
 
         return new ProfileStateDto(
             profileId.ToString(),
@@ -141,8 +164,56 @@ internal sealed class QuestProfileStateBuilder(
             applicable.Order(StringComparer.Ordinal).ToArray()
         )
         {
-            RepeatableQuestGroups = BuildRepeatableQuestGroups(pmc, profileQuests, language, generatedAt),
+            RepeatableQuestGroups = repeatableGroups,
         };
+    }
+
+    internal static Dictionary<string, QuestStatus> BuildProfileQuestLookup(
+        IEnumerable<QuestStatus> quests,
+        Action<string, QuestStatus, QuestStatus>? onDuplicate = null
+    )
+    {
+        var result = new Dictionary<string, QuestStatus>(StringComparer.Ordinal);
+        foreach (var quest in quests)
+        {
+            var questId = quest.QId.ToString();
+            if (result.TryAdd(questId, quest)) continue;
+            onDuplicate?.Invoke(questId, result[questId], quest);
+        }
+
+        return result;
+    }
+
+    internal static RepeatableQuestGroupDto[] EnsureUniqueRepeatableQuestIds(
+        IEnumerable<RepeatableQuestGroupDto> groups,
+        IEnumerable<string> reservedQuestIds,
+        Action<RepeatableQuestEntryDto, string>? onCollision = null
+    )
+    {
+        var reserved = reservedQuestIds.ToHashSet(StringComparer.Ordinal);
+        var occupied = new HashSet<string>(reserved, StringComparer.Ordinal);
+        var result = new List<RepeatableQuestGroupDto>();
+        foreach (var group in groups)
+        {
+            var unique = new List<RepeatableQuestEntryDto>();
+            foreach (var entry in group.Quests)
+            {
+                if (occupied.Add(entry.Node.Id))
+                {
+                    unique.Add(entry);
+                    continue;
+                }
+
+                onCollision?.Invoke(
+                    entry,
+                    reserved.Contains(entry.Node.Id) ? "the static quest topology" : "an earlier Daily/Weekly entry"
+                );
+            }
+
+            if (unique.Count > 0) result.Add(group with { Quests = unique });
+        }
+
+        return result.ToArray();
     }
 
     private RepeatableQuestGroupDto[] BuildRepeatableQuestGroups(
@@ -191,7 +262,7 @@ internal sealed class QuestProfileStateBuilder(
             .ToArray();
     }
 
-    private static RepeatableQuestEntryDto BuildRepeatableQuestEntry(
+    private RepeatableQuestEntryDto BuildRepeatableQuestEntry(
         RepeatableQuest quest,
         QuestStatus? profileQuest,
         Dictionary<string, string> locale,
@@ -209,7 +280,11 @@ internal sealed class QuestProfileStateBuilder(
         var location = QuestTemplateMapper.BuildLocation(quest.Location, locale, locationsById);
         var typeName = QuestTemplateMapper.Localize(locale, $"DailyQuestName/{quest.Type}", quest.Type.ToString());
         var finishConditions = quest.Conditions?.AvailableForFinish ?? [];
-        var objectives = QuestTemplateMapper.OrderObjectives(finishConditions, locale)
+        var objectives = QuestTemplateMapper.OrderObjectives(
+                finishConditions,
+                locale,
+                duplicateId => logger.Warning($"SPT-QuestMap: duplicate objective condition ID '{duplicateId}' on repeatable quest {questId}; keeping its first definition.")
+            )
             .Select(objective => objective with
             {
                 Text = RepeatableObjectiveText(

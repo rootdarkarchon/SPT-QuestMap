@@ -37,6 +37,7 @@ public sealed class QuestMapDataService
 #pragma warning disable CS0618 // SPT 4.0.13 exposes config instances through ConfigServer.
             configServer.GetConfig<QuestConfig>(),
 #pragma warning restore CS0618
+            new QuestSummaryCatalog(warning: message => logger.Warning(message)),
             logger
         );
         _profiles = new QuestProfileStateBuilder(
@@ -46,8 +47,9 @@ public sealed class QuestMapDataService
             questHelper,
             seasonalEventService,
 #pragma warning disable CS0618 // SPT 4.0.13 exposes config instances through ConfigServer.
-            configServer.GetConfig<QuestConfig>()
+            configServer.GetConfig<QuestConfig>(),
 #pragma warning restore CS0618
+            logger
         );
     }
 

@@ -116,6 +116,8 @@ Objective order should follow explicit `index`, `parentId`, visibility/dependenc
 
 Localized trader objective text must use the same allowlisted HTML/Tarkov-tag parser as quest descriptions and reward text.
 
+When a static localized summary exists for a quest, the detail pane provides Description and Summary tabs and remembers the preferred tab across quest selections and reloads. A quest without a summary retains the unsplit description presentation. Summaries are explicitly labeled as static user-generated text that may differ from SPT's authoritative quest text after other mods alter localization.
+
 ## State styling
 
 The exact palette is flexible, but states must remain distinguishable without relying only on text. Include a legend.

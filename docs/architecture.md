@@ -67,6 +67,8 @@ The server-owned UI catalog combines selected SPT global-locale values for share
 
 QuestMap-owned translations live as embedded JSON resources under `Localization/Locales`. `QuestMapUiCatalog` contains only the composition policy: English fallback, selected SPT global-locale values, QuestMap overrides, and invariant product names. The English catalog contains only keys consumed by Razor or the Canvas renderer.
 
+Static quest summaries are separate from SPT's authoritative locale text. The bundled `Localization/Summaries/en.json` catalog is embedded in the DLL. `QuestSummaryCatalog` overlays an optional trader-specific catalog from `SPT/user/mods/SPT-QuestMap/Summaries`: `<traderId>.<language>.json` takes precedence, with `<traderId>.json` as the default or `<traderId>.en.json` only when the default file is absent. Lookup remains per quest, and missing values do not create a Summary tab. Optional malformed/unreadable files are logged and skipped.
+
 QuestMap-owned presentation assets live under `Presentation/Assets` as embedded assembly resources. The Razor page injects the stylesheet through `HeadContent` and imports the Canvas module from an assembly-generated JavaScript data URL. SPT 4.0.13 only maps a mod's physical `wwwroot` directory; embedding both assets keeps the deployment DLL-only, avoids an extra controller/static route, and avoids SPT's legacy-mod rejection of deployed `.js` files. Renderer colors are semantic CSS custom properties read through `getComputedStyle`; JavaScript contains no color literals.
 
 ## Security

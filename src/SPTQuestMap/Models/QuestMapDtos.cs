@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace SPTQuestMap.Services;
 
 public sealed record QuestTopologyDto(
@@ -31,6 +33,9 @@ public sealed record QuestNodeDto(
 )
 {
     public UnknownConditionDto[] UnknownConditions { get; init; } = [];
+
+    [JsonIgnore]
+    public string? Summary { get; init; }
 }
 
 public sealed record QuestLocationDto(string Id, string? Name, bool Any, string? BannerImageUrl);

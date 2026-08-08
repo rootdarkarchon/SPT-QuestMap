@@ -31,6 +31,7 @@ public sealed class QuestMapPageState
     public bool ShowRepeatables { get; private set; } = true;
     public bool LevelEligibleOnly { get; private set; } = true;
     public bool InProgressExpanded { get; private set; }
+    public QuestDetailTextTab DetailTextTab { get; private set; }
     public QuestComparisonFilter ComparisonFilter { get; private set; }
     public string Search { get; private set; } = string.Empty;
     public string TraderFilter { get; private set; } = string.Empty;
@@ -56,6 +57,7 @@ public sealed class QuestMapPageState
         ShowRepeatables = settings.ShowRepeatables;
         LevelEligibleOnly = settings.LevelEligibleOnly;
         InProgressExpanded = settings.InProgressExpanded;
+        DetailTextTab = settings.DetailTextTab;
         Search = settings.Search ?? string.Empty;
         TraderFilter = settings.TraderFilter ?? string.Empty;
         ComparisonFilter = settings.ComparisonFilter;
@@ -76,9 +78,12 @@ public sealed class QuestMapPageState
             CompareEnabled = compareEnabled ?? CompareMode,
             ComparisonProfileId = comparisonProfileId ?? ComparisonProfile?.ProfileId,
             ComparisonFilter = ComparisonFilter,
+            DetailTextTab = DetailTextTab,
             ComparePairs = new Dictionary<string, QuestProfileUiSettings>(_comparePairSettings, StringComparer.Ordinal),
         };
     }
+
+    public void SetDetailTextTab(QuestDetailTextTab value) => DetailTextTab = value;
 
     public void SetData(QuestTopologyDto topology, ProfileStateDto? profile, ProfileStateDto? comparisonProfile = null)
     {
@@ -583,6 +588,8 @@ public sealed record QuestProfileUiSettings(string? SelectedId, string? FocusedI
 public enum QuestDifferenceCategory { PrimaryOnly, ComparisonOnly, Exclusion, Status, Objectives, AvailableAfter }
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum QuestComparisonFilter { AllQuests, AllChanges, PrimaryOnly, ComparisonOnly, Exclusion, Status, Objectives, AvailableAfter }
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum QuestDetailTextTab { Description, Summary }
 public sealed record QuestComparisonDto(string QuestId, QuestDifferenceCategory[] Categories)
 {
     public bool HasDifferences => Categories.Length > 0;
@@ -594,6 +601,7 @@ public sealed record QuestMapSettings(string? SelectedProfileId, string? Languag
     public bool CompareEnabled { get; init; }
     public string? ComparisonProfileId { get; init; }
     public QuestComparisonFilter ComparisonFilter { get; init; }
+    public QuestDetailTextTab DetailTextTab { get; init; }
     public IReadOnlyDictionary<string, QuestProfileUiSettings>? ComparePairs { get; init; } = new Dictionary<string, QuestProfileUiSettings>();
     public static QuestMapSettings Default { get; } = new(null, null, false, true, true, false, string.Empty, string.Empty, new Dictionary<string, QuestProfileUiSettings>());
 }

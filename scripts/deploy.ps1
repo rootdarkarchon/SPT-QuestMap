@@ -126,7 +126,8 @@ if ($PSCmdlet.ShouldProcess($destination, "Deploy files from $DeploymentSource")
 
     Get-ChildItem -LiteralPath $destinationFull -Recurse -File | ForEach-Object {
         $relativePath = [System.IO.Path]::GetRelativePath($destinationFull, $_.FullName)
-        if (-not $sourceRelativeFiles.Contains($relativePath)) {
+        $isUserSummary = $relativePath.StartsWith("Summaries$([System.IO.Path]::DirectorySeparatorChar)", [StringComparison]::OrdinalIgnoreCase)
+        if (-not $sourceRelativeFiles.Contains($relativePath) -and -not $isUserSummary) {
             Write-Host "Removing stale deployment file: $relativePath"
             Remove-Item -LiteralPath $_.FullName -Force
         }

@@ -52,9 +52,26 @@ internal static class QuestTemplateMapper
         return normalized.StartsWith("files/", StringComparison.OrdinalIgnoreCase) ? $"/{normalized}" : $"/files/{normalized}";
     }
 
-    internal static IEnumerable<ObjectiveDefinitionDto> OrderObjectives(IEnumerable<QuestCondition> conditions, Dictionary<string, string> locale)
+    internal static IEnumerable<ObjectiveDefinitionDto> OrderObjectives(
+        IEnumerable<QuestCondition> conditions,
+        Dictionary<string, string> locale,
+        Action<string>? onDuplicateId = null
+    )
     {
-        var source = conditions.Select((condition, sourceIndex) => new ObjectiveOrderItem(condition, sourceIndex)).ToArray();
+        // Modded traders sometimes ship the same objective condition ID more than once.
+        // SPT profile progress is keyed by that ID, so later copies cannot be represented
+        // independently; keep the first definition and preserve its stable source order.
+        var seenIds = new HashSet<string>(StringComparer.Ordinal);
+        var source = conditions
+            .Select((condition, sourceIndex) => new ObjectiveOrderItem(condition, sourceIndex))
+            .Where(item =>
+            {
+                var id = item.Condition.Id.ToString();
+                if (seenIds.Add(id)) return true;
+                onDuplicateId?.Invoke(id);
+                return false;
+            })
+            .ToArray();
         var byId = source.ToDictionary(item => item.Condition.Id.ToString(), StringComparer.Ordinal);
         var dependencies = source.ToDictionary(
             item => item.Condition.Id.ToString(),

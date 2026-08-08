@@ -149,7 +149,8 @@ public sealed class QuestMapDataServiceTests
             "state.InProgress", "state.ReadyToFinish", "state.Excluded", "state.RestartableFailure", "state.Expired",
             "state.Pending", "state.FailRestartable", "state.AvailableAfter", "details.effectiveGates",
             "details.availableAfter", "details.currentBlockers", "details.mutualExclusion", "details.branchAlternatives",
-            "details.prerequisites", "details.successors", "inProgress.title", "showFinished", "levelEligible", "trader.allShort",
+            "details.prerequisites", "details.successors", "details.textTabs", "details.description", "details.summary",
+            "details.summaryDisclaimer", "inProgress.title", "showFinished", "levelEligible", "trader.allShort",
             "compare.toggle", "compare.exit", "compare.swap", "compare.profileA", "compare.profileB",
             "compare.differencesOnly", "compare.repeatablesUnavailable", "compare.splitLegend", "compare.different",
             "compare.differencesShort", "compare.progress", "compare.status",
@@ -398,6 +399,81 @@ public sealed class QuestMapDataServiceTests
         var result = QuestTemplateMapper.OrderObjectives([condition], locale).Single();
 
         Assert.That(result.Text, Is.EqualTo("Eliminate Scavs on any location"));
+    }
+
+    [Test]
+    public void DuplicateObjectiveIdsUseFirstDefinitionWithoutThrowing()
+    {
+        var first = Condition("6917c82760dbbed68c3cc90f", 2) with { Value = 10 };
+        var duplicate = Condition("6917c82760dbbed68c3cc90f", 0) with { Value = 20 };
+        var duplicateIds = new List<string>();
+
+        var result = QuestTemplateMapper.OrderObjectives([first, duplicate], [], duplicateIds.Add).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Has.Length.EqualTo(1));
+            Assert.That(result[0].Id, Is.EqualTo(first.Id.ToString()));
+            Assert.That(result[0].Index, Is.EqualTo(first.Index));
+            Assert.That(result[0].RequiredValue, Is.EqualTo(first.Value));
+            Assert.That(duplicateIds, Is.EqualTo(new[] { first.Id.ToString() }));
+        });
+    }
+
+    [Test]
+    public void IdenticalDuplicateProfileQuestIdsMatchSptFirstEntryBehavior()
+    {
+        var questId = new MongoId("6a74f9b2a4da0da5c05eadc5");
+        var first = ProfileQuest(questId, QuestStatusEnum.Success);
+        var duplicate = ProfileQuest(questId, QuestStatusEnum.Success);
+        var duplicates = new List<(string Id, QuestStatus Kept, QuestStatus Ignored)>();
+
+        var result = QuestProfileStateBuilder.BuildProfileQuestLookup(
+            [first, duplicate],
+            (id, kept, ignored) => duplicates.Add((id, kept, ignored))
+        );
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[questId.ToString()], Is.SameAs(first));
+            Assert.That(duplicates, Has.Count.EqualTo(1));
+            Assert.That(duplicates[0].Id, Is.EqualTo(questId.ToString()));
+            Assert.That(duplicates[0].Kept, Is.SameAs(first));
+            Assert.That(duplicates[0].Ignored, Is.SameAs(duplicate));
+        });
+    }
+
+    [Test]
+    public void RepeatableQuestIdsDoNotCollideWithTopologyOrEarlierRepeatables()
+    {
+        var staticCollision = RepeatableEntry("static", "Static collision");
+        var firstDaily = RepeatableEntry("daily", "First daily");
+        var duplicateDaily = RepeatableEntry("daily", "Duplicate daily");
+        var collisions = new List<(string Id, string Source)>();
+        RepeatableQuestGroupDto[] groups =
+        [
+            new("Daily", 100, [staticCollision, firstDaily]),
+            new("Weekly", 200, [duplicateDaily]),
+        ];
+
+        var result = QuestProfileStateBuilder.EnsureUniqueRepeatableQuestIds(
+            groups,
+            ["static"],
+            (entry, source) => collisions.Add((entry.Node.Id, source))
+        );
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Has.Length.EqualTo(1));
+            Assert.That(result[0].Kind, Is.EqualTo("Daily"));
+            Assert.That(result[0].Quests.Select(entry => entry.Node.Id), Is.EqualTo(new[] { "daily" }));
+            Assert.That(collisions, Is.EqualTo(new[]
+            {
+                ("static", "the static quest topology"),
+                ("daily", "an earlier Daily/Weekly entry"),
+            }));
+        });
     }
 
     [TestCase(QuestStatusEnum.Success, "Completed")]
@@ -666,6 +742,19 @@ public sealed class QuestMapDataServiceTests
         DynamicLocale = false,
         ConditionType = "CounterCreator",
     };
+
+    private static QuestStatus ProfileQuest(MongoId id, QuestStatusEnum status) => new()
+    {
+        QId = id,
+        StartTime = 0,
+        Status = status,
+        StatusTimers = [],
+    };
+
+    private static RepeatableQuestEntryDto RepeatableEntry(string id, string name) => new(
+        Node(id, null) with { Name = name },
+        State("Available") with { QuestId = id }
+    );
 
     private static QuestTopologyDto Topology(QuestNodeDto[] nodes, QuestEdgeDto[] edges) => new("test", nodes, edges, [], [], []);
 

@@ -16,6 +16,7 @@ internal sealed class QuestTopologyBuilder(
     QuestHelper questHelper,
     SeasonalEventService seasonalEventService,
     QuestConfig questConfig,
+    QuestSummaryCatalog summaryCatalog,
     ISptLogger<QuestMapDataService> logger
 )
 {
@@ -110,7 +111,11 @@ internal sealed class QuestTopologyBuilder(
                 quest.Restartable,
                 requirements,
                 [],
-                QuestTemplateMapper.OrderObjectives(quest.Conditions?.AvailableForFinish ?? [], locale).ToArray(),
+                QuestTemplateMapper.OrderObjectives(
+                    quest.Conditions?.AvailableForFinish ?? [],
+                    locale,
+                    duplicateId => logger.Warning($"SPT-QuestMap: duplicate objective condition ID '{duplicateId}' on quest {questId}; keeping its first definition.")
+                ).ToArray(),
                 exclusions,
                 QuestTemplateMapper.BuildRewards(
                     quest.Rewards?.GetValueOrDefault(QuestStatusEnum.Success.ToString()) ?? [],
@@ -121,6 +126,7 @@ internal sealed class QuestTopologyBuilder(
             )
             {
                 UnknownConditions = unknownConditions,
+                Summary = summaryCatalog.Get(questId, quest.TraderId.ToString(), language),
             });
         }
 

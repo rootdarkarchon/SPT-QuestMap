@@ -145,6 +145,7 @@ public sealed class BlazorMigrationTests
             CompareEnabled = true,
             ComparisonProfileId = "comparison",
             ComparisonFilter = QuestComparisonFilter.Objectives,
+            DetailTextTab = QuestDetailTextTab.Summary,
             ComparePairs = new Dictionary<string, QuestProfileUiSettings> { ["profile|comparison"] = new("other-quest", null) },
         };
 
@@ -166,7 +167,51 @@ public sealed class BlazorMigrationTests
             Assert.That(actual.CompareEnabled, Is.True);
             Assert.That(actual.ComparisonProfileId, Is.EqualTo("comparison"));
             Assert.That(actual.ComparisonFilter, Is.EqualTo(QuestComparisonFilter.Objectives));
+            Assert.That(actual.DetailTextTab, Is.EqualTo(QuestDetailTextTab.Summary));
             Assert.That(actual.ComparePairs, Is.EquivalentTo(expected.ComparePairs));
+        });
+    }
+
+    [Test]
+    public async Task QuestDetailsShowsPersistentTabsOnlyWhenSummaryExists()
+    {
+        var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
+        var summarized = Node("summarized", "Summarized", "trader-a") with { Summary = "Short user summary." };
+        var plain = Node("plain", "Plain", "trader-a");
+        var topology = new QuestTopologyDto("version", [summarized, plain], [], [new QuestTraderDto("trader-a", "Trader A", null)], [], []);
+        var profile = new ProfileStateDto("profile", "PMC", "Usec", 10, 0, false, false,
+            [State("summarized", "Available"), State("plain", "Available")], [], ["summarized", "plain"], ["summarized", "plain"]);
+        var state = new QuestMapPageState();
+        state.SetData(topology, profile);
+        state.SetDetailTextTab(QuestDetailTextTab.Summary);
+        state.SelectQuest("summarized");
+        var localizer = new QuestMapLocalizer(new QuestMapBootstrapDto("en", "en", [], QuestMapUiCatalog.English));
+
+        var summarizedHtml = await renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<QuestDetails>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                [nameof(QuestDetails.State)] = state,
+                [nameof(QuestDetails.Localizer)] = localizer,
+            }))).ToHtmlString());
+
+        state.SelectQuest("plain");
+        var plainHtml = await renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<QuestDetails>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                [nameof(QuestDetails.State)] = state,
+                [nameof(QuestDetails.Localizer)] = localizer,
+            }))).ToHtmlString());
+        var rendererPayload = JsonSerializer.Serialize(state.BuildGraphSnapshot(localizer), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(summarizedHtml, Does.Contain("role=\"tablist\""));
+            Assert.That(summarizedHtml, Does.Contain("Short user summary."));
+            Assert.That(summarizedHtml, Does.Contain("static, user-generated summary"));
+            Assert.That(plainHtml, Does.Not.Contain("role=\"tablist\""));
+            Assert.That(state.DetailTextTab, Is.EqualTo(QuestDetailTextTab.Summary), "Selecting a quest without a summary must not reset the remembered tab.");
+            Assert.That(rendererPayload, Does.Not.Contain("Short user summary."), "Summary prose belongs to Blazor details and must not inflate the Canvas payload.");
         });
     }
 

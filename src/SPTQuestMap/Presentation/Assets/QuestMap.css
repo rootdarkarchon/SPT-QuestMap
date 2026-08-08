@@ -224,6 +224,11 @@ h1 { margin: 0; font: 700 1.55rem/1 Georgia, serif; letter-spacing: -.02em; }
 .status-completed { background: #36523b; }.status-failed, .status-excluded { background: #71383e; }.status-pending { background: #6b4e30; }
 .status-prerequisitegated { background: #554d43; }
 .description { margin: 0; padding: 0 1rem 1rem; color: #b4b6ad; font-size: .8rem; line-height: 1.55; }
+.detail-text-tabs { display: flex; gap: .2rem; margin: 0 1rem .8rem; border-bottom: 1px solid #3b4039; }
+.detail-text-tabs button { margin-bottom: -1px; padding: .42rem .65rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: #8f938a; font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.detail-text-tabs button:hover:not(:disabled) { border-bottom-color: #6f674b; background: #242922; color: #d4cfbf; }
+.detail-text-tabs button.active { border-bottom-color: #c4aa58; color: #e8d998; }
+.summary-disclaimer { margin: -.15rem 1rem 1rem; padding-top: .65rem; border-top: 1px solid #30352f; color: #777d74; font-size: .66rem; font-style: italic; line-height: 1.4; }
 .description-clip { position: relative; max-height: 250px; overflow: hidden; transition: max-height .32s cubic-bezier(.2,.7,.2,1); }
 .description-expander.can-expand:not(.expanded) .description-clip::after { position: absolute; right: 0; bottom: 0; left: 0; height: 4rem; content: ''; pointer-events: none; background: linear-gradient(to bottom, transparent, rgba(20,24,21,.98)); }
 .description-toggle { position: relative; z-index: 1; display: block; margin: -.25rem auto .75rem; padding: .3rem .7rem; border-color: #5f5a45; color: #c8ba86; font-size: .68rem; }
