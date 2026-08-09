@@ -10,33 +10,68 @@ Milestone 6 global and trader graph screens must be stable. M06 was user-accepte
 
 ## Status
 
-Active as of 2026-08-08. Start with the feature-gated detail model/pane and native `QuestView` fallback before changing trader-screen composition or action ownership.
+Feature-complete; final polish active as of 2026-08-09. The reusable pane is implemented on both the global Tasks workspace and the trader-scoped replacement. Trader Tasks/Quest Map composition uses the same table, graph, selection, detail, tracking, asset-cache, and native-action components as the global screen. A fresh-profile runtime pass accepted multiple quest accept, fulfillment, handover, turn-in, successor-unlock, and presentation transitions. Workspace bounds, filters, grouping, shared selection/detail synchronization, pinning, notification opacity, and trader objective expansion are also accepted. Milestone 8 remains deferred until this release-facing polish is accepted.
+
+### Release-facing UI polish
+
+- The client uses one configurable semantic palette for selection, prerequisite and successor emphasis; available, active, ready, completed, failed, level-gated, trader-gated and locked states; and Collector, Lightkeeper and terminal-route accents. The defaults preserve the established QuestMap appearance while F12 color entries allow local adjustment.
+- F12 section and entry names are human-readable free text. This is an initial-release contract, so obsolete generated names are not migrated.
+- Extensive topology, projection, table, raid-monitor and performance telemetry is controlled by the `Diagnostics / Enable debug logging` checkbox. Compatibility state plus warnings and errors remain visible without debug logging.
+- Deliberate compatibility/trader/global initialization failure switches and their production code paths have been removed. Real exact-version validation and safe native fallback remain intact.
+- Every custom button created through the shared UI factory, including quest-selection surfaces, uses EFT's native hover/click feedback. Hover color is a slightly dimmer form of the button's normal or active color; it is not a second semantic highlight.
+- Trader Tasks has a shared, default-on `Unavailable: Hidden` filter. It affects only the Unavailable group and remains consistent while moving between traders in the same profile session.
 
 ### Existing handoff assets
 
-- `EnableCustomQuestDetails` already exists as a default-off compatibility flag, but patch registration currently rejects it because no M07 UI is installed yet.
-- `TraderGraphScreenController` already resolves the exact-build native `_questView`, shows it for live quests, and uses `ReadonlyFutureQuestView` for topology-only future quests. This is the proven fallback/action boundary to preserve.
-- Global selection currently owns only the temporary M06 two-line summary. M07 should replace that summary with one shared detail model/pane rather than growing it further.
+- QuestMap details and native action bridges are mandatory parts of either enabled Tasks replacement. There is no independent detail-pane feature toggle; disabling the relevant global or trader replacement restores that complete vanilla screen.
+- The transitional `TraderGraphScreenController` is excluded from the client build. `TraderTasksScreenController` replaces the complete `QuestsScreen` workspace and hosts the shared custom components while leaving the surrounding trader navigation intact.
+- Global selection now owns a reusable QuestMap pane in place of the temporary M06 two-line summary when the feature is enabled.
 - Existing topology/overlay models already carry names, trader/location, status/display state, requirements, ordered objective definitions/live progress, repeatable expiry, route membership, and relationship data. Audit missing reward, exclusion-cause, inventory-eligibility, and native-action capability data before expanding transport contracts.
 
 ### First implementation slice
 
-1. Build a runtime-neutral selected-quest detail model from the existing topology and overlay without adding action behavior.
-2. Render that model in a default-off QuestMap pane for global and trader selections, with explicit unsupported/unknown fields and native `QuestView` fallback.
-3. Only after read-only parity is stable, widen the trader graph and introduce the responsive narrow side-pane composition.
-4. Bridge native actions one at a time, beginning with opening EFT's native handover picker; do not replace native validation or mutations.
+1. **Implemented:** render topology/overlay selection in a default-off 640-pixel right pane constrained to the global Tasks viewport.
+2. **Implemented:** reuse native `QuestView`, `QuestObjectiveView`, and `QuestRewardList` behavior for live actions, handover, and reward item interaction; keep future topology-only quests read-only.
+3. **Runtime-accepted:** selection and mutually exclusive overlay lifecycle are behaving correctly; a fresh-profile pass covered repeated accept, fulfillment, handover, turn-in, successor-unlock, and presentation transitions. Uncommon quest shapes remain opportunistic regression coverage because the action and reward paths are EFT-owned.
+4. **Implemented and runtime-accepted for composition:** the trader replacement reuses the component and parameterized global Tasks/Quest Map components. Bounds, filters, grouping, selection/detail synchronization, and pinning have passed user review.
+
+### Trader workspace implementation
+
+- The global `In Progress` label is now `Tasks`. The trader screen defaults to the same Tasks table and offers the same Quest Map renderer as a peer tab.
+- Trader chrome is a single row: Tasks, Quest Map, search/clear, contextual task-or-graph filters, and the right-aligned Quest Description toggle. It deliberately has no trader or location strips.
+- Trader Tasks projection includes the selected trader's ready-to-finish, available, active, restartable, level-gated, trader-gated, trader-unavailable, pending, locked, and unknown applicable quests. Completed/failed/excluded/expired quests and prerequisite-gated quests are omitted.
+- Trader Tasks sections are Available to Finish, Available to Start, In Progress, and Unavailable. With no explicit column sort, each section orders native handover-eligible rows first, then progress descending, then name.
+- Trader Tasks rows always display their complete visible objective list. The global Tasks table retains its compact four-objective limit and per-row expand/collapse control, but trader-scoped rows do not render an expander because their task column is intentionally always expanded.
+- Trader Quest Map uses the global selection/focus/legend/canvas behavior. Its trader context adds only direct successors of the selected trader's in-progress quests, including cross-trader successors; selecting a node still restores its complete applicable predecessor chain.
+- The full `QuestsScreen` content rectangle is covered, hiding the native list/detail/action workspace without covering the surrounding trader selector/navigation. Native transaction controllers remain the only mutation path and remain disabled during raids.
+- The custom surface keeps the `QuestsScreen` top/full width but derives its lower edge from the native list/detail workspace so it cannot cover the persistent bottom main menu.
+- Trader context suppresses only the currently selected trader's redundant portrait in Tasks rows and the detail banner; cross-trader successors retain their identity. The trader detail header is two-thirds of the global detail header height.
+- Level- and trader-gated status cells include the concrete unmet effective requirement on a second line.
+- Trader Tasks membership treats prerequisite gating as an independent exclusion: a quest with any additional prioritized gate remains absent when its authoritative prerequisite-blocker set is non-empty.
+- Ordinary accept, handover, and turn-in reconciliation refreshes the authoritative server profile projection before recomputing overlays while retaining the existing topology and layout when their version is unchanged. This is required for status prerequisites such as `Started` and newly unlocked successors. Repeatable replacement remains the isolated generated-topology delta path.
+- Trader Tasks/Quest Map filter values are profile-session state shared by every trader workspace instance. Search, level eligibility, completed-task visibility, future depth, and finished visibility therefore remain consistent while switching traders without becoming cross-restart persisted settings.
+
+### First runtime findings
+
+- Do not mutate TMP outline material properties on factory-created labels; some global Tasks paths have no source material and will throw. Use the established UI-shadow treatment.
+- The pane must remain above the graph after both direct selection and projection rebuild ordering. It is a sibling overlay bounded to the graph viewport rather than graph content.
+- Native live task progress must be captured from `AvailableForFinish` only. Start requirements are not task rows and must never contribute to the displayed overall percentage.
+- Lightkeeper and BTR Driver are raid-only quest givers. Their details are informational outside the raid interaction and must not expose accept, finish, restart, replace, or handover controls.
+- Rebind the reusable pane on every selection, not only on first construction. Mode/projection rebuilds must restore the pane above the canvas without asking a TMP label for synchronous preferred height during the transition.
+- A per-quest detail-render exception must degrade to a contained read-only detail error; it must never propagate through the graph rebuild and trigger the complete native fallback.
+- All detail progress uses the shared 0-100 percentage scale. Native reward-list height must be measured/grouped from the rendered two-column container, and only the reward cards—not the native surrounding panel chrome—are retained.
+- The inactive In Progress sort state follows canonical trader order, location, and authoritative feed order. Alphabetical quest names are only a user-requested explicit Quest-column sort.
+- Selection is shared state, not viewport state. Per-tab pan/zoom may persist independently, but tab changes must neither restore stale selected IDs nor synthesize a first-open selection. Re-clicking a selected In Progress quest clears it and closes details.
+- Scroll viewports are transparent interaction/mask surfaces over the pane gradient. Short text must not scroll; long text starts at the top and remains clamped. Task rows share a base height and grow only for real wrapping or numeric progress controls.
+- Native reward scrolling is governed by rendered child bounds and two-column row count. Suppress all surrounding native list/container graphics while retaining the instantiated reward-card graphics and interaction components.
+- Description and Tasks use bounded content-driven heights rather than fixed allocations; Rewards owns the remainder of the pane. The native reward grid is re-anchored below the custom heading so stock title spacing cannot create an empty band.
+- The overlay uses a soft non-interactive left-edge shadow to distinguish it from the graph/table beneath without consuming canvas input or changing the pane bounds.
+- Quest-banner state actions and repeatable badges reserve the right edge occupied by Collector/Lightkeeper route strips; neither marker may be covered by accept, turn-in, or replacement controls.
+- Native quest transactions may cause deferred `QuestsScreen` observers to reactivate its stock list/detail workspace. The trader replacement reasserts ownership immediately after a mutation and for four bounded late-layout frames; this is not a permanent update-loop guard and does not alter the native transaction itself.
 
 ## Rollout strategy
 
-Implement behind:
-
-```text
-EnableCustomQuestDetails
-```
-
-Retain native `QuestView` fallback until feature parity is manually verified.
-
-The global M06 replacement deliberately has no Native Tasks escape hatch. Until this milestone's custom detail/action bridge is enabled, the global graph remains read-only and disabling the global replacement in plugin settings restores the complete vanilla Tasks UI. M07 must not reintroduce the old relabeled-native-toggle composition.
+The custom detail pane and native action bridge are integral to both replacement workspaces. The global M06 replacement has no Native Tasks escape hatch and M07 does not reintroduce the old relabeled-native-toggle composition. Disabling the global or trader replacement restores that complete vanilla Tasks UI; initialization failure retains the same full-screen fallback.
 
 ## Trader screen composition and styling
 
@@ -119,9 +154,9 @@ Show:
 - penalties;
 - hidden/unsupported reward indicators.
 
-### Graph navigation
+### Graph navigation — deferred
 
-Provide:
+The following detail-pane shortcuts are explicitly not required for M07 closure and may be revisited only if they prove useful:
 
 - center selected;
 - focus chain;
@@ -157,7 +192,7 @@ Do not add automatic handover until all of the following are proven:
 
 ## Feature parity tests
 
-Compare native and custom detail behavior for:
+The accepted fresh-profile pass covers ordinary available, active, handover, ready-to-finish, completed, repeatable, and successor-unlock transitions. The following uncommon cases remain opportunistic regression coverage rather than closure blockers because QuestMap reuses EFT's native action/reward controllers:
 
 - locked future quest;
 - available quest;
@@ -175,7 +210,7 @@ Compare native and custom detail behavior for:
 
 Any unsupported case must fall back to native details or remain explicitly read-only.
 
-Also perform a side-by-side browser/in-game parity audit covering:
+The user accepted practical browser/in-game parity after extensive side-by-side refinement. Minor presentation differences are intentional and do not block closure. The audit covered:
 
 - graph and selected-quest information availability;
 - selection and graph-navigation behavior;
@@ -188,6 +223,20 @@ Record intentional in-game deviations and unresolved visual or functional gaps. 
 ## Documentation
 
 Record action bridges, unsupported cases, and parity results.
+
+The global-pane implementation now sizes descriptive scroll content from TMP's rendered bounds after layout rather than retaining a line-count approximation. Native reward cards are initialized through EFT's `QuestRewardList`, then their live container is mounted directly in QuestMap's reward viewport; this preserves native item interactions without inheriting EFT's unused internal title offset.
+
+The panel-separation shadow is a dedicated sibling outside the pane's left edge rather than a child constrained by the pane surface. Native reward layout is normalized for four bounded late-layout frames after first initialization so initial selection and subsequent quest changes produce identical card alignment.
+
+The optional F12 summary preference applies only when summary prose exists. Native action completion explicitly invalidates the selected quest overlay, while Started item-handover objectives expose EFT's native objective bridge without incorrectly waiting for the entire quest to reach `AvailableForFinish`.
+
+Handover availability is also native-owned: after binding the hidden exact-build `QuestObjectiveView`, QuestMap mirrors its stock handover button's active/interactable result and does not offer a custom control when EFT found no eligible item. Action completion never redraws from the old overlay. Ordinary actions wait for reactive reconciliation, while repeatable replacement forces a topology/profile reload because both the removed and replacement quest IDs can change.
+
+Quest-level `TURN IN` and objective-level `HAND OVER` are deliberately separate native bridges. `TURN IN` calls EFT's `QuestView.FinishQuest` (`QuestComplete`), while `HAND OVER` calls the bound `QuestObjectiveView` handover action (`QuestHandover`). Accept, restart, turn-in, and handover schedule one delayed authoritative reconciliation after the native transaction task completes; this avoids racing EFT's quest-book observers without introducing polling. Objective scrolling uses a small layout tolerance and disables its scrollbar when all rows fit.
+
+The selected detail pane is refreshed for both table and full-map overlay updates. Objective allocation and rendering share the same rich-text-aware row-height calculation; markup therefore cannot create phantom wrapped lines or a scrollbar that was absent from the section's initial size calculation.
+
+Quest mutation controls are out-of-raid only. Accept, restart, objective handover, repeatable replacement, and quest turn-in are neither rendered nor bound while an active raid context exists, and every callback rechecks that boundary before calling EFT. The quest banner now carries the established Collector/Lightkeeper route bar at its bottom edge: one route fills the width, while two routes split it equally with labels; the quest title remains above the bar.
 
 Update `docs/development-status.md`.
 

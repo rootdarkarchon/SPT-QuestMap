@@ -19,6 +19,21 @@ public sealed class QuestTopologyFeed
     public Dictionary<string, long> RepeatableEndTimes { get; set; } = new(StringComparer.Ordinal);
 
     public Dictionary<string, string[]> PrerequisiteBlockerIds { get; set; } = new(StringComparer.Ordinal);
+
+    public Dictionary<string, string> QuestSummaries { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class QuestRepeatableFeed
+{
+    public QuestNodePayload[] ProfileGeneratedQuests { get; set; } = [];
+    public Dictionary<string, string> RepeatableKinds { get; set; } = new(StringComparer.Ordinal);
+    public string[] DefaultVisibleQuestIds { get; set; } = [];
+    public string[] AllApplicableQuestIds { get; set; } = [];
+    public Dictionary<string, string> DisplayStates { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, double?> ProgressPercentages { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, long> RepeatableEndTimes { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string[]> PrerequisiteBlockerIds { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> QuestSummaries { get; set; } = new(StringComparer.Ordinal);
 }
 
 public sealed class QuestTopologyPayload

@@ -16,8 +16,8 @@ internal static class GlobalTasksGraphSettingsStore
     {
         var value = PlayerPrefs.GetString(Key(profileId), string.Empty);
         var parts = value.Split('|');
-        if (parts.Length is not (9 or 10 or 11 or 12)
-            || parts[0] is not ("2" or "3" or "4" or "5" or "6")
+        if (parts.Length is not (9 or 10 or 11 or 12 or 13)
+            || parts[0] is not ("2" or "3" or "4" or "5" or "6" or "7")
             || !Enum.TryParse(parts[1], out GlobalQuestGraphMode mode)
             || !bool.TryParse(parts[2], out var showAllFuture)
             || !bool.TryParse(parts[3], out var hideFinished)
@@ -40,9 +40,10 @@ internal static class GlobalTasksGraphSettingsStore
                 Decode(parts[8]),
                 routeFilter,
                 parts.Length >= 10 ? Decode(parts[9])?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? [] : [],
-                parts[0] is "4" or "5" or "6",
+                parts[0] is "4" or "5" or "6" or "7",
                 parts.Length >= 11 ? DecodeSortCriteria(parts[10]) : [],
-                parts.Length == 12 && bool.TryParse(parts[11], out var hideCompletedTasks) && hideCompletedTasks);
+                parts.Length >= 12 && bool.TryParse(parts[11], out var hideCompletedTasks) && hideCompletedTasks,
+                parts.Length == 13 && bool.TryParse(parts[12], out var includeAvailableRepeatables) && includeAvailableRepeatables);
             return true;
         }
         catch (FormatException)
@@ -55,7 +56,7 @@ internal static class GlobalTasksGraphSettingsStore
     public static void Save(string profileId, GlobalTasksGraphSettings settings)
     {
         var value = string.Join("|",
-            "6",
+            "7",
             settings.Mode.ToString(),
             settings.ShowAllFuture.ToString(CultureInfo.InvariantCulture),
             settings.HideFinished.ToString(CultureInfo.InvariantCulture),
@@ -66,7 +67,8 @@ internal static class GlobalTasksGraphSettingsStore
             Encode(settings.FocusQuestId),
             Encode(string.Join(",", settings.LocationIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))),
             Encode(string.Join(",", settings.InProgressSortCriteria.Select(EncodeSortCriterion))),
-            settings.HideCompletedInProgressTasks.ToString(CultureInfo.InvariantCulture));
+            settings.HideCompletedInProgressTasks.ToString(CultureInfo.InvariantCulture),
+            settings.IncludeAvailableRepeatables.ToString(CultureInfo.InvariantCulture));
         PlayerPrefs.SetString(Key(profileId), value);
     }
 
@@ -115,7 +117,8 @@ internal readonly struct GlobalTasksGraphSettings
         IReadOnlyCollection<string> locationIds,
         bool hasLocationFilter = true,
         IReadOnlyList<QuestTableSortCriterion>? inProgressSortCriteria = null,
-        bool hideCompletedInProgressTasks = false)
+        bool hideCompletedInProgressTasks = false,
+        bool includeAvailableRepeatables = false)
     {
         Mode = mode;
         ShowAllFuture = showAllFuture;
@@ -129,6 +132,7 @@ internal readonly struct GlobalTasksGraphSettings
         HasLocationFilter = hasLocationFilter;
         InProgressSortCriteria = inProgressSortCriteria ?? [];
         HideCompletedInProgressTasks = hideCompletedInProgressTasks;
+        IncludeAvailableRepeatables = includeAvailableRepeatables;
     }
 
     public GlobalQuestGraphMode Mode { get; }
@@ -143,4 +147,5 @@ internal readonly struct GlobalTasksGraphSettings
     public bool HasLocationFilter { get; }
     public IReadOnlyList<QuestTableSortCriterion> InProgressSortCriteria { get; }
     public bool HideCompletedInProgressTasks { get; }
+    public bool IncludeAvailableRepeatables { get; }
 }

@@ -76,6 +76,8 @@ EnableDebugLogging
 
 All replacement features should default to `false` in this milestone.
 
+Historical note: M07 later made custom details and the native-action bridge intrinsic to either enabled Tasks replacement and removed `EnableCustomQuestDetails` as an independent option. The two screen-replacement toggles remain default-off.
+
 ## Compatibility diagnostics
 
 Log once at startup:

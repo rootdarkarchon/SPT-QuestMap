@@ -44,7 +44,7 @@ internal sealed class QuestMapDataAdapter
         ServerProfile = loaded.Profile;
         Overlay = null;
         _liveQuestStates = null;
-        _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
             "QUESTMAP_M02_TOPOLOGY " +
             $"rawTemplates={loaded.RawTemplateCount}; nodes={Topology.Nodes.Count}; edges={Topology.Edges.Count}; " +
             $"serverStates={loaded.Profile.DisplayStates.Count}; repeatableTimers={loaded.Profile.RepeatableEndTimes.Count}; " +
@@ -52,6 +52,49 @@ internal sealed class QuestMapDataAdapter
             $"missingTargets={Topology.Diagnostics.MissingTargetIds.Count}; " +
             $"unsupportedConditions={Topology.Diagnostics.UnknownConditionCount}; " +
             $"topologyMs={loaded.ElapsedMilliseconds:F2}; layoutMs={layoutStopwatch.Elapsed.TotalMilliseconds:F2}");
+    }
+
+    public async Task LoadRepeatableTopologyDeltaAsync()
+    {
+        var currentTopology = Topology
+            ?? throw new InvalidOperationException("QuestMap topology must be loaded before applying a repeatable delta.");
+        var currentLayout = Layout
+            ?? throw new InvalidOperationException("QuestMap layout must be loaded before applying a repeatable delta.");
+        var loaded = await _topologySource.LoadRepeatableDeltaAsync(currentTopology).ConfigureAwait(false);
+        var layoutStopwatch = Stopwatch.StartNew();
+        var positions = currentLayout.NodesById
+            .Where(pair => loaded.Topology.NodesById.TryGetValue(pair.Key, out var node) && !node.ProfileGenerated)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        var generatedY = positions.Values.Where(position => position.Rank == 0)
+            .Select(position => position.Y + position.Height + DeterministicGraphLayout.RowGap)
+            .DefaultIfEmpty(0)
+            .Max();
+        foreach (var node in loaded.Topology.Nodes.Where(node => node.ProfileGenerated))
+        {
+            positions[node.Id] = new QuestNodePosition(
+                node.Id,
+                0,
+                0,
+                generatedY,
+                DeterministicGraphLayout.NodeWidth,
+                DeterministicGraphLayout.NodeHeight);
+            generatedY += DeterministicGraphLayout.NodeHeight + DeterministicGraphLayout.RowGap;
+        }
+        var layout = new QuestGraphLayout(
+            loaded.Topology.Version,
+            new ReadOnlyDictionary<string, QuestNodePosition>(positions),
+            positions.Count == 0 ? 0 : positions.Values.Max(position => position.X + position.Width),
+            positions.Count == 0 ? 0 : positions.Values.Max(position => position.Y + position.Height));
+        layoutStopwatch.Stop();
+
+        Topology = loaded.Topology;
+        Layout = layout;
+        ServerProfile = loaded.Profile;
+        QuestMapDebugLog.Info(_log,
+            "QUESTMAP_M07_REPEATABLE_TOPOLOGY_DELTA " +
+            $"generated={loaded.RawTemplateCount}; nodes={Topology.Nodes.Count}; edges={Topology.Edges.Count}; " +
+            $"fetchMs={loaded.ElapsedMilliseconds:F2}; layoutPatchMs={layoutStopwatch.Elapsed.TotalMilliseconds:F2}; " +
+            "staticNodesReused=True; edgesReused=True; fullTopologyNormalized=False; fullLayoutRebuilt=False");
     }
 
     public async Task<bool> RefreshServerProfileAsync()
@@ -102,7 +145,7 @@ internal sealed class QuestMapDataAdapter
         Overlay = overlay;
         if (logDiagnostics)
         {
-            _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
                 "QUESTMAP_M02_OVERLAY " +
                 $"liveQuests={snapshot.Quests.Count}; missingLiveQuests={overlay.MissingLiveQuestIds.Count}; " +
                 $"overlayMs={stopwatch.Elapsed.TotalMilliseconds:F2}");
@@ -138,7 +181,7 @@ internal sealed class QuestMapDataAdapter
                 live.ExactStatus,
                 true,
                 live.Visible,
-                live.Objectives,
+                QuestOverlayBuilder.NormalizeObjectiveProgress(topology.NodesById[live.QuestId], live.Objectives),
                 live.ExpirationTime,
                 live.HandoverReady);
         }

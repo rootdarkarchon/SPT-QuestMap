@@ -287,12 +287,11 @@ Startup binds these default-false settings beneath the plugin GUID `com.rootdark
 ```text
 Features.EnableTraderQuestGraph = false
 Features.EnableGlobalTasksGraph = false
-Features.EnableCustomQuestDetails = false
 Diagnostics.EnableDebugLogging = false
 Diagnostics.ForceCompatibilityFailure = false
 ```
 
-`ForceCompatibilityFailure` exists only to exercise the safe-disable branch without changing an installed binary. Feature toggles are placeholders in Milestone 1. If any replacement feature is requested, the harness logs a safe disable and still installs no patches.
+`ForceCompatibilityFailure` exists only to exercise the safe-disable branch without changing an installed binary. The two replacement toggles were placeholders in Milestone 1; the completed implementation makes QuestMap details intrinsic to either replacement rather than exposing a third independent toggle.
 
 Compatibility validation reuses the proven M00 identity boundary: EFT executable private build part `40087`, SPT client core file version `4.0.13.0`, and the exact `Assembly-CSharp.dll` SHA-256. Only after those checks pass does the harness resolve the four initial screen lifecycle candidates as unique declared methods by declaring type, method name, and expected parameter count:
 
@@ -457,6 +456,12 @@ Unity `PlayerPrefs` stores scale, anchored position, and selected quest under a 
 ## Milestone 6 global Tasks ownership
 
 The global replacement retains vanilla `TasksScreen.Show` as the initialization authority. Its delayed postfix resolves the exact installed `_tasksPanel`, regular/daily toggle spawners, Notes/Quest Items roots, and search field before changing any active state. The existing regular/daily toggle objects are relabeled as In Progress and Quest Map; their original vanilla callbacks still run first, and QuestMap's later listener closes the native task panel before presenting the graph. Notes and Quest Items keep their original callbacks, components, grids, transactions, warnings, blockers, and back navigation.
+
+### Native task-list mod compatibility
+
+The global and trader Tasks tables are QuestMap-owned renderers, not subclasses or decorated instances of EFT's native task-list rows. Third-party mods whose integration point is the native list—specifically the reviewed SPT 4.0-compatible Quest Tracker 1.6.0 and Task List Fixes—cannot inject their row controls, tracked-state presentation, layout adjustments, or list patches into QuestMap's table. This is an intentional replacement boundary rather than a missing compatibility hook.
+
+QuestMap supplies the replacement functionality it needs directly: profile-scoped manual and native-favorite tracking, map-aware implicit tracking, in-raid progress notifications, a tracked-quest overlay, corrected objective presentation, sorting, filtering, pinning, and native EFT action bridges. Users should not expect Quest Tracker or Task List Fixes UI changes to appear while a QuestMap Tasks replacement is active. Disabling the relevant QuestMap replacement restores the complete native screen and therefore restores the native integration surface for those mods.
 
 The graph root spans the union of the lower Tasks, Quest Items, and Notes content regions rather than inheriting the narrower native task-list column. It is ordered below the native Quest Items and Notes branches, so those right-side panels behave as toggleable overlays and do not hide or resize the graph. Both overlay toggles permit switch-off, start unselected, and directly preserve their native roots. Closing the inactive `TasksPanel` and disabling its separate `_notesTaskDescription` root are both required: the latter owns `NotesTaskDescriptionShort._image`, `_loader`, and `_description`, which can otherwise outlive the list and render stale localized content over the graph.
 

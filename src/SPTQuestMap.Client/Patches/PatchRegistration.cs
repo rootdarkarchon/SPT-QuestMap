@@ -30,14 +30,6 @@ internal sealed class PatchRegistration : IDisposable
             return new PatchRegistrationResult(false, true, "incompatible environment");
         }
 
-        if (configuration.EnableCustomQuestDetails.Value)
-        {
-            return new PatchRegistrationResult(
-                false,
-                true,
-                "the Milestone 7 custom-detail feature was requested before that UI milestone is available");
-        }
-
         _harmony = new Harmony(_harmonyId);
         QuestDataLifecyclePatch.Configure(dataRuntime.ObserveQuestController);
         TraderGraphLifecyclePatch.Configure(dataRuntime);

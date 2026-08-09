@@ -16,13 +16,13 @@ internal static class StartupDiagnostics
         CompatibilityReport compatibility,
         PatchRegistrationResult registration)
     {
-        log.LogInfo(
+        QuestMapDebugLog.Info(log,
             "QUESTMAP_M01_STARTUP " +
             $"pluginVersion={pluginVersion}; " +
             $"supportedEFT={CompatibilityValidator.SupportedEftVersion}; " +
             $"supportedSPT={CompatibilityValidator.SupportedSptVersion}");
 
-        log.LogInfo(
+        QuestMapDebugLog.Info(log,
             "QUESTMAP_M01_ENVIRONMENT " +
             $"detectedEFT={compatibility.DetectedEftVersion}; " +
             $"privatePart={compatibility.DetectedEftPrivatePart}; " +
@@ -33,27 +33,31 @@ internal static class StartupDiagnostics
         var unresolved = compatibility.PatchTargets.UnresolvedTargets.Count == 0
             ? "none"
             : string.Join(" | ", compatibility.PatchTargets.UnresolvedTargets);
-        log.LogInfo(
+        QuestMapDebugLog.Info(log,
             "QUESTMAP_M01_TARGETS " +
             $"resolved={compatibility.PatchTargets.ResolvedMethods.Count}/{compatibility.PatchTargets.ExpectedCount}; " +
             $"unresolved={unresolved}; installedPatches={PatchRegistration.InstalledPatchCount}");
 
-        log.LogInfo(
+        QuestMapDebugLog.Info(log,
             "QUESTMAP_M01_CONFIG " +
             $"traderGraph={configuration.EnableTraderQuestGraph.Value}; " +
             $"globalGraph={configuration.EnableGlobalTasksGraph.Value}; " +
-            $"customDetails={configuration.EnableCustomQuestDetails.Value}; " +
+            "customDetails=required-with-replacement; " +
+            $"defaultDetailsSummary={configuration.DefaultQuestDetailsToSummary.Value}; " +
             $"autoTrackNew={configuration.AutoTrackNewQuests.Value}; " +
             $"trackFavorites={configuration.TrackFavoriteQuests.Value}; " +
             $"autoTrackMap={configuration.AutoTrackMapRelatedQuests.Value}; " +
-            $"debug={configuration.EnableDebugLogging.Value}; " +
-            $"forceCompatibilityFailure={configuration.ForceCompatibilityFailure.Value}; " +
-            $"forceTraderGraphInitializationFailure={configuration.ForceTraderGraphInitializationFailure.Value}; " +
-            $"forceGlobalTasksGraphInitializationFailure={configuration.ForceGlobalTasksGraphInitializationFailure.Value}");
+            $"raidNotificationBackgroundOpacity={configuration.RaidNotificationOpacity.Value:0.##}; " +
+            $"raidNotificationMinimal={configuration.RaidNotificationMinimal.Value}; " +
+            $"raidOverlayFadeSeconds={configuration.RaidOverlayFadeDurationSeconds.Value:0.##}; " +
+            $"raidNotificationDisplaySeconds={configuration.RaidNotificationDisplayDurationSeconds.Value:0.##}; " +
+            $"trackedQuestListDisplaySeconds={configuration.TrackedQuestListDisplayDurationSeconds.Value:0.##}; " +
+            $"trackedQuestListHotkey={configuration.TrackedQuestListHotkey.Value}; " +
+            $"debug={configuration.EnableDebugLogging.Value}");
 
         if (configuration.EnableDebugLogging.Value && compatibility.Failures.Count > 0)
         {
-            log.LogDebug($"QUESTMAP_M01_FAILURES {string.Join(" | ", compatibility.Failures)}");
+            log.LogInfo($"QUESTMAP_M01_FAILURES {string.Join(" | ", compatibility.Failures)}");
         }
 
         var stateMessage =

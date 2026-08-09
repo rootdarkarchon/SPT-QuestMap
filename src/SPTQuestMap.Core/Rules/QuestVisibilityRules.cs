@@ -23,7 +23,9 @@ public sealed record QuestVisibilityOptions(
     string? Search,
     string? SelectedQuestId,
     string? FocusQuestId,
-    bool ShowRepeatables);
+    bool ShowRepeatables,
+    bool TraderInProgressSuccessorsOnly = false,
+    bool IncludeTraderPrerequisiteBlockers = true);
 
 public static class QuestVisibilityRules
 {
@@ -93,7 +95,9 @@ public static class QuestVisibilityRules
             var boundaries = visible.Where(id => nodeById.TryGetValue(id, out var node)
                 && string.Equals(node.TraderId, traderId, StringComparison.Ordinal)
                 && stateById.TryGetValue(id, out var state)
-                && QuestGraphRules.IsTraderBoundaryForFilter(state.DisplayState)).ToArray();
+                && (options.TraderInProgressSuccessorsOnly
+                    ? state.DisplayState == QuestMapDisplayStateKind.InProgress
+                    : QuestGraphRules.IsTraderBoundaryForFilter(state.DisplayState))).ToArray();
             foreach (var source in boundaries)
             {
                 if (!outgoing.TryGetValue(source, out var successors)) continue;
@@ -102,8 +106,10 @@ public static class QuestVisibilityRules
                     if (PassesFinishedAndLevel(successor)) visible.Add(successor);
                 }
             }
-            foreach (var blocked in visible.Where(id => stateById.TryGetValue(id, out var state)
-                         && state.PrerequisiteBlockerIds is { Count: > 0 }).ToArray())
+            foreach (var blocked in options.IncludeTraderPrerequisiteBlockers
+                         ? visible.Where(id => stateById.TryGetValue(id, out var state)
+                             && state.PrerequisiteBlockerIds is { Count: > 0 }).ToArray()
+                         : Array.Empty<string>())
             {
                 var blockers = stateById[blocked].PrerequisiteBlockerIds!;
                 if (!incoming.TryGetValue(blocked, out var prerequisites)) continue;

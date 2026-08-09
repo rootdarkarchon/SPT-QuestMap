@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using SPTQuestMap.Core.Models;
+using SPTQuestMap.Core.Rules;
 
 namespace SPTQuestMap.Core.Adapters;
 
@@ -25,7 +26,7 @@ public static class QuestOverlayBuilder
                     live.ExactStatus,
                     true,
                     live.Visible,
-                    live.Objectives,
+                    NormalizeObjectiveProgress(node, live.Objectives),
                     live.ExpirationTime,
                     live.HandoverReady);
                 continue;
@@ -46,5 +47,27 @@ public static class QuestOverlayBuilder
             new ReadOnlyDictionary<string, QuestLiveState>(states),
             new ReadOnlyDictionary<string, LiveTraderSnapshot>(traders),
             missing.OrderBy(id => id, StringComparer.Ordinal).ToArray());
+    }
+
+    public static IReadOnlyList<QuestObjectiveProgress> NormalizeObjectiveProgress(
+        QuestGraphNode node,
+        IReadOnlyList<QuestObjectiveProgress> progress)
+    {
+        var definitions = node.Objectives
+            .GroupBy(objective => objective.Id, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        return progress.Select(objective =>
+        {
+            if (objective.Complete || !objective.ProgressKnown
+                || !objective.Current.HasValue || !objective.Required.HasValue)
+                return objective;
+
+            var compare = definitions.TryGetValue(objective.ObjectiveId, out var definition)
+                ? definition.Compare ?? ">="
+                : ">=";
+            return QuestGraphRules.Compare(objective.Current.Value, objective.Required.Value, compare)
+                ? objective with { Complete = true }
+                : objective;
+        }).ToArray();
     }
 }

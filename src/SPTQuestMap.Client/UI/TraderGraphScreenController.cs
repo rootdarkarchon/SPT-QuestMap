@@ -68,13 +68,10 @@ internal sealed class TraderGraphScreenController : IDisposable
     public void Mount(
         QuestGraphTopology topology,
         QuestGraphLayout layout,
-        QuestProfileOverlay overlay,
-        bool forceFailure)
+        QuestProfileOverlay overlay)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(TraderGraphScreenController));
         if (_mounted) throw new InvalidOperationException("The trader graph is already mounted for this screen instance.");
-        if (forceFailure) throw new InvalidOperationException("Forced trader graph initialization failure.");
-
         _vanillaList = (QuestsListView?)QuestsListField.GetValue(_screen)
             ?? throw new InvalidOperationException("QuestsScreen._questsListView was null.");
         _nativeQuestView = (QuestView?)QuestViewField.GetValue(_screen)
@@ -249,6 +246,30 @@ internal sealed class TraderGraphScreenController : IDisposable
         return selectedQuestId is null ? "selection-none" : "selection-cleared-topology-removed";
     }
 
+    public string ApplyRepeatableTopologyDelta(
+        QuestGraphTopology topology,
+        QuestGraphLayout layout,
+        QuestProfileOverlay overlay)
+    {
+        if (_disposed || !_mounted || _graphView is null) return "screen-inactive";
+        var projection = TraderGraphProjectionBuilder.Build(topology, layout, _trader.Id);
+        if (_selectedQuestId is not null && !projection.NodesById.ContainsKey(_selectedQuestId))
+        {
+            _selectedQuestId = null;
+            _futureView?.Hide();
+            if (_nativeQuestView is not null)
+            {
+                _nativeQuestView.Close();
+                _nativeQuestView.gameObject.SetActive(true);
+            }
+        }
+        if (!_graphView.ApplyTopologyDelta(projection, topology, overlay, _selectedQuestId))
+            return RebuildTopology(topology, layout, overlay);
+        _topology = topology;
+        _overlay = overlay;
+        return "trader-topology-delta-applied";
+    }
+
     private void PlaceGraphBehindNativeDetail()
     {
         if (_graphView is null || _nativeQuestView is null) return;
@@ -272,7 +293,7 @@ internal sealed class TraderGraphScreenController : IDisposable
             _graphView.SetSelected(questId);
             _selectedQuestId = questId;
             PersistCurrentState();
-            var liveQuest = _questController.Quests.FirstOrDefault(quest => string.Equals(quest.Id, questId, StringComparison.Ordinal));
+            var liveQuest = _questController.Quests.LastOrDefault(quest => string.Equals(quest.Id, questId, StringComparison.Ordinal));
             if (liveQuest is not null)
             {
                 _futureView?.Hide();

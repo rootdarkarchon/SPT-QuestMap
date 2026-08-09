@@ -6,6 +6,7 @@ using System.Reflection;
 using BepInEx.Logging;
 using EFT;
 using EFT.InventoryLogic;
+using EFT.Quests;
 using EFT.UI;
 using HarmonyLib;
 using SPTQuestMap.Client.Data;
@@ -54,6 +55,10 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private readonly bool _debugLogging;
     private readonly QuestAssetSpriteCache _assetCache;
     private readonly QuestTrackingService _tracking;
+    private readonly bool _customDetailsEnabled;
+    private readonly Func<bool> _showHiddenRewards;
+    private readonly Func<bool> _defaultDetailsToSummary;
+    private readonly Action<string, QuestDetailsActionKind> _requestQuestRefresh;
     private readonly Dictionary<GameObject, bool> _nativeControlStates = new();
     private TasksPanel? _tasksPanel;
     private GameObject? _tasksDescription;
@@ -82,13 +87,15 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private TextMeshProUGUI? _selectionSummaryText;
     private Image? _notesButtonImage;
     private Image? _questItemsButtonImage;
-    private NativeOverlayMode _nativeOverlayMode;
+    private Image? _questDescriptionButtonImage;
+    private Button? _questDescriptionButton;
+    private QuestDetailsPane? _detailPane;
+    private GlobalOverlayMode _overlayMode;
     private GlobalQuestGraphMode _mode = GlobalQuestGraphMode.InProgress;
     private bool _raidInProgressOnly;
     private bool _showAllFuture;
     private bool _hideFinished;
     private bool _levelEligibleOnly = true;
-    private string? _activeStatusFilter;
     private string? _traderId;
     private string _search = string.Empty;
     private readonly HashSet<string> _inProgressLocationIds = new(StringComparer.OrdinalIgnoreCase);
@@ -96,6 +103,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private readonly List<QuestTableSortCriterion> _inProgressSortCriteria = [];
     private readonly HashSet<string> _expandedInProgressQuestIds = new(StringComparer.Ordinal);
     private bool _hideCompletedInProgressTasks;
+    private bool _includeAvailableRepeatables;
     private bool _inProgressLocationsInitialized;
     private string? _focusQuestId;
     private string? _selectedQuestId;
@@ -116,7 +124,11 @@ internal sealed class GlobalTasksScreenController : IDisposable
         ManualLogSource log,
         bool debugLogging,
         QuestAssetSpriteCache assetCache,
-        QuestTrackingService tracking)
+        QuestTrackingService tracking,
+        bool customDetailsEnabled,
+        Func<bool> showHiddenRewards,
+        Func<bool> defaultDetailsToSummary,
+        Action<string, QuestDetailsActionKind> requestQuestRefresh)
     {
         _screen = screen;
         _inventoryController = inventoryController;
@@ -126,18 +138,19 @@ internal sealed class GlobalTasksScreenController : IDisposable
         _debugLogging = debugLogging;
         _assetCache = assetCache;
         _tracking = tracking;
+        _defaultDetailsToSummary = defaultDetailsToSummary;
+        _requestQuestRefresh = requestQuestRefresh;
+        _customDetailsEnabled = customDetailsEnabled;
+        _showHiddenRewards = showHiddenRewards;
     }
 
     public void Mount(
         QuestGraphTopology topology,
         QuestGraphLayout layout,
-        QuestProfileOverlay overlay,
-        bool forceFailure)
+        QuestProfileOverlay overlay)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(GlobalTasksScreenController));
         if (_mounted) throw new InvalidOperationException("The global Tasks graph is already mounted for this screen instance.");
-        if (forceFailure) throw new InvalidOperationException("Forced global Tasks graph initialization failure.");
-
         _tasksPanel = TasksPanelField.GetValue(_screen) as TasksPanel
             ?? throw new InvalidOperationException("TasksScreen._tasksPanel was null.");
         _notesPart = (NotesPartField.GetValue(_screen) as GameObject)?.transform as RectTransform
@@ -182,7 +195,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         HideNativeTasksWorkspace();
         _mounted = true;
         _visible = true;
-        _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
             "QUESTMAP_M06_MOUNT " +
             $"screen={_screen.GetInstanceID()}; mode={_mode}; nodes={_projection?.Nodes.Count ?? 0}; " +
             $"edges={_projection?.Edges.Count ?? 0}; nativeNotes=True; nativeQuestItems=True; fullSurface=True; nativeSelectorsUnmodified=True; " +
@@ -238,10 +251,11 @@ internal sealed class GlobalTasksScreenController : IDisposable
             _graphView.Root.gameObject.SetActive(true);
             ConfigureNativeSidePanels();
             PlaceGraphBehindNativeSidePanels();
+            if (_customDetailsEnabled && _selectedQuestId is not null) ShowSelectedQuestDetails();
         }
         _visible = true;
         var cachedRows = (_graphView as InProgressQuestTableView)?.CachedRowCount ?? 0;
-        _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
             "QUESTMAP_M06_RESUME " +
             $"screen={_screen.GetInstanceID()}; topologyChanged={topologyChanged}; modeChanged={modeChanged}; " +
             $"mode={_mode}; cachedRows={cachedRows}; rootReused={!topologyChanged && !modeChanged}");
@@ -257,12 +271,13 @@ internal sealed class GlobalTasksScreenController : IDisposable
         if (_graphView?.Root != null) _graphView.Root.gameObject.SetActive(false);
         _visible = false;
         var cachedRows = (_graphView as InProgressQuestTableView)?.CachedRowCount ?? 0;
-        _log.LogInfo($"QUESTMAP_M06_SUSPEND screen={_screen.GetInstanceID()}; cached=True; rows={cachedRows}");
+        QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_SUSPEND screen={_screen.GetInstanceID()}; cached=True; rows={cachedRows}");
     }
 
-    public string RefreshOverlay(QuestProfileOverlay overlay)
+    public string RefreshOverlay(QuestProfileOverlay overlay, bool refreshAllNativeControls = true)
     {
         if (_disposed || !_mounted || _topology is null || _layout is null || _graphView is null) return "screen-inactive";
+        var locationsChanged = EnableLocationsForNewTaskStates(_overlay, overlay);
         _overlay = overlay;
         var nextProjection = BuildProjection();
         var membershipChanged = _projection is null
@@ -272,10 +287,13 @@ internal sealed class GlobalTasksScreenController : IDisposable
         {
             _projection = nextProjection;
             if (_selectedQuestId is not null && !_projection.NodesById.ContainsKey(_selectedQuestId))
+            {
                 _selectedQuestId = null;
-            table.RefreshOverlay(overlay, _selectedQuestId, nextProjection);
-            if (membershipChanged) RebuildInProgressChrome();
-            UpdateSelectionSummary();
+                CloseQuestDetails();
+            }
+            table.RefreshOverlay(overlay, _selectedQuestId, nextProjection, refreshAllNativeControls);
+            if (membershipChanged || locationsChanged) RebuildInProgressChrome();
+            UpdateSelectionDetails();
             return membershipChanged ? "global-projection-updated" : "global-overlay-refreshed";
         }
         if (membershipChanged)
@@ -285,6 +303,10 @@ internal sealed class GlobalTasksScreenController : IDisposable
         }
 
         _graphView.RefreshOverlay(overlay, _selectedQuestId);
+        // Full-map overlay refreshes previously updated only the card surface.
+        // Keep the open details pane bound to the same authoritative overlay as
+        // the graph so native accept/handover/turn-in changes appear in-place.
+        UpdateSelectionDetails();
         return "global-overlay-refreshed";
     }
 
@@ -292,9 +314,31 @@ internal sealed class GlobalTasksScreenController : IDisposable
     {
         if (_disposed || !_mounted || _graphView is null) return "screen-inactive";
         _overlay = overlay;
+        var nextProjection = BuildProjection();
+        var membershipChanged = _projection is null
+            || !_projection.Nodes.Select(node => node.Id).SequenceEqual(nextProjection.Nodes.Select(node => node.Id), StringComparer.Ordinal)
+            || !_projection.Edges.SequenceEqual(nextProjection.Edges);
+        if (membershipChanged)
+        {
+            _projection = nextProjection;
+            if (_selectedQuestId is not null && !_projection.NodesById.ContainsKey(_selectedQuestId))
+            {
+                _selectedQuestId = null;
+                _focusQuestId = null;
+                CloseQuestDetails();
+            }
+            if (_graphView is InProgressQuestTableView table)
+            {
+                table.RefreshOverlay(overlay, _selectedQuestId, nextProjection, false);
+                RebuildInProgressChrome();
+            }
+            else RebuildGraph(true);
+            UpdateSelectionDetails();
+            return "global-projection-updated";
+        }
         if (_projection is null || !_projection.NodesById.ContainsKey(questId)) return "global-quest-not-visible";
         _graphView.RefreshQuest(overlay, questId);
-        if (string.Equals(_selectedQuestId, questId, StringComparison.Ordinal)) UpdateSelectionSummary();
+        if (string.Equals(_selectedQuestId, questId, StringComparison.Ordinal)) UpdateSelectionDetails();
         return "global-quest-refreshed";
     }
 
@@ -311,6 +355,59 @@ internal sealed class GlobalTasksScreenController : IDisposable
         return _selectedQuestId is null ? "global-selection-none" : "global-selection-preserved";
     }
 
+    public string ApplyRepeatableTopologyDelta(
+        QuestGraphTopology topology,
+        QuestGraphLayout layout,
+        QuestProfileOverlay overlay)
+    {
+        if (_disposed || !_mounted || _graphView is null) return "screen-inactive";
+        var stopwatch = Stopwatch.StartNew();
+        _topology = topology;
+        _layout = layout;
+        _overlay = overlay;
+        var nextProjection = BuildProjection();
+        if (_selectedQuestId is not null && !nextProjection.NodesById.ContainsKey(_selectedQuestId))
+        {
+            _selectedQuestId = null;
+            _focusQuestId = null;
+            CloseQuestDetails();
+        }
+
+        var applied = _graphView switch
+        {
+            InProgressQuestTableView table => ApplyTableTopologyDelta(table, nextProjection),
+            QuestGraphView graph => graph.ApplyTopologyDelta(nextProjection, topology, overlay, _selectedQuestId),
+            _ => false,
+        };
+        if (!applied)
+        {
+            RebuildGraph(true);
+            return "global-topology-delta-fallback";
+        }
+
+        _projection = nextProjection;
+        if (_mode == GlobalQuestGraphMode.InProgress) RebuildInProgressChrome();
+        UpdateSelectionDetails();
+        stopwatch.Stop();
+        QuestMapDebugLog.Info(_log,
+            "QUESTMAP_M06_TOPOLOGY_DELTA " +
+            $"mode={_mode}; nodes={nextProjection.Nodes.Count}; elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}; fullRebuild=False");
+        return "global-topology-delta-applied";
+    }
+
+    private bool ApplyTableTopologyDelta(
+        InProgressQuestTableView table,
+        GlobalQuestGraphProjection nextProjection)
+    {
+        table.ApplyTopologyDelta(
+            _topology!,
+            _overlay!,
+            nextProjection,
+            BuildInProgressCacheProjection().Nodes,
+            _selectedQuestId);
+        return true;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -322,12 +419,16 @@ internal sealed class GlobalTasksScreenController : IDisposable
             if (pair.Key != null) pair.Key.SetActive(pair.Value);
         _nativeControlStates.Clear();
         _inProgressMapVisuals.Clear();
+        _detailPane?.Dispose();
+        _detailPane = null;
         _graphView?.Dispose();
         _graphView = null;
         _selectionSummary = null;
         _selectionSummaryText = null;
         _notesButtonImage = null;
         _questItemsButtonImage = null;
+        _questDescriptionButtonImage = null;
+        _questDescriptionButton = null;
         RestoreNativeSidePanelLayout();
         foreach (var ownedRoot in _screen == null
                      ? Array.Empty<RectTransform>()
@@ -342,7 +443,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             _tasksPanel.gameObject.SetActive(_tasksPanelWasActive);
         }
         if (_tasksDescription is not null) _tasksDescription.SetActive(_tasksDescriptionWasActive);
-        _log.LogInfo($"QUESTMAP_M06_DISPOSE screen={(_screen == null ? 0 : _screen.GetInstanceID())}; vanillaRestored=True");
+        QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_DISPOSE screen={(_screen == null ? 0 : _screen.GetInstanceID())}; vanillaRestored=True");
     }
 
     private void ShowMode(GlobalQuestGraphMode mode)
@@ -350,7 +451,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         if (_disposed || !_mounted || _tasksPanel is null) return;
         if (_raidInProgressOnly && mode == GlobalQuestGraphMode.Full)
         {
-            _log.LogInfo($"QUESTMAP_M06_VIEW screen={_screen.GetInstanceID()}; view=Full; blocked=True; reason=in-raid-in-progress-only");
+            QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_VIEW screen={_screen.GetInstanceID()}; view=Full; blocked=True; reason=in-raid-in-progress-only");
             return;
         }
         if (_mode != mode)
@@ -362,8 +463,12 @@ internal sealed class GlobalTasksScreenController : IDisposable
         }
         ClearNativeOverlays();
         HideNativeTasksWorkspace();
-        if (_graphView is not null) _graphView.Root.gameObject.SetActive(true);
-        _log.LogInfo($"QUESTMAP_M06_VIEW screen={_screen.GetInstanceID()}; view={mode}; native=False");
+        if (_graphView is not null)
+        {
+            _graphView.Root.gameObject.SetActive(true);
+            if (_customDetailsEnabled && _selectedQuestId is not null) ShowSelectedQuestDetails();
+        }
+        QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_VIEW screen={_screen.GetInstanceID()}; view={mode}; native=False");
     }
 
     private void RebuildGraph(bool preserveViewport)
@@ -373,6 +478,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
         {
             var viewport = preserveViewport ? _graphView?.CaptureViewportState() : null;
             PersistCurrentState();
+            _detailPane?.Dispose();
+            _detailPane = null;
             _graphView?.Dispose();
             _graphView = null;
             BuildGraphOnFullSurface(viewport, !preserveViewport);
@@ -412,10 +519,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
         _viewStateScope = QuestGraphViewStateStore.Scope(_topology.Version, _overlay.ProfileId, viewScope);
         PersistedQuestGraphViewState persisted = default;
         var hasPersisted = loadPersisted && QuestGraphViewStateStore.TryLoad(_viewStateScope, out persisted);
-        if (hasPersisted && _projection.NodesById.ContainsKey(persisted.SelectedQuestId ?? string.Empty))
-        {
-            _selectedQuestId = persisted.SelectedQuestId;
-        }
+        // Pan/zoom is view-scoped; selection is controller-scoped. Restoring a
+        // per-tab selection here resurrected stale quests after the other tab
+        // had explicitly deselected them and also selected a row on first open.
         if (_selectedQuestId is not null && !_projection.NodesById.ContainsKey(_selectedQuestId))
         {
             _selectedQuestId = null;
@@ -434,13 +540,23 @@ internal sealed class GlobalTasksScreenController : IDisposable
                 _hideCompletedInProgressTasks,
                 _expandedInProgressQuestIds,
                 SelectQuest,
+                ClearSelection,
                 ToggleInProgressSort,
                 ToggleInProgressQuestExpansion,
                 _log,
                 _assetCache,
-                _favoriteQuestService ?? throw new InvalidOperationException("Native favorite-quest service is unavailable."),
-                _tracking,
-                initialViewport)
+                 _favoriteQuestService ?? throw new InvalidOperationException("Native favorite-quest service is unavailable."),
+                 _tracking,
+                 QuestMutationsAllowed,
+                 CreateTableHandoverAction,
+                  CanAcceptTableQuest,
+                  AcceptTableQuestAsync,
+                  CanCompleteTableQuest,
+                  CompleteTableQuestAsync,
+                  CanReplaceRepeatable,
+                 ReplaceTableQuestAsync,
+                 _requestQuestRefresh,
+                 initialViewport)
             : QuestGraphView.Create(
                 mountRect,
                 BuildTitle(),
@@ -461,7 +577,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         Canvas.ForceUpdateCanvases();
         var viewportSize = _graphView.ViewportSize;
         var rootSize = _graphView.Root.rect.size;
-        _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
             "QUESTMAP_M06_GEOMETRY " +
             $"surface={FormatSize(mountRect.rect.size)}; parent={FormatSize((mountRect.parent as RectTransform)?.rect.size ?? Vector2.zero)}; " +
             $"topInset={_surfaceTopInset:0.##}; topSource={_surfaceTopSource}; root={FormatSize(rootSize)}; viewport={FormatSize(viewportSize)}; activeNodes={_graphView.ActiveNodeCount}");
@@ -475,7 +591,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
         if (_selectedQuestId is not null)
         {
             _graphView.SetSelected(_selectedQuestId);
-            UpdateSelectionSummary();
+            UpdateSelectionDetails();
+            if (_customDetailsEnabled) ShowSelectedQuestDetails();
         }
     }
 
@@ -491,13 +608,15 @@ internal sealed class GlobalTasksScreenController : IDisposable
                 _showAllFuture,
                 _hideFinished,
                 _levelEligibleOnly,
-                _activeStatusFilter,
+                null,
                 applyTraderFilter ? _traderId : null,
                 _search,
                 _focusQuestId,
                 QuestRouteFilter.None,
                 _selectedQuestId,
-                applyLocationFilter && _mode == GlobalQuestGraphMode.InProgress ? _inProgressLocationIds : null));
+                applyLocationFilter && _mode == GlobalQuestGraphMode.InProgress ? _inProgressLocationIds : null,
+                _includeAvailableRepeatables,
+                ExcludeReadyToFinish: _raidInProgressOnly));
     }
 
     private GlobalQuestGraphProjection BuildInProgressCacheProjection()
@@ -517,7 +636,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
                 null,
                 string.Empty,
                 null,
-                QuestRouteFilter.None));
+                QuestRouteFilter.None,
+                IncludeAvailableRepeatables: true));
     }
 
     private void InitializeInProgressLocations()
@@ -528,13 +648,32 @@ internal sealed class GlobalTasksScreenController : IDisposable
         _inProgressLocationsInitialized = true;
     }
 
+    private bool EnableLocationsForNewTaskStates(QuestProfileOverlay? previous, QuestProfileOverlay current)
+    {
+        if (_raidInProgressOnly || previous is null || _topology is null) return false;
+        var changed = false;
+        foreach (var node in _topology.Nodes)
+        {
+            var before = QuestGraphRules.ClassifyProfileDisplayState(_topology, node, previous);
+            var after = QuestGraphRules.ClassifyProfileDisplayState(_topology, node, current);
+            if (IsTaskLocationTrigger(before) || !IsTaskLocationTrigger(after)) continue;
+            changed |= _inProgressLocationIds.Add(node.Location.Any ? "any" : node.Location.Id);
+        }
+        if (changed) RefreshInProgressMapVisuals();
+        return changed;
+    }
+
+    private static bool IsTaskLocationTrigger(QuestMapDisplayStateKind state) => state is
+        QuestMapDisplayStateKind.Available or QuestMapDisplayStateKind.InProgress
+        or QuestMapDisplayStateKind.ReadyToFinish or QuestMapDisplayStateKind.RestartableFailure;
+
     private void ApplyInRaidDefaults(InRaidQuestContext context)
     {
         _traderId = null;
         _inProgressLocationIds.Clear();
         _inProgressLocationIds.UnionWith(context.DefaultLocationIds());
         _inProgressLocationsInitialized = true;
-        _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
             "QUESTMAP_M06_RAID_FILTERS " +
             $"location={context.LocationId}; trader=all; locations={string.Join(",", _inProgressLocationIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))}");
     }
@@ -573,7 +712,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
     private string BuildTitle()
     {
-        var title = _mode == GlobalQuestGraphMode.InProgress ? "IN PROGRESS" : "QUEST MAP";
+        var title = _mode == GlobalQuestGraphMode.InProgress ? "TASKS" : "QUEST MAP";
         if (!string.IsNullOrWhiteSpace(_search)) title += $"  ·  SEARCH: {_search}";
         return title;
     }
@@ -581,7 +720,16 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private void SelectQuest(string questId)
     {
         if (_graphView is null || _topology is null || !_topology.NodesById.ContainsKey(questId)) return;
-        if (string.Equals(_selectedQuestId, questId, StringComparison.Ordinal)) return;
+        if (string.Equals(_selectedQuestId, questId, StringComparison.Ordinal))
+        {
+            if (_mode == GlobalQuestGraphMode.InProgress)
+            {
+                ClearSelection();
+                return;
+            }
+            if (_customDetailsEnabled) ShowSelectedQuestDetails();
+            return;
+        }
         _selectedQuestId = questId;
         if (_mode == GlobalQuestGraphMode.Full)
         {
@@ -596,10 +744,11 @@ internal sealed class GlobalTasksScreenController : IDisposable
         {
             _graphView.SetSelected(questId);
         }
-        UpdateSelectionSummary();
+        UpdateSelectionDetails();
+        if (_customDetailsEnabled) ShowSelectedQuestDetails();
         PersistCurrentState();
         var live = _overlay?.QuestsById.TryGetValue(questId, out var state) == true && state.HasLiveQuest;
-        _log.LogInfo($"QUESTMAP_M06_SELECT view={_mode}; quest={questId}; live={live}; detail=graph-selection");
+        QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_SELECT view={_mode}; quest={questId}; live={live}; detail=graph-selection");
     }
 
     private void FocusQuest(string questId)
@@ -628,23 +777,21 @@ internal sealed class GlobalTasksScreenController : IDisposable
         if (!UpdateInProgressPresentation(true, true)) RebuildGraph(true);
     }
 
-    private void CycleActiveStatus()
-    {
-        _activeStatusFilter = _activeStatusFilter switch
-        {
-            null => "STARTED",
-            "STARTED" => "READY",
-            "READY" => "RETRY",
-            _ => null,
-        };
-        if (!UpdateInProgressPresentation(true, true)) RebuildGraph(true);
-    }
-
     private void ClearSelection()
     {
         if (_selectedQuestId is null && _focusQuestId is null) return;
+        if (_mode == GlobalQuestGraphMode.InProgress && _focusQuestId is null)
+        {
+            _selectedQuestId = null;
+            _graphView?.SetSelected(null);
+            CloseQuestDetails();
+            UpdateSelectionDetails();
+            PersistCurrentState();
+            return;
+        }
         _selectedQuestId = null;
         _focusQuestId = null;
+        CloseQuestDetails();
         RebuildGraph(true);
     }
 
@@ -678,14 +825,31 @@ internal sealed class GlobalTasksScreenController : IDisposable
         var header = _graphView.Root.Find("Header") as RectTransform
             ?? throw new InvalidOperationException("QuestMap global header was not created.");
 
-        AddHeaderButton(header, "InProgressTab", "IN PROGRESS", 12, -4, 112,
+        AddHeaderButton(header, "InProgressTab", "TASKS", 12, -4, 112,
             _mode == GlobalQuestGraphMode.InProgress, () => ShowMode(GlobalQuestGraphMode.InProgress));
         AddHeaderButton(header, "QuestMapTab", "QUEST MAP", 130, -4, 100,
             _mode == GlobalQuestGraphMode.Full, () => ShowMode(GlobalQuestGraphMode.Full), enabled: !_raidInProgressOnly);
         _notesButtonImage = AddRightHeaderButton(header, "Notes", "NOTES", 116, 72,
-            _nativeOverlayMode == NativeOverlayMode.Notes, () => ToggleNativeOverlay(true));
+            _overlayMode == GlobalOverlayMode.Notes, () => ToggleNativeOverlay(true));
         _questItemsButtonImage = AddRightHeaderButton(header, "QuestItems", "QUEST ITEMS", 6, 104,
-            _nativeOverlayMode == NativeOverlayMode.QuestItems, () => ToggleNativeOverlay(false));
+            _overlayMode == GlobalOverlayMode.QuestItems, () => ToggleNativeOverlay(false));
+        if (_customDetailsEnabled)
+        {
+            var detailSeparator = UnityUiFactory.CreateRect("DetailOverlaySeparator", header);
+            detailSeparator.anchorMin = detailSeparator.anchorMax = detailSeparator.pivot = new Vector2(1, 1);
+            detailSeparator.anchoredPosition = new Vector2(-198, -4);
+            detailSeparator.sizeDelta = new Vector2(1, 32);
+            detailSeparator.gameObject.AddComponent<Image>().color = QuestGraphPalette.Border;
+            _questDescriptionButtonImage = AddRightHeaderButton(
+                header,
+                "QuestDescription",
+                "QUEST DESCRIPTION",
+                208,
+                144,
+                _overlayMode == GlobalOverlayMode.QuestDescription,
+                ToggleQuestDetails);
+            _questDescriptionButton = _questDescriptionButtonImage.GetComponent<Button>();
+        }
 
         BuildSearchControl(header);
         if (_mode == GlobalQuestGraphMode.Full)
@@ -696,9 +860,10 @@ internal sealed class GlobalTasksScreenController : IDisposable
         }
         else
         {
-            AddHeaderButton(header, "Status", _activeStatusFilter is null ? "STATUS: ALL" : $"STATUS: {_activeStatusFilter}",
-                12, -70, 118, _activeStatusFilter is not null, CycleActiveStatus, 23);
-            AddHeaderButton(header, "HideCompletedTasks", "HIDE COMPLETED TASKS", 136, -70, 142,
+            AddHeaderButton(header, "Repeatables", _includeAvailableRepeatables ? "↻ ALL" : "↻ ACTIVE", 12, -70, 86,
+                _includeAvailableRepeatables, ToggleRepeatables, 23);
+            AddHeaderButton(header, "HideCompletedTasks",
+                _hideCompletedInProgressTasks ? "✓: HIDDEN" : "✓: SHOWN", 104, -70, 100,
                 _hideCompletedInProgressTasks, ToggleCompletedTasks, 23);
         }
 
@@ -709,7 +874,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         separator.gameObject.AddComponent<Image>().color = QuestGraphPalette.Border;
         BuildTraderStrip(header);
         if (_mode == GlobalQuestGraphMode.InProgress) BuildInProgressMapStrip(header);
-        UpdateNativeOverlayButtons();
+        UpdateOverlayButtons();
     }
 
     private void BuildInProgressMapStrip(RectTransform header)
@@ -787,7 +952,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             text.fontStyle = FontStyles.Bold;
             text.enableWordWrapping = false;
             var outline = root.gameObject.AddComponent<Outline>();
-            outline.effectColor = selected ? new Color(0.92f, 0.75f, 0.25f, 1) : QuestGraphPalette.Border;
+            outline.effectColor = selected ? QuestGraphPalette.Selected : QuestGraphPalette.Border;
             outline.effectDistance = selected ? new Vector2(2, -2) : Vector2.one;
             if (id is not null)
                 _inProgressMapVisuals[id] = new MapFilterVisual(background, banner, shadeImage, outline);
@@ -817,14 +982,15 @@ internal sealed class GlobalTasksScreenController : IDisposable
         {
             _selectedQuestId = null;
             _focusQuestId = null;
+            CloseQuestDetails();
         }
 
         table.UpdatePresentation(_projection, _hideCompletedInProgressTasks);
         if (rebuildChrome) RebuildInProgressChrome();
-        UpdateSelectionSummary();
+        UpdateSelectionDetails();
         PersistCurrentState();
         stopwatch.Stop();
-        _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
             "QUESTMAP_M06_PRESENTATION_UPDATE " +
             $"projectionChanged={projectionChanged}; chromeChanged={rebuildChrome}; rows={_projection.Nodes.Count}; " +
             $"elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}");
@@ -875,7 +1041,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
                 ? new Color(0.10f, 0.08f, 0.02f, 0.32f)
                 : new Color(0, 0, 0, 0.48f);
             pair.Value.Outline.effectColor = selected
-                ? new Color(0.92f, 0.75f, 0.25f, 1)
+                ? QuestGraphPalette.Selected
                 : QuestGraphPalette.Border;
             pair.Value.Outline.effectDistance = selected ? new Vector2(2, -2) : Vector2.one;
         }
@@ -895,6 +1061,12 @@ internal sealed class GlobalTasksScreenController : IDisposable
         if (!UpdateInProgressPresentation(false, true)) RebuildGraph(true);
     }
 
+    private void ToggleRepeatables()
+    {
+        _includeAvailableRepeatables = !_includeAvailableRepeatables;
+        if (!UpdateInProgressPresentation(true, true)) RebuildGraph(true);
+    }
+
     private void ToggleInProgressQuestExpansion(string questId)
     {
         if (!_expandedInProgressQuestIds.Add(questId)) _expandedInProgressQuestIds.Remove(questId);
@@ -905,6 +1077,71 @@ internal sealed class GlobalTasksScreenController : IDisposable
             return;
         }
         RebuildGraph(true);
+    }
+
+    private bool QuestMutationsAllowed() => !InRaidQuestContext.TryCapture(out _);
+
+    private NativeQuestHandoverAction? CreateTableHandoverAction(
+        RectTransform parent,
+        string questId,
+        string objectiveId)
+    {
+        if (!QuestMutationsAllowed()) return null;
+        var quest = _questController.Quests.LastOrDefault(value => string.Equals(value.Id, questId, StringComparison.Ordinal));
+        if (quest?.QuestStatus != EQuestStatus.Started) return null;
+        return NativeQuestTableActions.TryCreateHandover(
+            parent, quest, objectiveId, _questController, _inventoryController);
+    }
+
+    private bool CanReplaceRepeatable(string questId)
+    {
+        if (!QuestMutationsAllowed() || _topology?.NodesById.TryGetValue(questId, out var node) != true
+            || node.RepeatableKind is not ("Daily" or "Weekly")) return false;
+        return _questController.Quests.LastOrDefault(value => string.Equals(value.Id, questId, StringComparison.Ordinal))
+            ?.IsChangeAllowed == true;
+    }
+
+    private bool CanAcceptTableQuest(string questId)
+    {
+        if (!QuestMutationsAllowed() || _topology?.NodesById.TryGetValue(questId, out var node) != true
+            || NativeQuestTableActions.IsRaidOnlyTrader(node.TraderId)) return false;
+        return _questController.Quests.LastOrDefault(value => string.Equals(value.Id, questId, StringComparison.Ordinal))
+            ?.QuestStatus == EQuestStatus.AvailableForStart;
+    }
+
+    private async System.Threading.Tasks.Task AcceptTableQuestAsync(RectTransform parent, string questId)
+    {
+        if (!CanAcceptTableQuest(questId) || _topology is null) return;
+        var quest = _questController.Quests.Last(value => string.Equals(value.Id, questId, StringComparison.Ordinal));
+        await NativeQuestTableActions.AcceptAsync(
+            parent, _session, _inventoryController, _questController, quest,
+            _topology.NodesById[questId].TraderId, _log);
+    }
+
+    private bool CanCompleteTableQuest(string questId)
+    {
+        if (!QuestMutationsAllowed() || _topology?.NodesById.TryGetValue(questId, out var node) != true
+            || NativeQuestTableActions.IsRaidOnlyTrader(node.TraderId)) return false;
+        return _questController.Quests.LastOrDefault(value => string.Equals(value.Id, questId, StringComparison.Ordinal))
+            ?.QuestStatus == EQuestStatus.AvailableForFinish;
+    }
+
+    private async System.Threading.Tasks.Task CompleteTableQuestAsync(RectTransform parent, string questId)
+    {
+        if (!CanCompleteTableQuest(questId) || _topology is null) return;
+        var quest = _questController.Quests.Last(value => string.Equals(value.Id, questId, StringComparison.Ordinal));
+        await NativeQuestTableActions.CompleteAsync(
+            parent, _session, _inventoryController, _questController, quest,
+            _topology.NodesById[questId].TraderId, _log);
+    }
+
+    private async System.Threading.Tasks.Task ReplaceTableQuestAsync(RectTransform parent, string questId)
+    {
+        if (!CanReplaceRepeatable(questId) || _topology is null) return;
+        var quest = _questController.Quests.Last(value => string.Equals(value.Id, questId, StringComparison.Ordinal));
+        await NativeQuestTableActions.ReplaceAsync(
+            parent, _session, _inventoryController, _questController, quest,
+            _topology.NodesById[questId].TraderId, _log);
     }
 
     private void BuildSearchControl(RectTransform header)
@@ -994,7 +1231,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             labelRect.anchoredPosition = new Vector2(0, 1);
             labelRect.sizeDelta = new Vector2(51, 14);
             var traderLabel = UnityUiFactory.AddText(labelRect.gameObject, label, 8, TextAlignmentOptions.Center,
-                selected ? new Color(0.96f, 0.84f, 0.39f, 1) : QuestGraphPalette.MutedText);
+                selected ? QuestGraphPalette.Selected : QuestGraphPalette.MutedText);
             traderLabel.enableWordWrapping = false;
             button.onClick.AddListener(() => SetTrader(id));
         }
@@ -1004,29 +1241,13 @@ internal sealed class GlobalTasksScreenController : IDisposable
         RectTransform parent, string name, string label, float x, float y, float width, bool active, Action action,
         float height = 32, bool enabled = true)
     {
-        var rect = UnityUiFactory.CreateRect(name, parent);
-        rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0, 1);
-        rect.anchoredPosition = new Vector2(x, y);
-        rect.sizeDelta = new Vector2(width, height);
-        var button = UnityUiFactory.AddButton(rect.gameObject, active ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control);
-        button.interactable = enabled;
-        UnityUiFactory.AddText(rect.gameObject, label, height <= 24 ? 10 : 12, TextAlignmentOptions.Center,
-            enabled ? Color.white : new Color(0.48f, 0.50f, 0.50f, 1f));
-        button.onClick.AddListener(() => action());
-        return rect.GetComponent<Image>();
+        return QuestWorkspaceChrome.AddButton(parent, name, label, x, y, width, active, action, height, enabled);
     }
 
     private static Image AddRightHeaderButton(
         RectTransform parent, string name, string label, float right, float width, bool active, Action action)
     {
-        var rect = UnityUiFactory.CreateRect(name, parent);
-        rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1, 1);
-        rect.anchoredPosition = new Vector2(-right, -4);
-        rect.sizeDelta = new Vector2(width, 32);
-        var button = UnityUiFactory.AddButton(rect.gameObject, active ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control);
-        UnityUiFactory.AddText(rect.gameObject, label, 12, TextAlignmentOptions.Center, Color.white);
-        button.onClick.AddListener(() => action());
-        return rect.GetComponent<Image>();
+        return QuestWorkspaceChrome.AddRightButton(parent, name, label, right, width, active, action);
     }
 
     private static int TraderRank(string traderId)
@@ -1089,10 +1310,11 @@ internal sealed class GlobalTasksScreenController : IDisposable
                     _search,
                     _focusQuestId,
                     QuestRouteFilter.None,
-                    _inProgressLocationIds,
-                    true,
+                    [],
+                    false,
                     _inProgressSortCriteria,
-                    _hideCompletedInProgressTasks));
+                    _hideCompletedInProgressTasks,
+                    _includeAvailableRepeatables));
         }
     }
 
@@ -1106,17 +1328,19 @@ internal sealed class GlobalTasksScreenController : IDisposable
         _traderId = settings.TraderId;
         _search = settings.Search;
         _focusQuestId = settings.FocusQuestId;
+        // Location filters are deliberately session/raid-local. Persisting them
+        // made newly accepted quests disappear after a restart or raid boundary.
         _inProgressLocationIds.Clear();
-        _inProgressLocationIds.UnionWith(settings.LocationIds);
-        _inProgressLocationsInitialized = settings.HasLocationFilter;
+        _inProgressLocationsInitialized = false;
         _inProgressSortCriteria.Clear();
         _inProgressSortCriteria.AddRange(settings.InProgressSortCriteria);
         _hideCompletedInProgressTasks = settings.HideCompletedInProgressTasks;
+        _includeAvailableRepeatables = settings.IncludeAvailableRepeatables;
     }
 
     private void BuildSelectionSummary()
     {
-        if (_graphView is null) return;
+        if (_graphView is null || _customDetailsEnabled) return;
         _selectionSummary = UnityUiFactory.CreateRect("SelectionSummary", _graphView.Root);
         _selectionSummary.anchorMin = _selectionSummary.anchorMax = _selectionSummary.pivot = new Vector2(1, 0);
         _selectionSummary.anchoredPosition = new Vector2(-12, 12);
@@ -1136,73 +1360,123 @@ internal sealed class GlobalTasksScreenController : IDisposable
     {
         if (_disposed || !_mounted || _notesPart is null || _questItemsPart is null
             || _notesToggle is null || _questItemsToggle is null) return;
-        var requested = notes ? NativeOverlayMode.Notes : NativeOverlayMode.QuestItems;
-        ApplyNativeOverlayMode(_nativeOverlayMode == requested ? NativeOverlayMode.None : requested, true);
-        _log.LogInfo(
-            $"QUESTMAP_M06_OVERLAY requested={(notes ? "notes" : "quest-items")}; mode={_nativeOverlayMode}; " +
+        var requested = notes ? GlobalOverlayMode.Notes : GlobalOverlayMode.QuestItems;
+        ApplyOverlayMode(_overlayMode == requested ? GlobalOverlayMode.None : requested, true);
+        QuestMapDebugLog.Info(_log,
+            $"QUESTMAP_M06_OVERLAY requested={(notes ? "notes" : "quest-items")}; mode={_overlayMode}; " +
             $"notesVisible={_notesPart.gameObject.activeSelf}; questItemsVisible={_questItemsPart.gameObject.activeSelf}");
+    }
+
+    private void ToggleQuestDetails()
+    {
+        if (!_customDetailsEnabled || _selectedQuestId is null) return;
+        ApplyOverlayMode(
+            _overlayMode == GlobalOverlayMode.QuestDescription
+                ? GlobalOverlayMode.None
+                : GlobalOverlayMode.QuestDescription,
+            true);
+    }
+
+    private void ShowSelectedQuestDetails()
+    {
+        if (!_customDetailsEnabled || _selectedQuestId is null || _graphView is null || _topology is null || _overlay is null)
+            return;
+        if (_detailPane is null)
+        {
+            _detailPane = QuestDetailsPane.Create(
+                _graphView.Root.parent as RectTransform
+                    ?? throw new InvalidOperationException("QuestMap global root has no overlay parent."),
+                _graphView.Root.Find("Viewport") as RectTransform
+                    ?? throw new InvalidOperationException("QuestMap global viewport was not created."),
+                _session,
+                _inventoryController,
+                _questController,
+                _assetCache,
+                _log,
+                _showHiddenRewards,
+                _defaultDetailsToSummary,
+                _requestQuestRefresh);
+        }
+        _detailPane.Show(_topology, _overlay, _selectedQuestId);
+        ApplyOverlayMode(GlobalOverlayMode.QuestDescription, true);
+    }
+
+    private void CloseQuestDetails()
+    {
+        if (_overlayMode == GlobalOverlayMode.QuestDescription) _overlayMode = GlobalOverlayMode.None;
+        _detailPane?.Hide();
+        UpdateOverlayButtons();
     }
 
     private void ClearNativeOverlays()
     {
-        _nativeOverlayMode = NativeOverlayMode.None;
+        _overlayMode = GlobalOverlayMode.None;
         _notesToggle?.SetIsOnWithoutNotify(false);
         _questItemsToggle?.SetIsOnWithoutNotify(false);
         if (_notesPart is not null) _notesPart.gameObject.SetActive(false);
         if (_questItemsPart is not null) _questItemsPart.gameObject.SetActive(false);
         if (_notesBackdrop is not null) _notesBackdrop.gameObject.SetActive(false);
         if (_questItemsBackdrop is not null) _questItemsBackdrop.gameObject.SetActive(false);
-        UpdateNativeOverlayButtons();
+        _detailPane?.Hide();
+        UpdateOverlayButtons();
     }
 
-    private void ApplyNativeOverlayMode(NativeOverlayMode mode, bool invokeNative)
+    private void ApplyOverlayMode(GlobalOverlayMode mode, bool invokeNative)
     {
         if (_notesPart is null || _questItemsPart is null || _notesToggle is null || _questItemsToggle is null) return;
-        if (invokeNative && _nativeOverlayMode == NativeOverlayMode.Notes && mode != NativeOverlayMode.Notes)
+        if (mode == GlobalOverlayMode.QuestDescription && _selectedQuestId is null) mode = GlobalOverlayMode.None;
+        if (invokeNative && _overlayMode == GlobalOverlayMode.Notes && mode != GlobalOverlayMode.Notes)
             _notesToggle.isOn = false;
-        if (invokeNative && _nativeOverlayMode == NativeOverlayMode.QuestItems && mode != NativeOverlayMode.QuestItems)
+        if (invokeNative && _overlayMode == GlobalOverlayMode.QuestItems && mode != GlobalOverlayMode.QuestItems)
             _questItemsToggle.isOn = false;
         _notesToggle.SetIsOnWithoutNotify(false);
         _questItemsToggle.SetIsOnWithoutNotify(false);
 
-        if (invokeNative && mode == NativeOverlayMode.Notes) _notesToggle.isOn = true;
-        if (invokeNative && mode == NativeOverlayMode.QuestItems) _questItemsToggle.isOn = true;
+        if (invokeNative && mode == GlobalOverlayMode.Notes) _notesToggle.isOn = true;
+        if (invokeNative && mode == GlobalOverlayMode.QuestItems) _questItemsToggle.isOn = true;
 
         // Native toggle-group callbacks may select the opposite branch while a
         // toggle is turned off. The custom state is authoritative, so settle
         // both native toggles and roots explicitly after invoking EFT's opener.
-        _notesToggle.SetIsOnWithoutNotify(mode == NativeOverlayMode.Notes);
-        _questItemsToggle.SetIsOnWithoutNotify(mode == NativeOverlayMode.QuestItems);
-        _notesPart.gameObject.SetActive(mode == NativeOverlayMode.Notes);
-        _questItemsPart.gameObject.SetActive(mode == NativeOverlayMode.QuestItems);
-        if (_notesBackdrop is not null) _notesBackdrop.gameObject.SetActive(mode == NativeOverlayMode.Notes);
-        if (_questItemsBackdrop is not null) _questItemsBackdrop.gameObject.SetActive(mode == NativeOverlayMode.QuestItems);
-        _nativeOverlayMode = mode;
+        _notesToggle.SetIsOnWithoutNotify(mode == GlobalOverlayMode.Notes);
+        _questItemsToggle.SetIsOnWithoutNotify(mode == GlobalOverlayMode.QuestItems);
+        _notesPart.gameObject.SetActive(mode == GlobalOverlayMode.Notes);
+        _questItemsPart.gameObject.SetActive(mode == GlobalOverlayMode.QuestItems);
+        if (_notesBackdrop is not null) _notesBackdrop.gameObject.SetActive(mode == GlobalOverlayMode.Notes);
+        if (_questItemsBackdrop is not null) _questItemsBackdrop.gameObject.SetActive(mode == GlobalOverlayMode.QuestItems);
+        if (mode != GlobalOverlayMode.QuestDescription) _detailPane?.Hide();
+        _overlayMode = mode;
 
         if (_graphView?.Root.parent is Transform parent)
         {
             _graphView.Root.SetAsLastSibling();
-            if (mode == NativeOverlayMode.Notes)
+            if (mode == GlobalOverlayMode.Notes)
             {
                 _notesBackdrop?.SetAsLastSibling();
                 DirectChildUnder(parent, _notesPart).SetAsLastSibling();
             }
-            if (mode == NativeOverlayMode.QuestItems)
+            if (mode == GlobalOverlayMode.QuestItems)
             {
                 ConstrainQuestItemsScrolls();
                 _questItemsBackdrop?.SetAsLastSibling();
                 DirectChildUnder(parent, _questItemsPart).SetAsLastSibling();
             }
         }
-        UpdateNativeOverlayButtons();
+        if (mode == GlobalOverlayMode.QuestDescription) _detailPane?.ShowRoot();
+        UpdateOverlayButtons();
     }
 
-    private void UpdateNativeOverlayButtons()
+    private void UpdateOverlayButtons()
     {
         if (_notesButtonImage is not null)
-            _notesButtonImage.color = _nativeOverlayMode == NativeOverlayMode.Notes ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control;
+            _notesButtonImage.color = _overlayMode == GlobalOverlayMode.Notes ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control;
         if (_questItemsButtonImage is not null)
-            _questItemsButtonImage.color = _nativeOverlayMode == NativeOverlayMode.QuestItems ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control;
+            _questItemsButtonImage.color = _overlayMode == GlobalOverlayMode.QuestItems ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control;
+        if (_questDescriptionButtonImage is not null)
+            _questDescriptionButtonImage.color = _overlayMode == GlobalOverlayMode.QuestDescription
+                ? QuestGraphPalette.ControlActive
+                : QuestGraphPalette.Control;
+        if (_questDescriptionButton is not null) _questDescriptionButton.interactable = _selectedQuestId is not null;
     }
 
     private void HideNativeTasksWorkspace()
@@ -1270,16 +1544,17 @@ internal sealed class GlobalTasksScreenController : IDisposable
         var notesBranch = DirectChildUnder(commonParent, _notesPart);
         var questItemsBranch = DirectChildUnder(commonParent, _questItemsPart);
         _graphView.Root.SetAsLastSibling();
-        if (_nativeOverlayMode == NativeOverlayMode.Notes && _notesPart.gameObject.activeSelf)
+        if (_overlayMode == GlobalOverlayMode.Notes && _notesPart.gameObject.activeSelf)
         {
             _notesBackdrop?.SetAsLastSibling();
             notesBranch.SetAsLastSibling();
         }
-        if (_nativeOverlayMode == NativeOverlayMode.QuestItems && _questItemsPart.gameObject.activeSelf)
+        if (_overlayMode == GlobalOverlayMode.QuestItems && _questItemsPart.gameObject.activeSelf)
         {
             _questItemsBackdrop?.SetAsLastSibling();
             questItemsBranch.SetAsLastSibling();
         }
+        if (_overlayMode == GlobalOverlayMode.QuestDescription) _detailPane?.ShowRoot();
     }
 
     private void ConfigureNativeSidePanels()
@@ -1299,11 +1574,11 @@ internal sealed class GlobalTasksScreenController : IDisposable
             ?? throw new InvalidOperationException("QuestMap global root has no RectTransform parent.");
         _notesBackdrop = EnsureNativeBackdrop(overlayParent, _notesPart, _notesBackdrop, "QuestMapNotesBackdrop");
         _questItemsBackdrop = EnsureNativeBackdrop(overlayParent, _questItemsPart, _questItemsBackdrop, "QuestMapQuestItemsBackdrop");
-        _notesBackdrop.gameObject.SetActive(_nativeOverlayMode == NativeOverlayMode.Notes);
-        _questItemsBackdrop.gameObject.SetActive(_nativeOverlayMode == NativeOverlayMode.QuestItems);
+        _notesBackdrop.gameObject.SetActive(_overlayMode == GlobalOverlayMode.Notes);
+        _questItemsBackdrop.gameObject.SetActive(_overlayMode == GlobalOverlayMode.QuestItems);
         ConstrainQuestItemsScrolls();
 
-        _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
             "QUESTMAP_M06_NATIVE_BOUNDS " +
             $"canvas={FormatSize(viewport.rect.size)}; notes={FormatSize(_notesPart.rect.size)}; " +
             $"questItems={FormatSize(_questItemsPart.rect.size)}; search={FormatSize(_nativeSearch.rect.size)}; rightAligned=True; backdrop=True");
@@ -1455,6 +1730,18 @@ internal sealed class GlobalTasksScreenController : IDisposable
         return Rect.MinMaxRect(minimum.x, minimum.y, maximum.x, maximum.y);
     }
 
+    private void UpdateSelectionDetails()
+    {
+        UpdateSelectionSummary();
+        UpdateOverlayButtons();
+        if (!_customDetailsEnabled || _detailPane is null || _topology is null || _overlay is null || _selectedQuestId is null)
+        {
+            if (_selectedQuestId is null) CloseQuestDetails();
+            return;
+        }
+        _detailPane.Show(_topology, _overlay, _selectedQuestId);
+    }
+
     private void UpdateSelectionSummary()
     {
         if (_selectionSummary is null || _selectionSummaryText is null || _topology is null || _overlay is null || _selectedQuestId is null
@@ -1502,9 +1789,10 @@ internal sealed class GlobalTasksScreenController : IDisposable
         return string.Join("/", names.ToArray());
     }
 
-    private enum NativeOverlayMode
+    private enum GlobalOverlayMode
     {
         None,
+        QuestDescription,
         Notes,
         QuestItems,
     }

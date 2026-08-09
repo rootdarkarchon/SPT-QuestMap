@@ -9,6 +9,7 @@ using EFT.InventoryLogic;
 using EFT.UI;
 using SPTQuestMap.Client.Configuration;
 using SPTQuestMap.Client.UI;
+using SPTQuestMap.Core.Layout;
 using SPTQuestMap.Core.Models;
 using SPTQuestMap.Core.Rules;
 using UnityEngine;
@@ -28,7 +29,8 @@ internal sealed class QuestMapDataRuntime : IDisposable
     private readonly QuestAssetSpriteCache _assetCache;
     private readonly QuestTrackingService _tracking;
     private readonly RaidQuestProgressNotificationStack _raidNotification;
-    private readonly Dictionary<QuestsScreen, TraderGraphScreenController> _traderControllers = new();
+    private readonly RaidTrackedQuestListView _raidTrackedList;
+    private readonly Dictionary<QuestsScreen, TraderTasksScreenController> _traderControllers = new();
     private readonly Dictionary<TasksScreen, GlobalTasksScreenController> _globalControllers = new();
     private AbstractQuestControllerClass? _latestQuestController;
     private ReactiveQuestMonitor? _reactiveMonitor;
@@ -37,6 +39,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
     private Coroutine? _loadCoroutine;
     private Coroutine? _reactiveRefreshCoroutine;
     private Coroutine? _globalMountCoroutine;
+    private readonly Dictionary<string, Coroutine> _questActionRefreshes = new(StringComparer.Ordinal);
     private readonly HashSet<string> _reactiveReasons = new(StringComparer.Ordinal);
     private readonly HashSet<string> _reactiveQuestIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _raidPreferredObjectiveIds = new(StringComparer.Ordinal);
@@ -79,7 +82,20 @@ internal sealed class QuestMapDataRuntime : IDisposable
             coroutineOwner.transform,
             log,
             () => _configuration.RaidNotificationOpacity.Value,
+            () => _configuration.RaidNotificationMinimal.Value,
+            () => _configuration.RaidOverlayFadeDurationSeconds.Value,
+            () => _configuration.RaidNotificationDisplayDurationSeconds.Value,
             _assetCache);
+        _raidTrackedList = RaidTrackedQuestListView.Create(
+            coroutineOwner.transform,
+            log,
+            () => _configuration.TrackedQuestListHotkey.Value,
+            () => _configuration.RaidNotificationOpacity.Value,
+            () => _configuration.RaidOverlayFadeDurationSeconds.Value,
+            () => _configuration.TrackedQuestListDisplayDurationSeconds.Value,
+            BuildRaidTrackedQuestListProjection,
+            _assetCache);
+        _tracking.TrackingChanged += OnTrackingChanged;
         InRaidQuestProgressChanged += _raidNotification.Show;
     }
 
@@ -112,7 +128,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
                 raid.QuestController,
                 RequestRaidProgressRefresh);
             ObserveQuestController(raid.QuestController, false);
-            _log.LogInfo(
+            QuestMapDebugLog.Info(_log,
                 "QUESTMAP_M06_RAID_MONITOR active=True; " +
                 $"location={raid.LocationId}; intervalMs={RaidPollIntervalSeconds * 1000:0}; " +
                 $"checkerBudget={RaidPollCheckerBudget}; screenIndependent=True; " +
@@ -179,7 +195,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         if (!_configuration.EnableTraderQuestGraph.Value)
         {
             _pendingTraderScreen = null;
-            _log.LogInfo($"QUESTMAP_M03_STATE screen={screen.GetInstanceID()}; trader={trader.Id}; active=False; safelyDisabled=True; reason=feature disabled; vanillaRestored=True");
+            QuestMapDebugLog.Info(_log, $"QUESTMAP_M03_STATE screen={screen.GetInstanceID()}; trader={trader.Id}; active=False; safelyDisabled=True; reason=feature disabled; vanillaRestored=True");
         }
     }
 
@@ -230,7 +246,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
                 cached.Dispose();
                 if (!_configuration.EnableGlobalTasksGraph.Value)
                 {
-                    _log.LogInfo($"QUESTMAP_M06_STATE screen={screen.GetInstanceID()}; active=False; safelyDisabled=True; reason=feature disabled; vanillaRestored=True");
+                    QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_STATE screen={screen.GetInstanceID()}; active=False; safelyDisabled=True; reason=feature disabled; vanillaRestored=True");
                     return;
                 }
             }
@@ -247,7 +263,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
                     {
                         var result = cached.Resume(inventoryController, questController, session, topology, layout, overlay);
                         if (!InRaidQuestContext.TryCapture(out _)) RequestReactiveRefresh("global-screen-open", null);
-                        _log.LogInfo($"QUESTMAP_M06_STATE screen={screen.GetInstanceID()}; active=True; cached=True; result={result}");
+                        QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_STATE screen={screen.GetInstanceID()}; active=True; cached=True; result={result}");
                         return;
                     }
                     catch (Exception exception)
@@ -268,7 +284,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         if (!_configuration.EnableGlobalTasksGraph.Value)
         {
             _pendingGlobalScreen = null;
-            _log.LogInfo($"QUESTMAP_M06_STATE screen={screen.GetInstanceID()}; active=False; safelyDisabled=True; reason=feature disabled; vanillaRestored=True");
+            QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_STATE screen={screen.GetInstanceID()}; active=False; safelyDisabled=True; reason=feature disabled; vanillaRestored=True");
             return;
         }
 
@@ -305,9 +321,11 @@ internal sealed class QuestMapDataRuntime : IDisposable
         if (_loadCoroutine is not null) _coroutineOwner.StopCoroutine(_loadCoroutine);
         if (_reactiveRefreshCoroutine is not null) _coroutineOwner.StopCoroutine(_reactiveRefreshCoroutine);
         if (_globalMountCoroutine is not null) _coroutineOwner.StopCoroutine(_globalMountCoroutine);
+        foreach (var coroutine in _questActionRefreshes.Values) _coroutineOwner.StopCoroutine(coroutine);
         _loadCoroutine = null;
         _reactiveRefreshCoroutine = null;
         _globalMountCoroutine = null;
+        _questActionRefreshes.Clear();
         _reactiveMonitor?.Dispose();
         _reactiveMonitor = null;
         _reactiveReasons.Clear();
@@ -321,6 +339,8 @@ internal sealed class QuestMapDataRuntime : IDisposable
         InRaidQuestProgressChanged -= _raidNotification.Show;
         InRaidQuestProgressChanged = null;
         _raidNotification.Dispose();
+        _tracking.TrackingChanged -= OnTrackingChanged;
+        _raidTrackedList.Dispose();
         _tracking.Dispose();
         _latestQuestController = null;
         _pendingTraderScreen = null;
@@ -363,11 +383,11 @@ internal sealed class QuestMapDataRuntime : IDisposable
 
         var liveQuestCountAfter = controller.Quests.Count;
         if (!RefreshOverlay(controller, false)) yield break;
-        _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
             "QUESTMAP_M02_BOOK " +
             $"before={liveQuestCountBefore}; after={liveQuestCountAfter}; unchanged={liveQuestCountBefore == liveQuestCountAfter}; " +
             "loadAllCalled=False; templatesInjected=False");
-        _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
             "QUESTMAP_M02_STATE active=True; safelyDisabled=False; " +
             $"topologyVersion={_adapter.Topology?.Version}; layoutNodes={_adapter.Layout?.NodesById.Count ?? 0}");
         TryMountPendingTraderScreen(controller);
@@ -382,7 +402,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
             var layout = _adapter.Layout;
             var overlay = _adapter.RefreshOverlay(controller.Quests, controller.Profile);
             _tracking.EnsureFavoritesLoaded(overlay.ProfileId);
-            _log.LogInfo(
+            QuestMapDebugLog.Info(_log,
                 "QUESTMAP_M02_REFRESH " +
                 $"repeated={repeated}; topologyReused={ReferenceEquals(topology, _adapter.Topology)}; " +
                 $"layoutReused={ReferenceEquals(layout, _adapter.Layout)}; overlayQuests={overlay.QuestsById.Count}");
@@ -425,6 +445,19 @@ internal sealed class QuestMapDataRuntime : IDisposable
         _reactiveReasons.Clear();
         _reactiveQuestIds.Clear();
         _raidPreferredObjectiveIds.Clear();
+        var replacementStillSettling = _questActionRefreshes.Count > 0
+            && reasons.Any(reason => reason is
+                "quest-book-added" or "quest-book-added-range"
+                or "quest-book-removed" or "quest-book-removed-range");
+        if (replacementStillSettling)
+        {
+            QuestMapDebugLog.Info(_log,
+                "QUESTMAP_M07_REPLACE_DEFER " +
+                $"reasons={string.Join(",", reasons)}; quests={string.Join(",", signaledQuestIds)}; " +
+                "waitingForReplacementQuest=True");
+            CompleteReactiveRefresh();
+            yield break;
+        }
         if (controller is null || oldOverlay is null || originalTopology is null || originalLayout is null)
         {
             CompleteReactiveRefresh();
@@ -450,7 +483,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         {
             if (_configuration.EnableDebugLogging.Value)
             {
-                _log.LogInfo(
+                QuestMapDebugLog.Info(_log,
                     "QUESTMAP_M06_RAID_REFRESH " +
                     $"reasons={string.Join(",", reasons)}; serverProfileSkipped=True; topologyReloaded=False");
             }
@@ -460,7 +493,9 @@ internal sealed class QuestMapDataRuntime : IDisposable
             Task topologyTask;
             try
             {
-                topologyTask = _adapter.LoadTopologyAsync();
+                topologyTask = reasons.Contains("quest-details-replace") || reasons.Contains("repeatable-expired")
+                    ? _adapter.LoadRepeatableTopologyDeltaAsync()
+                    : _adapter.LoadTopologyAsync();
             }
             catch (Exception exception)
             {
@@ -541,16 +576,36 @@ internal sealed class QuestMapDataRuntime : IDisposable
             newOverlay,
             changedQuestIds,
             preferredObjectiveIds);
-        var selectionConsequences = _traderControllers.Values
-            .Select(graph => topologyReloaded
-                ? graph.RebuildTopology(topology, layout, newOverlay)
-                : graph.RefreshOverlay(newOverlay))
-            .Concat(_globalControllers.Values.Select(graph => topologyReloaded
-                ? graph.RebuildTopology(topology, layout, newOverlay)
-                : graph.RefreshOverlay(newOverlay)))
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(value => value, StringComparer.Ordinal)
-            .ToArray();
+        if (inRaid) _raidTrackedList.RefreshIfVisible();
+        var refreshAllNativeControls = !reasons.Contains("quest-details-action-settled");
+        var repeatableTopologyDelta = topologyReloaded
+            && (reasons.Contains("quest-details-replace") || reasons.Contains("repeatable-expired"));
+        string[] selectionConsequences;
+        try
+        {
+            selectionConsequences = _traderControllers.Values
+                .Select(graph => topologyReloaded
+                    ? repeatableTopologyDelta
+                        ? graph.ApplyRepeatableTopologyDelta(topology, layout, newOverlay)
+                        : graph.RebuildTopology(topology, layout, newOverlay)
+                    : graph.RefreshOverlay(newOverlay))
+                .Concat(_globalControllers.Values.Select(graph => topologyReloaded
+                    ? repeatableTopologyDelta
+                        ? graph.ApplyRepeatableTopologyDelta(topology, layout, newOverlay)
+                        : graph.RebuildTopology(topology, layout, newOverlay)
+                    : graph.RefreshOverlay(newOverlay, refreshAllNativeControls)))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+        }
+        catch (Exception exception)
+        {
+            _log.LogError(
+                "QUESTMAP_M07_UI_REFRESH_ERROR " +
+                $"reasons={string.Join(",", reasons)}; topologyDelta={repeatableTopologyDelta}; {exception}");
+            CompleteReactiveRefresh();
+            yield break;
+        }
 
         if (_configuration.EnableDebugLogging.Value)
         {
@@ -562,10 +617,10 @@ internal sealed class QuestMapDataRuntime : IDisposable
                 var newStatus = newOverlay.QuestsById.TryGetValue(questId, out var newState) && newState.HasLiveQuest
                     ? newState.ExactStatus
                     : "not-live";
-                _log.LogInfo($"QUESTMAP_M04_TRANSITION quest={questId}; old={oldStatus}; new={newStatus}");
+                QuestMapDebugLog.Info(_log, $"QUESTMAP_M04_TRANSITION quest={questId}; old={oldStatus}; new={newStatus}");
             }
 
-            _log.LogInfo(
+            QuestMapDebugLog.Info(_log,
                 "QUESTMAP_M04_REFRESH " +
                 $"reasons={string.Join(",", reasons)}; signaledQuests={string.Join(",", signaledQuestIds)}; " +
                 $"changedQuests={changedQuestIds.Length}; topologyInvalidated={topologyReloaded}; " +
@@ -575,6 +630,84 @@ internal sealed class QuestMapDataRuntime : IDisposable
         }
 
         CompleteReactiveRefresh();
+    }
+
+    private void ScheduleQuestActionReconciliation(string questId, QuestDetailsActionKind action)
+    {
+        if (_disposed || string.IsNullOrWhiteSpace(questId)) return;
+        if (_questActionRefreshes.Remove(questId, out var pending)) _coroutineOwner.StopCoroutine(pending);
+        _questActionRefreshes[questId] = _coroutineOwner.StartCoroutine(
+            ReconcileQuestActionAfterNativeTransaction(questId, action));
+    }
+
+    private IEnumerator ReconcileQuestActionAfterNativeTransaction(string questId, QuestDetailsActionKind action)
+    {
+        // Native replacement/handover methods can complete when their popup is
+        // shown rather than when the confirmed transaction has propagated into
+        // the quest book. Wait for an observable controller-state transition;
+        // refreshing on an arbitrary delay rendered stale repeatables and rows.
+        var interactive = action is QuestDetailsActionKind.Replace or QuestDetailsActionKind.Handover;
+        var startedAt = Time.realtimeSinceStartup;
+        var deadline = startedAt + (interactive ? 120f : 10f);
+        var settled = QuestMutationObserved(questId, action);
+        while (!_disposed && !settled && Time.realtimeSinceStartup < deadline)
+        {
+            yield return new WaitForSecondsRealtime(0.1f);
+            settled = QuestMutationObserved(questId, action);
+        }
+        _questActionRefreshes.Remove(questId);
+        if (_disposed) yield break;
+        if (!settled)
+        {
+            _log.LogWarning(
+                $"QUESTMAP_M07_ACTION_RECONCILE quest={questId}; action={action}; settled=False; " +
+                $"waitMs={(Time.realtimeSinceStartup - startedAt) * 1000f:F0}; refreshSkipped=True");
+            yield break;
+        }
+
+        QuestMapDebugLog.Info(_log,
+            $"QUESTMAP_M07_ACTION_RECONCILE quest={questId}; action={action}; settled=True; " +
+            $"waitMs={(Time.realtimeSinceStartup - startedAt) * 1000f:F0}");
+
+        // Give the rest of the native observers one frame after the quest-book
+        // mutation before taking the authoritative snapshot.
+        yield return null;
+        RequestReactiveRefresh(
+            action == QuestDetailsActionKind.Replace
+                ? "quest-details-replace"
+                : "quest-details-action-settled",
+            questId);
+    }
+
+    private bool QuestMutationObserved(string questId, QuestDetailsActionKind action)
+    {
+        var controller = _latestQuestController;
+        var overlay = _adapter.Overlay;
+        if (controller is null || overlay is null) return false;
+
+        overlay.QuestsById.TryGetValue(questId, out var prior);
+        var currentQuests = controller.Quests.ToArray();
+        var liveQuest = currentQuests.LastOrDefault(quest => string.Equals(quest.Id, questId, StringComparison.Ordinal));
+        if (action == QuestDetailsActionKind.Replace)
+        {
+            var priorLiveIds = overlay.QuestsById
+                .Where(pair => pair.Value.HasLiveQuest)
+                .Select(pair => pair.Key)
+                .ToHashSet(StringComparer.Ordinal);
+            return liveQuest is null
+                && currentQuests.Any(quest => !priorLiveIds.Contains(quest.Id)
+                    && _adapter.Topology?.NodesById.ContainsKey(quest.Id) != true);
+        }
+        if (liveQuest is null)
+            return prior?.HasLiveQuest == true;
+
+        var current = EftLiveSnapshotAdapter.CaptureQuest(liveQuest);
+        if (prior is null || !prior.HasLiveQuest) return true;
+        return !string.Equals(prior.ExactStatus, current.ExactStatus, StringComparison.Ordinal)
+               || prior.Visible != current.Visible
+               || prior.ExpirationTime != current.ExpirationTime
+               || prior.HandoverReady != current.HandoverReady
+               || !prior.Objectives.SequenceEqual(current.Objectives);
     }
 
     private bool TryApplyTargetedRaidRefresh(
@@ -621,6 +754,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
                 newOverlay,
                 changedQuestIds,
                 preferredObjectiveIds);
+            _raidTrackedList.RefreshIfVisible();
 
             var uiStartedAt = Stopwatch.GetTimestamp();
             var selectionConsequences = changedQuestIds
@@ -643,11 +777,11 @@ internal sealed class QuestMapDataRuntime : IDisposable
                     var newStatus = newOverlay.QuestsById.TryGetValue(questId, out var newState) && newState.HasLiveQuest
                         ? newState.ExactStatus
                         : "not-live";
-                    _log.LogInfo($"QUESTMAP_M04_TRANSITION quest={questId}; old={oldStatus}; new={newStatus}");
+                    QuestMapDebugLog.Info(_log, $"QUESTMAP_M04_TRANSITION quest={questId}; old={oldStatus}; new={newStatus}");
                 }
             }
 
-            _log.LogInfo(
+            QuestMapDebugLog.Info(_log,
                 "QUESTMAP_M06_RAID_PATCH " +
                 $"reasons={string.Join(",", reasons)}; requested={requestedIds.Count}; changed={changedQuestIds.Length}; " +
                 $"modelMs={modelMilliseconds:0.###}; uiMs={uiMilliseconds:0.###}; " +
@@ -673,7 +807,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
     private void EndRaidMonitor()
     {
         if (!_raidMonitorActive) return;
-        _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
             "QUESTMAP_M06_RAID_MONITOR active=False; " +
             $"location={_raidLocationId}; reason=raid-ended");
         _raidMonitorActive = false;
@@ -684,6 +818,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         _raidPreferredObjectiveIds.Clear();
         LogRaidPerformance(true);
         _raidNotification.Hide();
+        _raidTrackedList.Hide();
         _tracking.EndRaid();
         _reactiveMonitor?.Dispose();
         _reactiveMonitor = null;
@@ -710,7 +845,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
             if (!tracking.Tracked)
             {
                 if (_configuration.EnableDebugLogging.Value)
-                    _log.LogInfo($"QUESTMAP_M06_RAID_NOTIFICATION_SUPPRESSED quest={questId}; reason=untracked");
+                    QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_RAID_NOTIFICATION_SUPPRESSED quest={questId}; reason=untracked");
                 continue;
             }
 
@@ -749,7 +884,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
                 .First();
             var definition = node.Objectives.FirstOrDefault(objective =>
                 string.Equals(objective.Id, progress.ObjectiveId, StringComparison.Ordinal));
-            _log.LogInfo(
+            QuestMapDebugLog.Info(_log,
                 "QUESTMAP_M06_RAID_NOTIFICATION " +
                 $"quest={questId}; objective={progress.ObjectiveId}; candidates={notificationObjectives.Length}; " +
                 $"suppressed={changedObjectives.Length - notificationObjectives.Length}; " +
@@ -764,6 +899,30 @@ internal sealed class QuestMapDataRuntime : IDisposable
                 current.ExactStatus ?? "Unknown"));
         }
     }
+
+    private RaidTrackedQuestListProjection BuildRaidTrackedQuestListProjection()
+    {
+        var topology = _adapter.Topology;
+        var overlay = _adapter.Overlay;
+        if (!_raidMonitorActive || topology is null || overlay is null
+            || !InRaidQuestContext.TryCapture(out var raid))
+        {
+            return RaidTrackedQuestListProjection.Empty;
+        }
+
+        var trackedQuestIds = topology.Nodes
+            .Where(node => _tracking.Resolve(overlay.ProfileId, node).Tracked)
+            .Select(node => node.Id)
+            .ToArray();
+        return RaidTrackedQuestListProjectionBuilder.Build(
+            topology,
+            overlay,
+            trackedQuestIds,
+            raid.DefaultLocationIds());
+    }
+
+    private void OnTrackingChanged(string? profileId, string? questId) =>
+        _raidTrackedList.RefreshIfVisible();
 
     private static bool IsLeafObjective(QuestGraphNode node, string objectiveId) =>
         !node.Objectives.Any(objective =>
@@ -895,7 +1054,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
     private void LogRaidPerformance(bool final)
     {
         if (_raidPollCount == 0) return;
-        _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
             "QUESTMAP_M06_RAID_PERF " +
             $"final={final}; polls={_raidPollCount}; scannedCheckers={_raidPolledCheckerCount}; " +
             $"pollChanges={_raidPollChangeCount}; " +
@@ -926,7 +1085,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         IReadOnlyCollection<string> signaledQuestIds,
         QuestGraphTopology topology)
     {
-        if (reasons.Contains("repeatable-expired")) return true;
+        if (reasons.Contains("repeatable-expired") || reasons.Contains("quest-details-replace")) return true;
         if (signaledQuestIds.Any(questId => !topology.NodesById.ContainsKey(questId))) return true;
         if (reasons.Any(reason => reason == "quest-book-removed" || reason == "quest-book-removed-range")
             && signaledQuestIds.Any(questId =>
@@ -987,7 +1146,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         if (topology is null || layout is null || overlay is null) return;
 
         _pendingTraderScreen = null;
-        var controller = new TraderGraphScreenController(
+        var controller = new TraderTasksScreenController(
             pending.Screen,
             pending.Session,
             pending.InventoryController,
@@ -995,16 +1154,20 @@ internal sealed class QuestMapDataRuntime : IDisposable
             pending.Trader,
             _log,
             _configuration.EnableDebugLogging.Value,
-            _assetCache);
+            _assetCache,
+            _tracking,
+            true,
+            () => _configuration.ShowHiddenQuestRewards.Value,
+            () => _configuration.DefaultQuestDetailsToSummary.Value,
+            ScheduleQuestActionReconciliation);
         try
         {
             controller.Mount(
                 topology,
                 layout,
-                overlay,
-                _configuration.ForceTraderGraphInitializationFailure.Value);
+                overlay);
             _traderControllers[pending.Screen] = controller;
-            _log.LogInfo($"QUESTMAP_M03_STATE screen={pending.Screen.GetInstanceID()}; trader={pending.Trader.Id}; active=True; safelyDisabled=False; vanillaRestored=False");
+            QuestMapDebugLog.Info(_log, $"QUESTMAP_M03_STATE screen={pending.Screen.GetInstanceID()}; trader={pending.Trader.Id}; active=True; safelyDisabled=False; vanillaRestored=False");
         }
         catch (Exception exception)
         {
@@ -1048,16 +1211,19 @@ internal sealed class QuestMapDataRuntime : IDisposable
             _log,
             _configuration.EnableDebugLogging.Value,
             _assetCache,
-            _tracking);
+            _tracking,
+            true,
+            () => _configuration.ShowHiddenQuestRewards.Value,
+            () => _configuration.DefaultQuestDetailsToSummary.Value,
+            ScheduleQuestActionReconciliation);
         try
         {
             controller.Mount(
                 topology,
                 layout,
-                overlay,
-                _configuration.ForceGlobalTasksGraphInitializationFailure.Value);
+                overlay);
             _globalControllers[pending.Screen] = controller;
-            _log.LogInfo($"QUESTMAP_M06_STATE screen={pending.Screen.GetInstanceID()}; active=True; safelyDisabled=False; vanillaRestored=False");
+            QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_STATE screen={pending.Screen.GetInstanceID()}; active=True; safelyDisabled=False; vanillaRestored=False");
         }
         catch (Exception exception)
         {

@@ -54,6 +54,10 @@ public static class GlobalQuestGraphProjectionBuilder
         var applicableSource = overlay.ApplicableQuestIds.Count > 0 ? overlay.ApplicableQuestIds : topology.ApplicableQuestIds;
         var defaultSource = overlay.DefaultVisibleQuestIds.Count > 0 ? overlay.DefaultVisibleQuestIds : topology.DefaultVisibleQuestIds;
         var applicable = applicableSource.ToHashSet(StringComparer.Ordinal);
+        if (options.TraderTasksContext)
+        {
+            return BuildTraderTasksVisibleIds(topology, overlay, options, applicable);
+        }
         if (options.Mode == GlobalQuestGraphMode.Full)
         {
             return QuestVisibilityRules.BuildVisibleIds(
@@ -74,10 +78,15 @@ public static class GlobalQuestGraphProjectionBuilder
                     options.Search,
                     options.SelectedQuestId,
                     options.FocusQuestId,
-                    true));
+                    true,
+                    options.TraderGraphContext,
+                    !options.TraderGraphContext));
         }
         var visible = options.Mode == GlobalQuestGraphMode.InProgress
-            ? topology.Nodes.Where(node => IsActive(QuestGraphRules.ClassifyProfileDisplayState(topology, node, overlay)))
+            ? topology.Nodes.Where(node => IsVisibleInProgress(
+                    node,
+                    QuestGraphRules.ClassifyProfileDisplayState(topology, node, overlay),
+                    options.IncludeAvailableRepeatables))
                 .Select(node => node.Id).ToHashSet(StringComparer.Ordinal)
             : (options.ShowAllFuture ? applicableSource : defaultSource)
                 .ToHashSet(StringComparer.Ordinal);
@@ -88,6 +97,13 @@ public static class GlobalQuestGraphProjectionBuilder
                 || !MatchesActiveStatus(
                     QuestGraphRules.ClassifyProfileDisplayState(topology, node, overlay),
                     options.ActiveStatusFilter!));
+        }
+
+        if (options.Mode == GlobalQuestGraphMode.InProgress && options.ExcludeReadyToFinish)
+        {
+            visible.RemoveWhere(id => topology.NodesById.TryGetValue(id, out var node)
+                && QuestGraphRules.ClassifyProfileDisplayState(topology, node, overlay)
+                    == QuestMapDisplayStateKind.ReadyToFinish);
         }
 
         if (options.Mode == GlobalQuestGraphMode.InProgress && options.LocationIds is not null)
@@ -194,6 +210,58 @@ public static class GlobalQuestGraphProjectionBuilder
         return visible;
     }
 
+    private static HashSet<string> BuildTraderTasksVisibleIds(
+        QuestGraphTopology topology,
+        QuestProfileOverlay overlay,
+        GlobalQuestGraphOptions options,
+        HashSet<string> applicable)
+    {
+        if (string.IsNullOrWhiteSpace(options.TraderId)) return [];
+
+        var visible = topology.Nodes
+            .Where(node => applicable.Contains(node.Id)
+                && string.Equals(node.TraderId, options.TraderId, StringComparison.Ordinal))
+            .Where(node => !QuestGraphRules.HasUnmetPrerequisiteGate(topology, node.Id, overlay))
+            .Where(node => QuestGraphRules.ClassifyProfileDisplayState(topology, node, overlay) is
+                QuestMapDisplayStateKind.ReadyToFinish or
+                QuestMapDisplayStateKind.Available or
+                QuestMapDisplayStateKind.InProgress or
+                QuestMapDisplayStateKind.RestartableFailure or
+                QuestMapDisplayStateKind.LevelGated or
+                QuestMapDisplayStateKind.TraderGated or
+                QuestMapDisplayStateKind.TraderUnavailable or
+                QuestMapDisplayStateKind.Pending or
+                QuestMapDisplayStateKind.Locked or
+                QuestMapDisplayStateKind.Unknown)
+            .Select(node => node.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (options.LevelEligibleOnly)
+        {
+            visible.RemoveWhere(id => topology.NodesById.TryGetValue(id, out var node)
+                && QuestGraphRules.ClassifyProfileDisplayState(topology, node, overlay) == QuestMapDisplayStateKind.LevelGated);
+        }
+
+        if (options.HideUnavailableTraderTasks)
+        {
+            visible.RemoveWhere(id => topology.NodesById.TryGetValue(id, out var node)
+                && QuestGraphRules.ClassifyProfileDisplayState(topology, node, overlay) is not (
+                    QuestMapDisplayStateKind.ReadyToFinish or
+                    QuestMapDisplayStateKind.Available or
+                    QuestMapDisplayStateKind.InProgress or
+                    QuestMapDisplayStateKind.RestartableFailure));
+        }
+
+        var search = options.Search?.Trim();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            visible.RemoveWhere(id => !topology.NodesById.TryGetValue(id, out var node)
+                || !($"{node.Name} {node.TraderName} {node.Id}").Contains(search!, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return visible;
+    }
+
     private static bool MatchesActiveStatus(QuestMapDisplayStateKind status, string filter) => filter switch
     {
         "READY" => status == QuestMapDisplayStateKind.ReadyToFinish,
@@ -205,6 +273,15 @@ public static class GlobalQuestGraphProjectionBuilder
     private static bool IsActive(QuestMapDisplayStateKind display) => display is
         QuestMapDisplayStateKind.InProgress or QuestMapDisplayStateKind.ReadyToFinish
         or QuestMapDisplayStateKind.RestartableFailure;
+
+    private static bool IsVisibleInProgress(
+        QuestGraphNode node,
+        QuestMapDisplayStateKind display,
+        bool includeAvailableRepeatables) =>
+        IsActive(display)
+        || includeAvailableRepeatables
+        && node.RepeatableKind is "Daily" or "Weekly"
+        && display == QuestMapDisplayStateKind.Available;
 
     private static bool PassesCommonFilters(QuestGraphTopology topology, QuestProfileOverlay overlay, GlobalQuestGraphOptions options, string id)
     {

@@ -17,7 +17,7 @@ internal static class CompatibilityValidator
     public const string SupportedAssemblyCSharpSha256 =
         "FAEF6F0B9F142F9D047495EC3DCCFD5D6974AC048368DC7045955CF54B117982";
 
-    public static CompatibilityReport Validate(bool forceFailure)
+    public static CompatibilityReport Validate()
     {
         var failures = new List<string>();
         var detectedEftVersion = "unavailable";
@@ -59,11 +59,6 @@ internal static class CompatibilityValidator
         catch (Exception exception)
         {
             failures.Add($"Environment inspection failed: {exception.GetType().Name}: {exception.Message}");
-        }
-
-        if (forceFailure)
-        {
-            failures.Add("Compatibility failure was forced by configuration.");
         }
 
         PatchTargetResolution targets;

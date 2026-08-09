@@ -213,9 +213,9 @@ internal sealed class QuestGraphCardNodeView
         _outline.enabled = highlight != QuestNodeHighlightKind.None;
         _outline.effectColor = highlight switch
         {
-            QuestNodeHighlightKind.Selected => new Color(0.94f, 0.83f, 0.44f, 1),
-            QuestNodeHighlightKind.Prerequisite => new Color(0.48f, 0.71f, 0.85f, 1),
-            _ => new Color(0.84f, 0.64f, 0.36f, 1),
+            QuestNodeHighlightKind.Selected => QuestGraphPalette.Selected,
+            QuestNodeHighlightKind.Prerequisite => QuestGraphPalette.Prerequisite,
+            _ => QuestGraphPalette.Successor,
         };
     }
 

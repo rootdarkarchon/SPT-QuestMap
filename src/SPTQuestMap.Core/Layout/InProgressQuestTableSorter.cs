@@ -5,12 +5,19 @@ namespace SPTQuestMap.Core.Layout;
 
 public static class InProgressQuestTableSorter
 {
-    private static readonly QuestTableSortCriterion[] DefaultCriteria =
+    private static readonly string[] TraderOrder =
     [
-        new(QuestTableSortColumn.Trader, QuestTableSortDirection.Ascending),
-        new(QuestTableSortColumn.Location, QuestTableSortDirection.Ascending),
-        new(QuestTableSortColumn.Quest, QuestTableSortDirection.Ascending),
+        "54cb50c76803fa8b248b4571", "54cb57776803fa99248b456e", "579dc571d53a0658a154fbec",
+        "58330581ace78e27b8b10cee", "5935c25fb3acc3127c3d8cd9", "5a7c2eca46aef81a7ca2145d",
+        "5ac3b934156ae10c4430e83c", "5c0647fdd443bc2504c2d371", "6617beeaa9cfa777ca915b7c",
+        "638f541a29ffd1183d187f57", "656f0f98d80a697f855d34b1",
     ];
+
+    public static int NaturalTraderRank(string traderId)
+    {
+        var rank = Array.IndexOf(TraderOrder, traderId);
+        return rank < 0 ? int.MaxValue : rank;
+    }
 
     public static IReadOnlyList<QuestGraphNode> Sort(
         IEnumerable<QuestGraphNode> nodes,
@@ -38,8 +45,7 @@ public static class InProgressQuestTableSorter
         if (overlay is null) throw new ArgumentNullException(nameof(overlay));
         if (criteria is null) throw new ArgumentNullException(nameof(criteria));
 
-        var effective = criteria.Count == 0 ? DefaultCriteria : criteria;
-        return nodes.OrderBy(node => node, new NodeComparer(topology, overlay, effective, groupByRepeatableKind)).ToArray();
+        return nodes.OrderBy(node => node, new NodeComparer(topology, overlay, criteria, groupByRepeatableKind)).ToArray();
     }
 
     public static IReadOnlyList<QuestTableSortCriterion> Toggle(
@@ -80,6 +86,15 @@ public static class InProgressQuestTableSorter
             {
                 var section = Section(left).CompareTo(Section(right));
                 if (section != 0) return section;
+            }
+
+            if (criteria.Count == 0)
+            {
+                var trader = NaturalTraderRank(left.TraderId).CompareTo(NaturalTraderRank(right.TraderId));
+                if (trader != 0) return trader;
+                var location = CompareText(LocationName(left), LocationName(right));
+                if (location != 0) return location;
+                return left.NaturalOrder.CompareTo(right.NaturalOrder);
             }
 
             foreach (var criterion in criteria)
@@ -146,5 +161,6 @@ public static class InProgressQuestTableSorter
 
         private static int CompareText(string left, string right) =>
             StringComparer.OrdinalIgnoreCase.Compare(left, right);
+
     }
 }

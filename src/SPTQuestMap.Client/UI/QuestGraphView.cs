@@ -19,9 +19,9 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
     private const double CullPadding = 160;
     private readonly RectTransform _viewport;
     private readonly RectTransform _content;
-    private readonly IQuestGraphProjection _projection;
-    private readonly QuestGraphTopology _topology;
-    private readonly QuestGraphSpatialIndex _spatialIndex;
+    private IQuestGraphProjection _projection;
+    private QuestGraphTopology _topology;
+    private QuestGraphSpatialIndex _spatialIndex;
     private readonly QuestGraphNodePool _nodePool;
     private readonly QuestAssetSpriteCache _assetCache;
     private readonly QuestGraphEdgeLayer _edgeLayer;
@@ -160,7 +160,8 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         bool ignoreParentLayout = false,
         Action? onBackgroundClick = null,
         bool globalChrome = false,
-        Action<string>? onFocusRequested = null)
+        Action<string>? onFocusRequested = null,
+        float? globalHeaderHeightOverride = null)
     {
         var stopwatch = Stopwatch.StartNew();
         var root = UnityUiFactory.CreateRect("QuestMapGraph", mountRect.parent);
@@ -175,7 +176,8 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         header.anchorMin = new Vector2(0, 1);
         header.anchorMax = new Vector2(1, 1);
         header.pivot = new Vector2(0.5f, 1);
-        var globalHeaderHeight = projection is GlobalQuestGraphProjection { Mode: GlobalQuestGraphMode.InProgress } ? 140 : 96;
+        var globalHeaderHeight = globalHeaderHeightOverride
+            ?? (projection is GlobalQuestGraphProjection { Mode: GlobalQuestGraphMode.InProgress } ? 140 : 96);
         header.offsetMin = new Vector2(0, globalChrome ? -globalHeaderHeight : -44);
         header.offsetMax = Vector2.zero;
         header.gameObject.AddComponent<Image>().color = globalChrome ? new Color(0.055f, 0.07f, 0.075f, 0.99f) : Color.clear;
@@ -218,7 +220,7 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         view.RefreshViewportCulling();
         Canvas.ForceUpdateCanvases();
         stopwatch.Stop();
-        log.LogInfo(
+        QuestMapDebugLog.Info(log,
             "QUESTMAP_M05_RENDER " +
             $"nodes={projection.Nodes.Count}; edges={projection.Edges.Count}; activeNodes={view.ActiveNodeCount}; " +
             $"createdNodes={view.CreatedNodeCount}; edgeBatches={view._edgeLayer.BatchCount}; firstRenderMs={stopwatch.Elapsed.TotalMilliseconds:F2}");
@@ -234,7 +236,7 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         stopwatch.Stop();
         if (_debugLogging)
         {
-            _log.LogInfo($"QUESTMAP_M05_OVERLAY activeNodes={_activeNodes.Count}; totalNodes={_projection.Nodes.Count}; overlayMs={stopwatch.Elapsed.TotalMilliseconds:F2}; layoutRebuilt=False");
+            QuestMapDebugLog.Info(_log, $"QUESTMAP_M05_OVERLAY activeNodes={_activeNodes.Count}; totalNodes={_projection.Nodes.Count}; overlayMs={stopwatch.Elapsed.TotalMilliseconds:F2}; layoutRebuilt=False");
         }
     }
 
@@ -242,6 +244,58 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
     {
         _overlay = overlay;
         if (_activeNodes.TryGetValue(questId, out var view)) ApplyNodeState(questId, view);
+    }
+
+    public bool ApplyTopologyDelta(
+        IQuestGraphProjection projection,
+        QuestGraphTopology topology,
+        QuestProfileOverlay overlay,
+        string? selectedQuestId)
+    {
+        if (_disposed) return false;
+        var stopwatch = Stopwatch.StartNew();
+        var priorNodeIds = _projection.Nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
+        var nextNodeIds = projection.Nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
+        var added = nextNodeIds.Except(priorNodeIds, StringComparer.Ordinal).Count();
+        var removed = priorNodeIds.Except(nextNodeIds, StringComparer.Ordinal).Count();
+
+        // Repeatable quests are isolated nodes. If an unexpected replacement
+        // changes dependency edges, fall back to the controller's safe full
+        // rebuild rather than leave a stale edge mesh behind.
+        if (!_projection.Edges.SequenceEqual(projection.Edges)) return false;
+
+        foreach (var view in _activeNodes.Values) _nodePool.Release(view);
+        _activeNodes.Clear();
+        RemoveRepeatableBand();
+        _projection = projection;
+        _topology = topology;
+        _overlay = overlay;
+        _spatialIndex = new QuestGraphSpatialIndex(projection.NodesById);
+        _content.sizeDelta = new Vector2(
+            Mathf.Max(1, (float)projection.Width),
+            Mathf.Max(1, (float)projection.Height));
+        BuildRepeatableBand(_content, projection, overlay);
+        _selection = QuestGraphRules.BuildSelection(_topology, selectedQuestId);
+        _edgeLayer.SetSelection(_selection);
+        RefreshViewportCulling();
+        stopwatch.Stop();
+        QuestMapDebugLog.Info(_log,
+            "QUESTMAP_M05_TOPOLOGY_DELTA " +
+            $"added={added}; removed={removed}; activeNodes={_activeNodes.Count}; " +
+            $"elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}; edgeMeshRebuilt=False; fullRebuild=False");
+        return true;
+    }
+
+    private void RemoveRepeatableBand()
+    {
+        foreach (Transform child in _content)
+        {
+            if (child.name is "DailyHeader" or "WeeklyHeader" or "DailySeparator" or "WeeklySeparator" or "RepeatableSeparator")
+            {
+                child.gameObject.SetActive(false);
+                UnityEngine.Object.Destroy(child.gameObject);
+            }
+        }
     }
 
     public void SetSelected(string? questId)
@@ -290,7 +344,7 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         _disposed = true;
         if (_debugLogging)
         {
-            _log.LogInfo(
+            QuestMapDebugLog.Info(_log,
                 "QUESTMAP_M05_RENDER_DISPOSE " +
                 $"nodes={_projection.Nodes.Count}; maxActiveNodes={_maximumActiveNodes}; createdNodes={CreatedNodeCount}; pooledNodes={PooledNodeCount}; " +
                 $"edgeMeshBuilds={_edgeMeshBuilds}; edgeMeshMs={_edgeMeshMilliseconds:F2}");
@@ -516,7 +570,7 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         _edgeMeshBuilds++;
         if (_debugLogging)
         {
-            _log.LogInfo($"QUESTMAP_M05_EDGE_MESH edges={edgeCount}; meshMs={elapsedMilliseconds:F2}; reason=geometry-or-selection");
+            QuestMapDebugLog.Info(_log, $"QUESTMAP_M05_EDGE_MESH edges={edgeCount}; meshMs={elapsedMilliseconds:F2}; reason=geometry-or-selection");
         }
     }
 }

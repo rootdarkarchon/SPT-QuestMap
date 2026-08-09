@@ -111,7 +111,13 @@ public sealed record QuestGraphNode(
     IReadOnlyList<QuestReward> Rewards,
     IReadOnlyList<QuestUnknownCondition> UnknownConditions,
     bool ProfileGenerated,
-    string? RepeatableKind);
+    string? RepeatableKind)
+{
+    public string? Summary { get; init; }
+
+    /// <summary>Stable order supplied by the authoritative topology feed.</summary>
+    public int NaturalOrder { get; init; } = int.MaxValue;
+}
 
 public sealed record QuestGraphEdge(
     string SourceId,
@@ -341,7 +347,12 @@ public sealed record GlobalQuestGraphOptions(
     string? FocusQuestId,
     QuestRouteFilter RouteFilter,
     string? SelectedQuestId = null,
-    IReadOnlyCollection<string>? LocationIds = null);
+    IReadOnlyCollection<string>? LocationIds = null,
+    bool IncludeAvailableRepeatables = false,
+    bool TraderTasksContext = false,
+    bool TraderGraphContext = false,
+    bool ExcludeReadyToFinish = false,
+    bool HideUnavailableTraderTasks = false);
 
 public sealed record GlobalQuestGraphProjection(
     GlobalQuestGraphMode Mode,

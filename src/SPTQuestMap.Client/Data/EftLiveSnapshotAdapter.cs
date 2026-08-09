@@ -38,8 +38,9 @@ internal static class EftLiveSnapshotAdapter
 
     internal static LiveQuestSnapshot CaptureQuest(QuestClass quest)
     {
-        var objectiveProgress = quest.Conditions.Values
-            .SelectMany(conditions => conditions)
+        var objectiveProgress = (quest.Conditions.TryGetValue(EQuestStatus.AvailableForFinish, out var finishConditions)
+                ? finishConditions
+                : Enumerable.Empty<Condition>())
             .GroupBy(condition => condition.id.ToString(), StringComparer.Ordinal)
             .Select(group => group.First())
             .OrderBy(condition => condition.index)

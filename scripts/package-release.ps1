@@ -33,12 +33,12 @@ $outputFull = [System.IO.Path]::GetFullPath($OutputDirectory)
 $packageRoot = Join-Path $outputFull 'package'
 $modDirectory = Join-Path $packageRoot 'SPT/user/mods/SPT-QuestMap'
 $archive = Join-Path $outputFull "SPT-QuestMap-$Version.zip"
-$buildOutput = Join-Path $root "src/SPTQuestMap/bin/$Configuration/net9.0"
+$buildOutput = Join-Path $root 'dist/server'
 $dll = Join-Path $buildOutput 'SPTQuestMap.dll'
 $coreDll = Join-Path $buildOutput 'SPTQuestMap.Core.dll'
 
 if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) {
-    throw "Built mod DLL was not found: $dll"
+    throw "Staged server mod DLL was not found: $dll. Run scripts/build.ps1 -Target Server first."
 }
 if (-not (Test-Path -LiteralPath $coreDll -PathType Leaf)) {
     throw "Built shared core DLL was not found: $coreDll"

@@ -6,6 +6,43 @@ namespace SPTQuestMap.Core.Adapters;
 
 public static class QuestTopologyNormalizer
 {
+    public static QuestGraphTopology ApplyProfileGeneratedDelta(
+        QuestGraphTopology current,
+        QuestRepeatableFeed feed)
+    {
+        if (current is null) throw new ArgumentNullException(nameof(current));
+        if (feed is null) throw new ArgumentNullException(nameof(feed));
+        var staticNodes = current.Nodes.Where(node => !node.ProfileGenerated).ToArray();
+        var generatedNodes = (feed.ProfileGeneratedQuests ?? [])
+            .Select((node, index) => MapNode(
+                node,
+                true,
+                feed.RepeatableKinds?.GetValueOrDefault(node.Id),
+                feed.QuestSummaries?.GetValueOrDefault(node.Id),
+                staticNodes.Length + index))
+            .GroupBy(node => node.Id, StringComparer.Ordinal)
+            .Select(group => group.Last())
+            .ToArray();
+        var nodes = staticNodes.Concat(generatedNodes).OrderBy(node => node.Id, StringComparer.Ordinal).ToArray();
+        var nodeIds = nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
+        var staticVersion = current.Version.Split(new[] { ":generated:" }, StringSplitOptions.None)[0];
+        var diagnostics = current.Diagnostics with
+        {
+            UnknownConditionCount = staticNodes.Sum(node => node.UnknownConditions.Count)
+                + generatedNodes.Sum(node => node.UnknownConditions.Count),
+        };
+        return new QuestGraphTopology(
+            BuildTopologyVersion(staticVersion, feed.ProfileGeneratedQuests ?? []),
+            nodes,
+            current.Edges,
+            current.Traders,
+            KnownIds(feed.DefaultVisibleQuestIds, nodeIds),
+            KnownIds(feed.AllApplicableQuestIds, nodeIds),
+            current.CollectorPathQuestIds,
+            current.LightkeeperPathQuestIds,
+            diagnostics);
+    }
+
     public static QuestGraphTopology Normalize(QuestTopologyFeed feed)
     {
         if (feed is null) throw new ArgumentNullException(nameof(feed));
@@ -14,8 +51,13 @@ public static class QuestTopologyNormalizer
         var staticNodes = feed.Topology.Quests ?? [];
         var generatedNodes = feed.ProfileGeneratedQuests ?? [];
         var nodes = staticNodes
-            .Select(node => MapNode(node, false, null))
-            .Concat(generatedNodes.Select(node => MapNode(node, true, feed.RepeatableKinds?.GetValueOrDefault(node.Id))))
+            .Select((node, index) => MapNode(node, false, null, feed.QuestSummaries?.GetValueOrDefault(node.Id), index))
+            .Concat(generatedNodes.Select((node, index) => MapNode(
+                node,
+                true,
+                feed.RepeatableKinds?.GetValueOrDefault(node.Id),
+                feed.QuestSummaries?.GetValueOrDefault(node.Id),
+                staticNodes.Length + index)))
             .GroupBy(node => node.Id, StringComparer.Ordinal)
             .Select(group => group.OrderByDescending(node => node.ProfileGenerated).First())
             .OrderBy(node => node.Id, StringComparer.Ordinal)
@@ -102,7 +144,12 @@ public static class QuestTopologyNormalizer
         return count == 0 ? staticVersion : $"{staticVersion}:generated:{hash:X16}";
     }
 
-    private static QuestGraphNode MapNode(QuestNodePayload node, bool profileGenerated, string? repeatableKind)
+    private static QuestGraphNode MapNode(
+        QuestNodePayload node,
+        bool profileGenerated,
+        string? repeatableKind,
+        string? summary,
+        int naturalOrder)
     {
         var location = node.Location ?? new QuestLocationPayload();
         return new QuestGraphNode(
@@ -147,7 +194,11 @@ public static class QuestTopologyNormalizer
                 condition.ConditionType,
                 condition.ConditionId)).ToArray(),
             profileGenerated,
-            repeatableKind);
+            repeatableKind)
+        {
+            Summary = string.IsNullOrWhiteSpace(summary) ? null : summary.Trim(),
+            NaturalOrder = naturalOrder,
+        };
     }
 
     private static QuestRequirement MapRequirement(QuestRequirementPayload requirement) =>

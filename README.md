@@ -35,6 +35,8 @@ SPT-QuestMap is an independent community project. It is not affiliated with or e
 
 This release targets **SPT 4.0.13 exactly**. It was built and tested against the matching 4.0.13 server source and assemblies. Do not assume it is compatible with SPT 4.1 or later.
 
+When either in-game Tasks replacement is enabled, QuestMap renders a completely custom task table rather than extending EFT's native task-list rows. Mods that patch or decorate the native list—most notably **DrakiaXYZ Quest Tracker** and **Task List Fixes**—cannot apply their task-list integration to QuestMap's replacement. QuestMap provides its own profile-scoped pin/tracking controls, in-raid progress notifications, tracked-quest overlay, sorting, filtering, and corrected task presentation; the corresponding Quest Tracker and Task List Fixes behavior is therefore largely redundant. Do not expect those mods' native-list additions to appear inside QuestMap.
+
 ## Installation
 
 1. Stop the SPT server.

@@ -54,6 +54,7 @@
 
   <ItemGroup>
     <Compile Remove="UI\TraderGraphView.cs" />
+    <Compile Remove="UI\TraderGraphScreenController.cs" />
     <Compile Remove="UI\QuestGraphEdgeGraphic.cs" />
     <ProjectReference Include="..\SPTQuestMap.Core\SPTQuestMap.Core.csproj" />
     <Reference Include="0Harmony">

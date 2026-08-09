@@ -5,6 +5,7 @@ using SPTQuestMap.Client.Configuration;
 using SPTQuestMap.Client.Diagnostics;
 using SPTQuestMap.Client.Data;
 using SPTQuestMap.Client.Patches;
+using SPTQuestMap.Client.UI;
 
 namespace SPTQuestMap.Client;
 
@@ -21,7 +22,9 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
     private void Awake()
     {
         var configuration = QuestMapClientConfiguration.Bind(Config);
-        var compatibility = CompatibilityValidator.Validate(configuration.ForceCompatibilityFailure.Value);
+        QuestMapDebugLog.Configure(configuration.EnableDebugLogging);
+        QuestGraphPalette.Configure(configuration);
+        var compatibility = CompatibilityValidator.Validate();
         _dataRuntime = new QuestMapDataRuntime(this, Logger, configuration);
         _patchRegistration = new PatchRegistration(PluginGuid);
         var registration = _patchRegistration.Register(compatibility, configuration, _dataRuntime);

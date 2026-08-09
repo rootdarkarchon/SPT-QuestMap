@@ -10,19 +10,23 @@ namespace SPTQuestMap.Client.UI;
 
 internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDisposable
 {
-    private const float FadeInSeconds = 0.18f;
-    private const float VisibleSeconds = 4f;
-    private const float FadeOutSeconds = 0.55f;
-
     private RectTransform? _root;
     private CanvasGroup? _group;
     private Func<float>? _opacity;
+    private Func<bool>? _minimal;
+    private Func<float>? _fadeDuration;
+    private Func<float>? _displayDuration;
     private QuestAssetSpriteCache? _assetCache;
+    private CanvasGroup? _backgroundGroup;
+    private Image? _background;
     private Image? _questArt;
     private Image? _portrait;
     private TextMeshProUGUI? _portraitFallback;
     private TextMeshProUGUI? _questName;
     private Image? _statusRail;
+    private RectTransform? _shade;
+    private RectTransform? _portraitRoot;
+    private Outline? _border;
     private TextMeshProUGUI? _task;
     private TextMeshProUGUI? _count;
     private RectTransform? _progressRoot;
@@ -36,12 +40,18 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         Transform owner,
         ManualLogSource log,
         Func<float> opacity,
+        Func<bool> minimal,
+        Func<float> fadeDuration,
+        Func<float> displayDuration,
         QuestAssetSpriteCache assetCache)
     {
         var host = new GameObject("QuestMapRaidProgressNotifications", typeof(RectTransform));
         host.transform.SetParent(owner, false);
         var view = host.AddComponent<RaidQuestProgressNotificationView>();
         view._opacity = opacity;
+        view._minimal = minimal;
+        view._fadeDuration = fadeDuration;
+        view._displayDuration = displayDuration;
         view._assetCache = assetCache;
         view.Build(log);
         return view;
@@ -49,9 +59,11 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
 
     public bool Displaying => _displaying;
 
-    public void SetStackIndex(int index)
+    public float CardHeight => _root?.rect.height > 0 ? _root.rect.height : (_minimal?.Invoke() == true ? 54f : 94f);
+
+    public void SetStackTop(float top)
     {
-        if (_root is not null) _root.anchoredPosition = new Vector2(-28, -28 - index * 102);
+        if (_root is not null) _root.anchoredPosition = new Vector2(-28, -top);
     }
 
     public void Show(InRaidQuestProgressChange change)
@@ -60,14 +72,19 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         var version = ++_contentVersion;
         var node = change.Quest;
         var progress = change.Progress;
+        var minimal = _minimal?.Invoke() == true;
+        ApplyPresentationMode(minimal);
 
         _questName!.text = node.Name;
         var statusColor = QuestGraphPalette.Status(DisplayState(change.ExactStatus));
         if (_statusRail is not null) _statusRail.color = statusColor;
-        _task!.text = change.Objective?.Text ?? "Quest status changed";
-        _task.color = progress?.Complete == true
-            ? new Color(0.61f, 0.86f, 0.63f, 1f)
-            : Color.white;
+        var objectiveText = change.Objective?.Text ?? "Quest status changed";
+        _task!.text = minimal && progress?.ProgressKnown == true
+            && progress.Current.HasValue && progress.Required.HasValue
+                ? $"[{CappedCurrent(progress):0.##}/{progress.Required.Value:0.##}] {objectiveText}"
+                : objectiveText;
+        _task.color = minimal ? Color.white : progress?.Complete == true
+            ? QuestGraphPalette.Completed : Color.white;
 
         var hasCount = progress?.ProgressKnown == true
             && progress.Current.HasValue
@@ -76,8 +93,8 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
             ? $"{CappedCurrent(progress!):0.##} / {progress!.Required!.Value:0.##}"
             : string.Empty;
 
-        var percent = ObjectivePercent(progress);
-        _progressRoot!.gameObject.SetActive(percent.HasValue);
+        var percent = progress?.Required is > 1d ? ObjectivePercent(progress) : null;
+        _progressRoot!.gameObject.SetActive(!minimal && percent.HasValue);
         if (percent.HasValue)
         {
             _progressFill!.anchorMax = new Vector2((float)(percent.Value / 100d), 1);
@@ -88,7 +105,7 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
 
         _questArt!.sprite = null;
         _questArt.gameObject.SetActive(false);
-        _assetCache.Request(node.ImageUrl, sprite =>
+        if (!minimal) _assetCache.Request(node.ImageUrl, sprite =>
         {
             if (version != _contentVersion || _questArt is null || sprite is null) return;
             _questArt.sprite = sprite;
@@ -100,8 +117,8 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         _portrait!.sprite = null;
         _portrait.gameObject.SetActive(false);
         _portraitFallback!.text = Initials(node.TraderName);
-        _portraitFallback.gameObject.SetActive(true);
-        _assetCache.Request(node.TraderImageUrl, sprite =>
+        _portraitFallback.gameObject.SetActive(!minimal);
+        if (!minimal) _assetCache.Request(node.TraderImageUrl, sprite =>
         {
             if (version != _contentVersion || _portrait is null || sprite is null) return;
             _portrait.sprite = sprite;
@@ -123,6 +140,9 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         _group = null;
         _assetCache = null;
         _opacity = null;
+        _minimal = null;
+        _fadeDuration = null;
+        _displayDuration = null;
     }
 
     public void Hide()
@@ -149,13 +169,21 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         _root.anchoredPosition = new Vector2(-28, -28);
         _root.sizeDelta = new Vector2(390, 94);
         _root.gameObject.AddComponent<RectMask2D>();
-        _root.gameObject.AddComponent<Image>().color = new Color(0.035f, 0.04f, 0.042f, 0.99f);
         _group = _root.gameObject.AddComponent<CanvasGroup>();
         _group.alpha = 0;
         _group.interactable = false;
         _group.blocksRaycasts = false;
 
-        var artRoot = UnityUiFactory.CreateRect("QuestArt", _root);
+        var backgroundRoot = UnityUiFactory.CreateRect("BackgroundLayers", _root);
+        UnityUiFactory.Stretch(backgroundRoot);
+        _background = backgroundRoot.gameObject.AddComponent<Image>();
+        _background.color = new Color(0.035f, 0.04f, 0.042f, 0.99f);
+        _background.raycastTarget = false;
+        _backgroundGroup = backgroundRoot.gameObject.AddComponent<CanvasGroup>();
+        _backgroundGroup.interactable = false;
+        _backgroundGroup.blocksRaycasts = false;
+
+        var artRoot = UnityUiFactory.CreateRect("QuestArt", backgroundRoot);
         UnityUiFactory.Stretch(artRoot);
         _questArt = artRoot.gameObject.AddComponent<Image>();
         _questArt.raycastTarget = false;
@@ -164,9 +192,9 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         artFitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
         artRoot.gameObject.SetActive(false);
 
-        var shade = UnityUiFactory.CreateRect("Shade", _root);
-        UnityUiFactory.Stretch(shade);
-        shade.gameObject.AddComponent<Image>().color = new Color(0.01f, 0.013f, 0.014f, 0.62f);
+        _shade = UnityUiFactory.CreateRect("Shade", backgroundRoot);
+        UnityUiFactory.Stretch(_shade);
+        _shade.gameObject.AddComponent<Image>().color = new Color(0.01f, 0.013f, 0.014f, 0.62f);
 
         var statusRail = UnityUiFactory.CreateRect("StatusRail", _root);
         statusRail.anchorMin = Vector2.zero;
@@ -176,15 +204,15 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         _statusRail = statusRail.gameObject.AddComponent<Image>();
         _statusRail.color = QuestGraphPalette.Status(QuestMapDisplayStateKind.InProgress);
 
-        var portraitRoot = UnityUiFactory.CreateRect("Trader", _root);
-        portraitRoot.anchorMin = portraitRoot.anchorMax = new Vector2(0, 0.5f);
-        portraitRoot.pivot = new Vector2(0, 0.5f);
-        portraitRoot.anchoredPosition = new Vector2(16, 3);
-        portraitRoot.sizeDelta = new Vector2(56, 56);
-        portraitRoot.gameObject.AddComponent<Image>().color = new Color(0.20f, 0.19f, 0.16f, 0.98f);
-        _portraitFallback = UnityUiFactory.AddText(portraitRoot.gameObject, string.Empty, 16,
+        _portraitRoot = UnityUiFactory.CreateRect("Trader", _root);
+        _portraitRoot.anchorMin = _portraitRoot.anchorMax = new Vector2(0, 0.5f);
+        _portraitRoot.pivot = new Vector2(0, 0.5f);
+        _portraitRoot.anchoredPosition = new Vector2(16, 3);
+        _portraitRoot.sizeDelta = new Vector2(56, 56);
+        _portraitRoot.gameObject.AddComponent<Image>().color = new Color(0.20f, 0.19f, 0.16f, 0.98f);
+        _portraitFallback = UnityUiFactory.AddText(_portraitRoot.gameObject, string.Empty, 16,
             TextAlignmentOptions.Center, new Color(0.94f, 0.88f, 0.68f, 1));
-        var portraitImageRoot = UnityUiFactory.CreateRect("Image", portraitRoot);
+        var portraitImageRoot = UnityUiFactory.CreateRect("Image", _portraitRoot);
         UnityUiFactory.Stretch(portraitImageRoot, 2, 2, 2, 2);
         _portrait = portraitImageRoot.gameObject.AddComponent<Image>();
         _portrait.preserveAspect = true;
@@ -236,9 +264,9 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         _count.outlineColor = Color.black;
         _count.outlineWidth = 0.18f;
 
-        var border = _root.gameObject.AddComponent<Outline>();
-        border.effectColor = QuestGraphPalette.Border;
-        border.effectDistance = Vector2.one;
+        _border = _root.gameObject.AddComponent<Outline>();
+        _border.effectColor = QuestGraphPalette.Border;
+        _border.effectDistance = Vector2.one;
 
         if (_assetCache is null)
         {
@@ -251,21 +279,24 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
     private void Update()
     {
         if (!_displaying || _root is null || _group is null) return;
+        ApplyBackgroundOpacity(_minimal?.Invoke() == true);
         var elapsed = Time.unscaledTime - _shownAt;
-        if (elapsed < FadeInSeconds)
+        var fadeDuration = FadeDuration;
+        var displayDuration = DisplayDuration;
+        if (elapsed < fadeDuration)
         {
-            _group.alpha = Mathf.Lerp(_fadeStartAlpha, TargetOpacity, elapsed / FadeInSeconds);
+            _group.alpha = Mathf.Lerp(_fadeStartAlpha, 1f, elapsed / fadeDuration);
             return;
         }
-        if (elapsed < FadeInSeconds + VisibleSeconds)
+        if (elapsed < fadeDuration + displayDuration)
         {
-            _group.alpha = TargetOpacity;
+            _group.alpha = 1f;
             return;
         }
-        if (elapsed < FadeInSeconds + VisibleSeconds + FadeOutSeconds)
+        if (elapsed < fadeDuration + displayDuration + fadeDuration)
         {
-            var fadeElapsed = elapsed - FadeInSeconds - VisibleSeconds;
-            _group.alpha = TargetOpacity * (1f - fadeElapsed / FadeOutSeconds);
+            var fadeElapsed = elapsed - fadeDuration - displayDuration;
+            _group.alpha = 1f - fadeElapsed / fadeDuration;
             return;
         }
 
@@ -286,7 +317,54 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         return Math.Clamp(progress.Current.Value / progress.Required.Value * 100d, 0d, 100d);
     }
 
-    private float TargetOpacity => Mathf.Clamp(_opacity?.Invoke() ?? 1f, 0.2f, 1f);
+    private float BackgroundOpacity => Mathf.Clamp(_opacity?.Invoke() ?? 1f, 0.2f, 1f);
+
+    private float FadeDuration => Mathf.Clamp(_fadeDuration?.Invoke() ?? 0.3f, 0.05f, 3f);
+
+    private float DisplayDuration => Mathf.Clamp(_displayDuration?.Invoke() ?? 4f, 0.5f, 30f);
+
+    private void ApplyPresentationMode(bool minimal)
+    {
+        if (_root is null || _questName is null || _task is null) return;
+        _root.sizeDelta = minimal ? new Vector2(320, 54) : new Vector2(390, 94);
+        ApplyBackgroundOpacity(minimal);
+        _shade?.gameObject.SetActive(!minimal);
+        _statusRail?.gameObject.SetActive(!minimal);
+        _portraitRoot?.gameObject.SetActive(!minimal);
+        if (_border is not null) _border.enabled = !minimal;
+
+        var titleRoot = (RectTransform)_questName.transform;
+        titleRoot.offsetMin = minimal ? new Vector2(10, -25) : new Vector2(84, -38);
+        titleRoot.offsetMax = minimal ? new Vector2(-10, -5) : new Vector2(-12, -8);
+        _questName.fontSize = minimal ? 13 : 16;
+        _questName.fontStyle = minimal ? FontStyles.Normal : FontStyles.Bold;
+        _questName.outlineWidth = minimal ? 0 : 0.14f;
+
+        var taskRoot = (RectTransform)_task.transform;
+        taskRoot.offsetMin = minimal ? new Vector2(10, 4) : new Vector2(84, 24);
+        taskRoot.offsetMax = minimal ? new Vector2(-10, -26) : new Vector2(-12, -39);
+        _task.fontSize = minimal ? 11 : 11;
+        _task.enableWordWrapping = false;
+        _task.overflowMode = TextOverflowModes.Ellipsis;
+    }
+
+    private void ApplyBackgroundOpacity(bool minimal)
+    {
+        if (_backgroundGroup is not null)
+            _backgroundGroup.alpha = BackgroundOpacity;
+        if (_background is not null)
+        {
+            _background.color = minimal
+                ? new Color(0.035f, 0.04f, 0.042f, 1f)
+                : new Color(0.035f, 0.04f, 0.042f, 0.99f);
+        }
+        if (_questArt is not null)
+        {
+            var color = _questArt.color;
+            color.a = minimal ? 0f : 1f;
+            _questArt.color = color;
+        }
+    }
 
     private static QuestMapDisplayStateKind DisplayState(string exactStatus) => exactStatus switch
     {

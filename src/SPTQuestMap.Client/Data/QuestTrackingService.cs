@@ -86,7 +86,7 @@ internal sealed class QuestTrackingService : IDisposable
         if (added.Count == 0) return;
         Save();
         foreach (var questId in added) TrackingChanged?.Invoke(current.ProfileId, questId);
-        _log.LogInfo(
+        QuestMapDebugLog.Info(_log,
             $"QUESTMAP_M06_TRACKING autoTracked={added.Count}; profile={current.ProfileId}; quests={string.Join(",", added)}");
     }
 

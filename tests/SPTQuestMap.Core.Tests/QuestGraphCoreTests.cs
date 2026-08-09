@@ -313,6 +313,71 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
+    public void ApplyProfileGeneratedDelta_ReusesStaticTopologyAndSwapsOnlyGeneratedNodes()
+    {
+        var feed = Feed(
+            [Node("root", "Prapor", "Any"), Node("next", "Prapor", "Any")],
+            [Edge("root", "next", "Success")]);
+        feed.ProfileGeneratedQuests = [Node("old-daily", "Prapor", "Any")];
+        feed.RepeatableKinds["old-daily"] = "Daily";
+        var current = QuestTopologyNormalizer.Normalize(feed);
+        var delta = new QuestRepeatableFeed
+        {
+            ProfileGeneratedQuests = [Node("new-daily", "Therapist", "Any")],
+            RepeatableKinds = new Dictionary<string, string>(StringComparer.Ordinal) { ["new-daily"] = "Daily" },
+            DefaultVisibleQuestIds = ["root", "next", "new-daily"],
+            AllApplicableQuestIds = ["root", "next", "new-daily"],
+        };
+
+        var updated = QuestTopologyNormalizer.ApplyProfileGeneratedDelta(current, delta);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(updated.NodesById.Keys, Is.EquivalentTo(new[] { "root", "next", "new-daily" }));
+            Assert.That(updated.NodesById["new-daily"].ProfileGenerated, Is.True);
+            Assert.That(updated.NodesById["new-daily"].RepeatableKind, Is.EqualTo("Daily"));
+            Assert.That(updated.Edges, Is.SameAs(current.Edges));
+            Assert.That(updated.Traders, Is.SameAs(current.Traders));
+            Assert.That(updated.Version, Is.Not.EqualTo(current.Version));
+        });
+    }
+
+    [Test]
+    public void Normalize_AttachesClientSummaryWithoutChangingNodeTransportShape()
+    {
+        var feed = Feed([Node("quest", "Prapor", "Any")], []);
+        feed.QuestSummaries["quest"] = "  Condensed quest summary.  ";
+
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+
+        Assert.That(topology.NodesById["quest"].Summary, Is.EqualTo("Condensed quest summary."));
+    }
+
+    [Test]
+    public void Overlay_CounterSatisfactionMarksBinaryChildObjectiveComplete()
+    {
+        var node = Node("quest", "Prapor", "Any");
+        node.Objectives =
+        [
+            new QuestObjectivePayload
+            {
+                Id = "binary-child",
+                Text = "Binary child",
+                RequiredValue = 1,
+                Compare = ">=",
+            },
+        ];
+        var topology = QuestTopologyNormalizer.Normalize(Feed([node], []));
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            new LiveQuestSnapshot("quest", "Started", true,
+            [
+                new QuestObjectiveProgress("binary-child", false, 1, 1, true),
+            ], null, false)));
+
+        Assert.That(overlay.QuestsById["quest"].Objectives.Single().Complete, Is.True);
+    }
+
+    [Test]
     public void GlobalProjection_InProgressLocationTogglesUseOrSemanticsIncludingAnyLocation()
     {
         var woods = Node("woods", "Prapor", "Woods");
@@ -345,6 +410,58 @@ public sealed class QuestGraphCoreTests
         {
             Assert.That(projection.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { "woods", "customs", "anywhere" }));
             Assert.That(noneSelected.Nodes, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void GlobalProjection_InRaidExcludesReadyToFinishQuests()
+    {
+        var feed = Feed([Node("started", "Prapor", "Any"), Node("ready", "Prapor", "Any")], []);
+        feed.DefaultVisibleQuestIds = ["started", "ready"];
+        feed.AllApplicableQuestIds = ["started", "ready"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("started", "Started"), Quest("ready", "AvailableForFinish")));
+
+        var projection = GlobalQuestGraphProjectionBuilder.Build(
+            topology,
+            DeterministicGraphLayout.Build(topology),
+            overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false,
+                null, null, null, null, QuestRouteFilter.None, ExcludeReadyToFinish: true));
+
+        Assert.That(projection.Nodes.Select(node => node.Id), Is.EqualTo(new[] { "started" }));
+    }
+
+    [Test]
+    public void GlobalProjection_InProgressRepeatableAllAddsOnlyAvailableRepeatables()
+    {
+        var active = Node("active", "Prapor", "Any");
+        var availableDaily = Node("available-daily", "Prapor", "Any");
+        var availableOrdinary = Node("available-ordinary", "Prapor", "Any");
+        var feed = Feed([active, availableOrdinary], []);
+        feed.ProfileGeneratedQuests = [availableDaily];
+        feed.RepeatableKinds[availableDaily.Id] = "Daily";
+        feed.DefaultVisibleQuestIds = [active.Id, availableDaily.Id, availableOrdinary.Id];
+        feed.AllApplicableQuestIds = [active.Id, availableDaily.Id, availableOrdinary.Id];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest(active.Id, "Started"),
+            Quest(availableDaily.Id, "AvailableForStart"),
+            Quest(availableOrdinary.Id, "AvailableForStart")));
+        var layout = DeterministicGraphLayout.Build(topology);
+
+        var activeOnly = GlobalQuestGraphProjectionBuilder.Build(topology, layout, overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false, null, null, null, null,
+                QuestRouteFilter.None));
+        var allRepeatables = GlobalQuestGraphProjectionBuilder.Build(topology, layout, overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false, null, null, null, null,
+                QuestRouteFilter.None, IncludeAvailableRepeatables: true));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(activeOnly.Nodes.Select(node => node.Id), Is.EqualTo(new[] { active.Id }));
+            Assert.That(allRepeatables.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { active.Id, availableDaily.Id }));
         });
     }
 
@@ -419,6 +536,31 @@ public sealed class QuestGraphCoreTests
 
         criteria = InProgressQuestTableSorter.Toggle(criteria, QuestTableSortColumn.Progress);
         Assert.That(criteria.Select(criterion => criterion.Column), Is.EqualTo(new[] { QuestTableSortColumn.Trader }));
+    }
+
+    [Test]
+    public void InProgressTableDefaultSort_UsesCanonicalTraderThenServerQuestOrder()
+    {
+        var therapistSecond = Node("therapist-second", "Therapist", "Any");
+        therapistSecond.TraderId = "54cb57776803fa99248b456e";
+        therapistSecond.Name = "Alpha";
+        var praporSecond = Node("prapor-second", "Prapor", "Any");
+        praporSecond.TraderId = "54cb50c76803fa8b248b4571";
+        praporSecond.Name = "Alpha";
+        var praporFirst = Node("prapor-first", "Prapor", "Any");
+        praporFirst.TraderId = "54cb50c76803fa8b248b4571";
+        praporFirst.Name = "Zulu";
+        var feed = Feed([therapistSecond, praporFirst, praporSecond], []);
+        feed.DefaultVisibleQuestIds = ["therapist-second", "prapor-first", "prapor-second"];
+        feed.AllApplicableQuestIds = ["therapist-second", "prapor-first", "prapor-second"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("therapist-second", "Started"), Quest("prapor-first", "Started"), Quest("prapor-second", "Started")));
+
+        var ordered = InProgressQuestTableSorter.Sort(topology.Nodes, topology, overlay, []);
+
+        Assert.That(ordered.Select(node => node.Id),
+            Is.EqualTo(new[] { "prapor-first", "prapor-second", "therapist-second" }));
     }
 
     [Test]
@@ -701,6 +843,158 @@ public sealed class QuestGraphCoreTests
             Assert.That(projection.Nodes.Select(node => node.Id), Does.Not.Contain("lightkeeper"));
             Assert.That(projection.NodesById["weekly"].X, Is.GreaterThan(projection.NodesById["daily"].X));
             Assert.That(overlay.RepeatableEndTimes["weekly"], Is.EqualTo(2000));
+        });
+    }
+
+    [Test]
+    public void TraderTasksProjection_IncludesActionableAndNonPrerequisiteGatesOnly()
+    {
+        var nodes = new[]
+        {
+            Node("ready", "Prapor", "Any"), Node("available", "Prapor", "Any"),
+            Node("started", "Prapor", "Any"), Node("level", "Prapor", "Any"),
+            Node("trader", "Prapor", "Any"), Node("prerequisite", "Prapor", "Any"),
+            Node("multi-level", "Prapor", "Any"), Node("multi-unavailable", "Prapor", "Any"),
+            Node("completed", "Prapor", "Any"), Node("other", "Therapist", "Any"),
+        };
+        var feed = Feed(nodes, []);
+        feed.DefaultVisibleQuestIds = nodes.Select(node => node.Id).ToArray();
+        feed.AllApplicableQuestIds = nodes.Select(node => node.Id).ToArray();
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("ready", "AvailableForFinish"), Quest("available", "AvailableForStart"),
+            Quest("started", "Started"), Quest("completed", "Success"), Quest("other", "AvailableForStart"))) with
+        {
+            AuthoritativeDisplayStates = new Dictionary<string, QuestMapDisplayStateKind>(StringComparer.Ordinal)
+            {
+                ["level"] = QuestMapDisplayStateKind.LevelGated,
+                ["trader"] = QuestMapDisplayStateKind.TraderGated,
+                ["prerequisite"] = QuestMapDisplayStateKind.PrerequisiteGated,
+                ["multi-level"] = QuestMapDisplayStateKind.LevelGated,
+                ["multi-unavailable"] = QuestMapDisplayStateKind.TraderUnavailable,
+            },
+            PrerequisiteBlockerIds = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal)
+            {
+                ["prerequisite"] = ["blocked-by"],
+                ["multi-level"] = ["blocked-by"],
+                ["multi-unavailable"] = ["blocked-by"],
+            },
+            ApplicableQuestIds = nodes.Select(node => node.Id).ToArray(),
+        };
+        var layout = DeterministicGraphLayout.Build(topology);
+        var projection = GlobalQuestGraphProjectionBuilder.Build(topology, layout, overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false, null, "prapor", null, null,
+                QuestRouteFilter.None, TraderTasksContext: true));
+        var levelFiltered = GlobalQuestGraphProjectionBuilder.Build(topology, layout, overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, true, null, "prapor", null, null,
+                QuestRouteFilter.None, TraderTasksContext: true));
+        var unavailableHidden = GlobalQuestGraphProjectionBuilder.Build(topology, layout, overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false, null, "prapor", null, null,
+                QuestRouteFilter.None, TraderTasksContext: true, HideUnavailableTraderTasks: true));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(projection.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { "ready", "available", "started", "level", "trader" }));
+            Assert.That(levelFiltered.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { "ready", "available", "started", "trader" }));
+            Assert.That(unavailableHidden.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { "ready", "available", "started" }));
+        });
+    }
+
+    [Test]
+    public void TraderGraphContext_AddsOnlyDirectSuccessorsOfInProgressTraderQuests()
+    {
+        var nodes = new[]
+        {
+            Node("active", "Prapor", "Any"), Node("available", "Prapor", "Any"),
+            Node("active-successor", "Therapist", "Any"), Node("available-successor", "Therapist", "Any"),
+        };
+        var feed = Feed(nodes,
+        [
+            Edge("active", "active-successor", "Success"),
+            Edge("available", "available-successor", "Success"),
+        ]);
+        feed.DefaultVisibleQuestIds = nodes.Select(node => node.Id).ToArray();
+        feed.AllApplicableQuestIds = nodes.Select(node => node.Id).ToArray();
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("active", "Started"), Quest("available", "AvailableForStart"))) with
+        {
+            ApplicableQuestIds = nodes.Select(node => node.Id).ToArray(),
+            DefaultVisibleQuestIds = nodes.Select(node => node.Id).ToArray(),
+        };
+
+        var projection = GlobalQuestGraphProjectionBuilder.Build(topology, DeterministicGraphLayout.Build(topology), overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.Full, false, false, false, null, "prapor", null, null,
+                QuestRouteFilter.None, TraderGraphContext: true));
+
+        Assert.That(projection.Nodes.Select(node => node.Id),
+            Is.EquivalentTo(new[] { "active", "available", "active-successor" }));
+    }
+
+    [Test]
+    public void RaidTrackedList_ScopesLocationsAndUsesNaturalTraderThenQuestOrder()
+    {
+        const string praporId = "54cb50c76803fa8b248b4571";
+        const string therapistId = "54cb57776803fa99248b456e";
+        var currentZulu = Node("current-zulu", "Prapor", "Any");
+        currentZulu.Name = "Zulu";
+        currentZulu.Location = new QuestLocationPayload { Id = "customs", Name = "Customs" };
+        currentZulu.Objectives =
+        [
+            new QuestObjectivePayload { Id = "open", Text = "Open", Index = 0, RequiredValue = 5 },
+            new QuestObjectivePayload { Id = "done", Text = "Done", Index = 1, RequiredValue = 1 },
+        ];
+        var transitAlpha = Node("transit-alpha", "Prapor", "Any");
+        transitAlpha.Name = "Alpha";
+        transitAlpha.Location = new QuestLocationPayload { Id = "marathon", Name = "Transition" };
+        var anyBravo = Node("any-bravo", "Therapist", "Any");
+        anyBravo.Name = "Bravo";
+        var otherMap = Node("other-map", "Prapor", "Any");
+        otherMap.Location = new QuestLocationPayload { Id = "woods", Name = "Woods" };
+        var untracked = Node("untracked", "Prapor", "Any");
+        untracked.Location = new QuestLocationPayload { Id = "customs", Name = "Customs" };
+        var nodes = new[] { currentZulu, transitAlpha, anyBravo, otherMap, untracked };
+        foreach (var node in new[] { currentZulu, transitAlpha, otherMap, untracked }) node.TraderId = praporId;
+        anyBravo.TraderId = therapistId;
+        var feed = Feed(nodes, []);
+        feed.Topology.Traders =
+        [
+            new QuestTraderPayload { Id = therapistId, Name = "Therapist" },
+            new QuestTraderPayload { Id = praporId, Name = "Prapor" },
+        ];
+        feed.DefaultVisibleQuestIds = nodes.Select(node => node.Id).ToArray();
+        feed.AllApplicableQuestIds = nodes.Select(node => node.Id).ToArray();
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            new LiveQuestSnapshot("current-zulu", "Started", true,
+            [
+                new QuestObjectiveProgress("open", false, 2, 5, true),
+                new QuestObjectiveProgress("done", true, 1, 1, true),
+            ], null, false),
+            Quest("transit-alpha", "Started"), Quest("any-bravo", "AvailableForFinish"),
+            Quest("other-map", "Started"), Quest("untracked", "Started"))) with
+        {
+            ApplicableQuestIds = nodes.Select(node => node.Id).ToArray(),
+        };
+
+        var projection = RaidTrackedQuestListProjectionBuilder.Build(
+            topology,
+            overlay,
+            ["current-zulu", "transit-alpha", "any-bravo", "other-map"],
+            ["any", "marathon", "customs"]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(projection.Groups.Select(group => group.Trader.Id),
+                Is.EqualTo(new[] { praporId }));
+            Assert.That(projection.Groups[0].Quests.Select(quest => quest.Quest.Id),
+                Is.EqualTo(new[] { "transit-alpha", "current-zulu" }));
+            Assert.That(projection.Groups.SelectMany(group => group.Quests).Select(quest => quest.Quest.Id),
+                Does.Not.Contain("other-map"));
+            Assert.That(projection.Groups.SelectMany(group => group.Quests).Select(quest => quest.Quest.Id),
+                Does.Not.Contain("any-bravo"));
+            Assert.That(projection.Groups[0].Quests[1].Objectives.Select(objective => objective.Definition.Id),
+                Is.EqualTo(new[] { "open" }));
         });
     }
 

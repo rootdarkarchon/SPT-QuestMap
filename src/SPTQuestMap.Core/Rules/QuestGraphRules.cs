@@ -71,7 +71,7 @@ public static class QuestGraphRules
         if (exact == QuestDisplayStateKind.AvailableAfter) return QuestMapDisplayStateKind.Pending;
         if (HasUnmetLevel(node, overlay.Level)) return QuestMapDisplayStateKind.LevelGated;
         if (HasUnmetTraderRequirement(node, overlay)) return QuestMapDisplayStateKind.TraderGated;
-        if (HasUnmetPrerequisite(topology, node.Id, overlay)) return QuestMapDisplayStateKind.PrerequisiteGated;
+        if (HasUnmetPrerequisiteGate(topology, node.Id, overlay)) return QuestMapDisplayStateKind.PrerequisiteGated;
         if (exact == QuestDisplayStateKind.AvailableForStart || state?.Visible == true) return QuestMapDisplayStateKind.Available;
         return exact == QuestDisplayStateKind.Unknown ? QuestMapDisplayStateKind.Unknown : QuestMapDisplayStateKind.Locked;
     }
@@ -178,8 +178,18 @@ public static class QuestGraphRules
             return !Compare(actual, requirement.Value, requirement.Compare);
         });
 
-    private static bool HasUnmetPrerequisite(QuestGraphTopology topology, string questId, QuestProfileOverlay overlay)
+    /// <summary>
+    /// Evaluates prerequisite membership independently from the single
+    /// presentation-state priority. This matters when a quest is blocked by a
+    /// prerequisite and another gate at the same time.
+    /// </summary>
+    public static bool HasUnmetPrerequisiteGate(
+        QuestGraphTopology topology,
+        string questId,
+        QuestProfileOverlay overlay)
     {
+        if (overlay.PrerequisiteBlockerIds.TryGetValue(questId, out var authoritativeBlockers))
+            return authoritativeBlockers.Count > 0;
         if (!topology.IncomingEdgesByTarget.TryGetValue(questId, out var incoming)) return false;
         return incoming.Any(edge => !overlay.QuestsById.TryGetValue(edge.SourceId, out var prerequisite)
             || prerequisite.ExactStatus is null

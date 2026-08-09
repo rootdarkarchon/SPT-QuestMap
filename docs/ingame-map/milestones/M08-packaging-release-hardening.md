@@ -85,6 +85,8 @@ Include:
 - profile backup recommendation;
 - debug log guidance.
 
+The known-incompatibilities section must explicitly state that QuestMap's global and trader task tables replace, rather than extend, EFT's native task-list rows. Native-list modifications from Quest Tracker and Task List Fixes do not appear inside the custom table. Note the QuestMap-owned tracking, raid notification/overlay, sorting, filtering, pinning, and task-presentation equivalents, and explain that disabling the relevant QuestMap replacement restores the native integration surface.
+
 ## Regression matrix
 
 ### Server/browser

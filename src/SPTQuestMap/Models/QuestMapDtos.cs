@@ -74,4 +74,15 @@ public sealed record QuestMapClientTopologyFeedDto(
     IReadOnlyDictionary<string, string> DisplayStates,
     IReadOnlyDictionary<string, double?> ProgressPercentages,
     IReadOnlyDictionary<string, long> RepeatableEndTimes,
-    IReadOnlyDictionary<string, string[]> PrerequisiteBlockerIds);
+    IReadOnlyDictionary<string, string[]> PrerequisiteBlockerIds,
+    IReadOnlyDictionary<string, string> QuestSummaries);
+public sealed record QuestMapClientRepeatableFeedDto(
+    QuestNodeDto[] ProfileGeneratedQuests,
+    IReadOnlyDictionary<string, string> RepeatableKinds,
+    string[] DefaultVisibleQuestIds,
+    string[] AllApplicableQuestIds,
+    IReadOnlyDictionary<string, string> DisplayStates,
+    IReadOnlyDictionary<string, double?> ProgressPercentages,
+    IReadOnlyDictionary<string, long> RepeatableEndTimes,
+    IReadOnlyDictionary<string, string[]> PrerequisiteBlockerIds,
+    IReadOnlyDictionary<string, string> QuestSummaries);

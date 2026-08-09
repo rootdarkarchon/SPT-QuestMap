@@ -1,3 +1,4 @@
+using EFT.UI;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -66,9 +67,25 @@ internal static class UnityUiFactory
         button.targetGraphic = image;
         var colors = button.colors;
         colors.normalColor = Color.white;
-        colors.highlightedColor = new Color(1.12f, 1.12f, 1.12f, 1f);
-        colors.pressedColor = new Color(0.82f, 0.82f, 0.82f, 1f);
+        colors.highlightedColor = new Color(0.90f, 0.90f, 0.90f, 1f);
+        colors.pressedColor = new Color(0.76f, 0.76f, 0.76f, 1f);
         button.colors = colors;
+        gameObject.AddComponent<QuestMapButtonFeedback>();
         return button;
+    }
+}
+
+internal sealed class QuestMapButtonFeedback : ButtonFeedback
+{
+    private Button? _button;
+
+    public override bool Interactable
+    {
+        get
+        {
+            _button ??= GetComponent<Button>();
+            return (_button?.interactable ?? true) && base.Interactable;
+        }
+        set => base.Interactable = value;
     }
 }

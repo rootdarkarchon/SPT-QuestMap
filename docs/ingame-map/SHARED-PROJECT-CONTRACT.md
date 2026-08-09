@@ -156,7 +156,7 @@ On graph or custom-view initialization failure:
 4. leave close/back navigation functional;
 5. avoid stale input blockers or hidden panels.
 
-Provide separate configuration controls for major replacements so a user can disable the trader graph, global Tasks graph, or custom detail pane independently.
+Provide separate configuration controls for the trader and global Tasks replacements. The QuestMap detail pane and its native-action bridge are mandatory parts of either enabled replacement; they are not independently disableable. Disabling a replacement restores that complete vanilla screen.
 
 ## Unity lifecycle and threading
 
