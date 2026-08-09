@@ -197,6 +197,7 @@ public static class QuestTopologyNormalizer
             repeatableKind)
         {
             Summary = string.IsNullOrWhiteSpace(summary) ? null : summary.Trim(),
+            ScavRepeatable = node.ScavRepeatable,
             NaturalOrder = naturalOrder,
         };
     }

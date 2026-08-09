@@ -14,6 +14,7 @@
         <div class="detail-banners">
             <div class="detail-header">
                 @if (!string.IsNullOrWhiteSpace(node.ImageUrl)) { <img src="@node.ImageUrl" alt=""> }
+                @if (node.ScavRepeatable) { <span class="scav-quest-badge">@Localizer["repeatable.scav"]</span> }
                 <div class="detail-heading"><h2>@node.Name</h2></div>
             </div>
             <div class="location-detail">

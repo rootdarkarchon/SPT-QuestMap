@@ -42,7 +42,7 @@ Every relevant quest node should be able to communicate:
 ## Daily and weekly operational quests
 
 - Read the selected PMC profile's saved `Daily` and `Weekly` repeatable groups without invoking SPT's mutating repeatable-generation controller.
-- Exclude `Daily_Savage` quests.
+- Include `Daily_Savage` quests and explicitly identify them as Scav repeatables wherever their cards, rows, bands, or details are rendered.
 - Show every generated active-group entry, including unaccepted quests as available, accepted/in-progress quests, ready-to-finish quests, completed quests, and expired quests.
 - A group whose `endTime` has passed classifies all of its displayed entries as expired, regardless of their previous active profile status.
 - Place the Daily block followed by the Weekly block from left to right in one horizontal Canvas band above the normal dependency graph. Sort cards within each block by the established trader order.

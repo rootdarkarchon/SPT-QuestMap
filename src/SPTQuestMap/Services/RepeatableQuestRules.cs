@@ -4,7 +4,11 @@ namespace SPTQuestMap.Services;
 
 internal static class RepeatableQuestRules
 {
-    internal static bool ShouldIncludeGroup(string? name) => name is "Daily" or "Weekly";
+    internal static bool ShouldIncludeGroup(string? name) => name is "Daily" or "Weekly" or "Daily_Savage";
+
+    internal static bool IsScavGroup(string? name) => name is "Daily_Savage";
+
+    internal static string DisplayKind(string? name) => name == "Weekly" ? "Weekly" : "Daily";
 
     internal static QuestStatusEnum ExactStatus(int? status) =>
         status is >= (int)QuestStatusEnum.Locked and <= (int)QuestStatusEnum.AvailableAfter

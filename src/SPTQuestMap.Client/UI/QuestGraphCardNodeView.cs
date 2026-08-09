@@ -24,12 +24,14 @@ internal sealed class QuestGraphCardNodeView
     private readonly Image _lightkeeperRoute;
     private readonly Image _terminalMarker;
     private readonly QuestCompletedMarkerGraphic _completedMarker;
+    private readonly GameObject _scavBadge;
     private readonly Outline _outline;
     private readonly Button _button;
     private readonly QuestNodeClickHandler _clickHandler;
     private readonly TMP_Text _name;
     private readonly TMP_Text _state;
     private float _visualAlpha = 1f;
+    private bool _isScavRepeatable;
 
     private QuestGraphCardNodeView(
         RectTransform root,
@@ -44,6 +46,7 @@ internal sealed class QuestGraphCardNodeView
         Image lightkeeperRoute,
         Image terminalMarker,
         QuestCompletedMarkerGraphic completedMarker,
+        GameObject scavBadge,
         Outline outline,
         Button button,
         QuestNodeClickHandler clickHandler,
@@ -62,6 +65,7 @@ internal sealed class QuestGraphCardNodeView
         _lightkeeperRoute = lightkeeperRoute;
         _terminalMarker = terminalMarker;
         _completedMarker = completedMarker;
+        _scavBadge = scavBadge;
         _outline = outline;
         _button = button;
         _clickHandler = clickHandler;
@@ -143,8 +147,18 @@ internal sealed class QuestGraphCardNodeView
         completedMarker.raycastTarget = false;
         completedRoot.gameObject.SetActive(false);
 
+        var scavBadge = UnityUiFactory.CreateRect("ScavBadge", root);
+        scavBadge.anchorMin = scavBadge.anchorMax = scavBadge.pivot = new Vector2(1, 1);
+        scavBadge.anchoredPosition = new Vector2(-45, -7);
+        scavBadge.sizeDelta = new Vector2(48, 18);
+        scavBadge.gameObject.AddComponent<Image>().color = new Color(0.40f, 0.34f, 0.16f, 0.98f);
+        var scavText = UnityUiFactory.AddText(scavBadge.gameObject, "SCAV", 9,
+            TextAlignmentOptions.Center, new Color(1f, 0.96f, 0.78f, 1f));
+        scavText.fontStyle = FontStyles.Bold;
+        scavBadge.gameObject.SetActive(false);
+
         root.gameObject.SetActive(false);
-        return new QuestGraphCardNodeView(root, assets, background, rail, questArt, mapArt, portrait, fallback, collector, lightkeeper, terminal, completedMarker, outline, button, clickHandler, name, state);
+        return new QuestGraphCardNodeView(root, assets, background, rail, questArt, mapArt, portrait, fallback, collector, lightkeeper, terminal, completedMarker, scavBadge.gameObject, outline, button, clickHandler, name, state);
     }
 
     public void BindStatic(
@@ -163,6 +177,8 @@ internal sealed class QuestGraphCardNodeView
         _portraitFallback.text = UnityUiFactory.Initials(node.TraderName);
         _portraitFallback.gameObject.SetActive(true);
         _name.text = node.Name;
+        _isScavRepeatable = node.ScavRepeatable;
+        _scavBadge.SetActive(_isScavRepeatable);
         SetRoutes(collector, lightkeeper);
         _terminalMarker.gameObject.SetActive(terminal);
         _visualAlpha = 1f;
@@ -226,6 +242,7 @@ internal sealed class QuestGraphCardNodeView
         _portrait.gameObject.SetActive(!overview && _portrait.sprite is not null);
         _portraitFallback.gameObject.SetActive(!overview && _portrait.sprite is null);
         _state.gameObject.SetActive(!overview);
+        _scavBadge.SetActive(!overview && _isScavRepeatable);
         _name.fontSize = overview ? 20 : 17;
     }
 
@@ -239,6 +256,8 @@ internal sealed class QuestGraphCardNodeView
         Clear(_portrait);
         _terminalMarker.gameObject.SetActive(false);
         _completedMarker.gameObject.SetActive(false);
+        _isScavRepeatable = false;
+        _scavBadge.SetActive(false);
         Root.gameObject.SetActive(false);
     }
 

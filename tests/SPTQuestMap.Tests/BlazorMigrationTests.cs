@@ -704,14 +704,52 @@ public sealed class BlazorMigrationTests
     }
 
     [Test]
-    public void RepeatableQuestRulesIncludePmcDailyAndWeeklyOnly()
+    public void RepeatableQuestRulesIncludePmcAndScavGroupsWithNormalizedBands()
     {
         Assert.Multiple(() =>
         {
             Assert.That(RepeatableQuestRules.ShouldIncludeGroup("Daily"), Is.True);
             Assert.That(RepeatableQuestRules.ShouldIncludeGroup("Weekly"), Is.True);
-            Assert.That(RepeatableQuestRules.ShouldIncludeGroup("Daily_Savage"), Is.False);
+            Assert.That(RepeatableQuestRules.ShouldIncludeGroup("Daily_Savage"), Is.True);
             Assert.That(RepeatableQuestRules.ShouldIncludeGroup(null), Is.False);
+            Assert.That(RepeatableQuestRules.IsScavGroup("Daily_Savage"), Is.True);
+            Assert.That(RepeatableQuestRules.IsScavGroup("Daily"), Is.False);
+            Assert.That(RepeatableQuestRules.DisplayKind("Daily_Savage"), Is.EqualTo("Daily"));
+            Assert.That(RepeatableQuestRules.DisplayKind("Weekly"), Is.EqualTo("Weekly"));
+        });
+    }
+
+    [Test]
+    public async Task ScavRepeatableDetailsRendersExplicitBannerDenomination()
+    {
+        var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
+        var node = Node("scav-daily", "Scav Daily", "trader-a") with { ScavRepeatable = true };
+        var topology = new QuestTopologyDto("version", [], [], [new QuestTraderDto("trader-a", "Trader A", null)], [], []);
+        var profile = new ProfileStateDto("profile", "PMC", "Usec", 10, 0, false, false, [], [], [], [])
+        {
+            RepeatableQuestGroups =
+            [
+                new RepeatableQuestGroupDto("Daily", 100,
+                    [new RepeatableQuestEntryDto(node, State(node.Id, "Available"))]) { Scav = true },
+            ],
+        };
+        var state = new QuestMapPageState();
+        state.SetData(topology, profile);
+        state.SelectQuest(node.Id);
+        var localizer = new QuestMapLocalizer(new QuestMapBootstrapDto("en", "en", [], QuestMapUiCatalog.English));
+
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<QuestDetails>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                [nameof(QuestDetails.State)] = state,
+                [nameof(QuestDetails.Localizer)] = localizer,
+            }))).ToHtmlString());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(html, Does.Contain("scav-quest-badge"));
+            Assert.That(html, Does.Contain(">Scav</span>"));
         });
     }
 

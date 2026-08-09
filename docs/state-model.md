@@ -71,7 +71,7 @@ Prefer the server's own availability decision when accessible. Use local derivat
 
 ### Repeatable overlay
 
-Daily and Weekly operational quests are profile-generated rather than members of the cached database topology. QuestMap reads `PmcData.RepeatableQuests` directly and never calls `RepeatableQuestController.GetClientRepeatableQuests`, because that method can expire, generate, and persist quests.
+Daily, Scav Daily, and Weekly operational quests are profile-generated rather than members of the cached database topology. QuestMap reads `PmcData.RepeatableQuests` directly and never calls `RepeatableQuestController.GetClientRepeatableQuests`, because that method can expire, generate, and persist quests.
 
 For every saved `Daily` or `Weekly` active-group entry:
 
@@ -80,7 +80,7 @@ For every saved `Daily` or `Weekly` active-group entry:
 - map started, hand-in-ready, success, failure, restartable failure, pending, and expired statuses to the normal display-state vocabulary;
 - override the result to `Expired` when the group's `endTime` has passed;
 - normalize its generated trader, image, location, localized type/description, objectives, and success rewards into the normal node/detail DTOs;
-- exclude the `Daily_Savage` group.
+- include the `Daily_Savage` group as a Daily band while retaining an explicit Scav-repeatable identity marker for every generated node;
 
 These nodes live in the profile overlay and do not change the topology fingerprint, dependency edges, or permanent graph layout cache.
 
@@ -141,7 +141,7 @@ Each differing quest carries an ordered set of categories: profile A only, profi
 
 The default `All quests` comparison keeps the union graph intact and dims matching nodes. `All changes` and the individual category filters remove nonmatching nodes while retaining the selected quest, its recursive prerequisites and its direct successors. Filter counts are calculated after the ordinary frontier, finished, level, trader and search filters but before the comparison category filter. The selected comparison filter persists in browser settings; version-three `differencesOnly` settings migrate to `All changes` or `All quests`.
 
-Hide-finished removes a quest only when every applicable profile state is terminal and hideable. Level filtering removes it only when every applicable profile is level-gated. The default frontier, selection closure, direct-successor behavior, search and trader context otherwise retain their existing rules. Daily and Weekly generated quests are omitted because their profile-local IDs do not provide a safe equivalence key.
+Hide-finished removes a quest only when every applicable profile state is terminal and hideable. Level filtering removes it only when every applicable profile is level-gated. The default frontier, selection closure, direct-successor behavior, search and trader context otherwise retain their existing rules. Profile-generated repeatables are omitted because their profile-local IDs do not provide a safe equivalence key.
 
 ## Objective ordering
 

@@ -1,3 +1,4 @@
+using System;
 using SPTQuestMap.Client.Configuration;
 using SPTQuestMap.Core.Models;
 using UnityEngine;
@@ -13,6 +14,10 @@ internal static class QuestGraphPalette
     public static readonly Color MutedText = Hex(0xB7BAB0);
 
     private static QuestMapClientConfiguration? _configuration;
+
+    public static event Action? RowHighlightSettingChanged;
+
+    public static bool RowHighlightsEnabled => _configuration?.EnableRowHighlights.Value != false;
 
     public static Color Selected => Configured(_configuration?.SelectedHighlightColor.Value, 0xEFD470);
     public static Color Prerequisite => Configured(_configuration?.PrerequisiteHighlightColor.Value, 0x7AB5D9);
@@ -37,7 +42,16 @@ internal static class QuestGraphPalette
         Failed.b * 0.42f,
         1f);
 
-    public static void Configure(QuestMapClientConfiguration configuration) => _configuration = configuration;
+    public static void Configure(QuestMapClientConfiguration configuration)
+    {
+        if (_configuration is not null)
+            _configuration.EnableRowHighlights.SettingChanged -= OnRowHighlightSettingChanged;
+        _configuration = configuration;
+        _configuration.EnableRowHighlights.SettingChanged += OnRowHighlightSettingChanged;
+    }
+
+    private static void OnRowHighlightSettingChanged(object sender, EventArgs eventArgs) =>
+        RowHighlightSettingChanged?.Invoke();
 
     public static Color Status(QuestMapDisplayStateKind kind) => kind switch
     {

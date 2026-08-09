@@ -25,7 +25,7 @@ SPT-QuestMap is an independent community project. It is not affiliated with or e
 - Keeps the default graph focused on known quests plus the immediate future tier, with an option to reveal all future quests.
 - Provides search, trader, level-eligibility, and finished-quest filters.
 - Includes a persistent **Quests In Progress** drawer grouped by trader.
-- Places profile-generated Daily and Weekly operational quests in a labeled horizontal band above the dependency graph, including live remaining time and expired-state display.
+- Places profile-generated Daily, Scav Daily, and Weekly operational quests in labeled horizontal bands above the dependency graph, including live remaining time and expired-state display.
 - Preserves profile choice, language, filters, selection, focus state, pan, and zoom in the browser.
 - Compares two profiles on one shared graph with explicit change categories, readable A/B transitions, objective deltas, profile-exclusive quests and category filters.
 - Uses a Canvas renderer so the full graph remains practical to pan and zoom.
@@ -60,7 +60,7 @@ Your browser may warn about SPT's local TLS certificate until you trust that cer
 ## Using the map
 
 - Pick a profile in the top bar. Headless and level-zero profiles are intentionally omitted.
-- Use the compare control to add profile B. Matching quests collapse to one dimmed card, while changed quests show an outlined reason badge and explicit A/B state or progress rows. The comparison bar can show all quests, all changes or one change category while preserving selected-chain context. Daily and Weekly quests are hidden during comparison because separately generated quests cannot be matched safely.
+- Use the compare control to add profile B. Matching quests collapse to one dimmed card, while changed quests show an outlined reason badge and explicit A/B state or progress rows. The comparison bar can show all quests, all changes or one change category while preserving selected-chain context. Profile-generated repeatables are hidden during comparison because their profile-local IDs cannot be matched safely.
 - Click a quest to inspect its details and highlight its recursive prerequisites and direct successors.
 - Selection behaves the same with or without a trader filter: recursive prerequisites remain visible across traders, while only direct successors are highlighted.
 - Double-click a quest, or select it and press **Focus chain**, to compact the view to that chain.
@@ -69,7 +69,7 @@ Your browser may warn about SPT's local TLS certificate until you trust that cer
 - Search by quest, trader, or ID, or select a trader portrait to show that trader's filtered quests plus one tier after its currently available, active, or completed quests. Successors may belong to other traders, while the finished and level-eligibility filters still apply.
 - Trader-filtered prerequisite-gated quests also show each direct prerequisite that is still unmet, even when that prerequisite belongs to another trader.
 - Open **Quests In Progress** on the left for a filter-independent progress list. Selecting an entry also selects and centers it in the graph.
-- Daily and Weekly operational quests appear above the graph in trader order. Available, accepted, ready-to-finish, completed, and expired entries use the same state styling and details panel as ordinary quests; trader, search, and finished filters also apply. A default-on calendar filter toggles the complete band. Scav dailies are intentionally excluded.
+- Daily, Weekly, and Scav Daily operational quests appear above the graph in trader order. Scav repeatables are explicitly marked on their band, quest cards, task rows, and details banner. Available, accepted, ready-to-finish, completed, and expired entries use the same state styling and details panel as ordinary quests; trader, search, and finished filters also apply. A default-on calendar filter toggles the complete band.
 - Press the circular refresh button after changing profile progress in-game. QuestMap never refreshes automatically.
 
 ### Custom summaries for modded traders

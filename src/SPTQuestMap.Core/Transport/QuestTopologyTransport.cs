@@ -73,6 +73,7 @@ public sealed class QuestNodePayload
     public QuestLocationPayload Location { get; set; } = new();
     public string? EventSeason { get; set; }
     public bool Restartable { get; set; }
+    public bool ScavRepeatable { get; set; }
     public QuestRequirementPayload[] DirectRequirements { get; set; } = [];
     public QuestRequirementPayload[] EffectiveRequirements { get; set; } = [];
     public QuestObjectivePayload[] Objectives { get; set; } = [];

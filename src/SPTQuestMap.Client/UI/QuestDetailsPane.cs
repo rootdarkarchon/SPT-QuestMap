@@ -341,6 +341,7 @@ internal sealed class QuestDetailsPane : IDisposable
         title.fontStyle = FontStyles.Bold;
         AddTextShadow(title);
         AddRouteBar(questBanner, collector, lightkeeper);
+        if (node.ScavRepeatable) AddScavBadge(questBanner);
 
         var locationName = node.Location.Any ? "Any" : node.Location.Name ?? node.Location.Id;
         var location = UnityUiFactory.AddText(locationBanner.gameObject, locationName, 16,
@@ -988,6 +989,18 @@ internal sealed class QuestDetailsPane : IDisposable
             0f, lightkeeper ? 0.5f : 1f, height);
         if (lightkeeper) AddRouteBarPart(parent, "LightkeeperRoute", "LIGHTKEEPER", QuestGraphPalette.Lightkeeper,
             collector ? 0.5f : 0f, 1f, height);
+    }
+
+    private static void AddScavBadge(RectTransform parent)
+    {
+        var badge = UnityUiFactory.CreateRect("ScavBadge", parent);
+        badge.anchorMin = badge.anchorMax = badge.pivot = new Vector2(1, 1);
+        badge.anchoredPosition = new Vector2(-10, -10);
+        badge.sizeDelta = new Vector2(58, 22);
+        badge.gameObject.AddComponent<Image>().color = new Color(0.40f, 0.34f, 0.16f, 0.96f);
+        var label = UnityUiFactory.AddText(badge.gameObject, "SCAV", 10,
+            TextAlignmentOptions.Center, new Color(1f, 0.96f, 0.78f, 1f));
+        label.fontStyle = FontStyles.Bold;
     }
 
     private static void AddRouteBarPart(

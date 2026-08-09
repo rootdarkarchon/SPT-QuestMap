@@ -20,6 +20,9 @@ internal sealed class QuestMapClientConfiguration
         ConfigEntry<float> raidNotificationDisplayDurationSeconds,
         ConfigEntry<float> trackedQuestListDisplayDurationSeconds,
         ConfigEntry<KeyboardShortcut> trackedQuestListHotkey,
+        ConfigEntry<bool> enableRowHighlights,
+        ConfigEntry<bool> playHoverSounds,
+        ConfigEntry<bool> playClickSounds,
         ConfigEntry<Color> selectedHighlightColor,
         ConfigEntry<Color> prerequisiteHighlightColor,
         ConfigEntry<Color> successorHighlightColor,
@@ -50,6 +53,9 @@ internal sealed class QuestMapClientConfiguration
         RaidNotificationDisplayDurationSeconds = raidNotificationDisplayDurationSeconds;
         TrackedQuestListDisplayDurationSeconds = trackedQuestListDisplayDurationSeconds;
         TrackedQuestListHotkey = trackedQuestListHotkey;
+        EnableRowHighlights = enableRowHighlights;
+        PlayHoverSounds = playHoverSounds;
+        PlayClickSounds = playClickSounds;
         SelectedHighlightColor = selectedHighlightColor;
         PrerequisiteHighlightColor = prerequisiteHighlightColor;
         SuccessorHighlightColor = successorHighlightColor;
@@ -94,6 +100,12 @@ internal sealed class QuestMapClientConfiguration
     public ConfigEntry<float> TrackedQuestListDisplayDurationSeconds { get; }
 
     public ConfigEntry<KeyboardShortcut> TrackedQuestListHotkey { get; }
+
+    public ConfigEntry<bool> EnableRowHighlights { get; }
+
+    public ConfigEntry<bool> PlayHoverSounds { get; }
+
+    public ConfigEntry<bool> PlayClickSounds { get; }
 
     public ConfigEntry<Color> SelectedHighlightColor { get; }
 
@@ -202,6 +214,21 @@ internal sealed class QuestMapClientConfiguration
                 "Tracked quest list hotkey",
                 new KeyboardShortcut(KeyCode.I),
                 "Show or hide the compact in-raid list of tracked quests applicable to the current map, Any, or transit."),
+            config.Bind(
+                "Interface feedback",
+                "Highlight quest rows",
+                true,
+                "Highlight Tasks-table quest rows while hovered or selected."),
+            config.Bind(
+                "Interface feedback",
+                "Play mouse-over sounds",
+                true,
+                "Play Tarkov's native interface sound when the pointer enters a custom QuestMap button."),
+            config.Bind(
+                "Interface feedback",
+                "Play click sounds",
+                true,
+                "Play Tarkov's native interface sound when a custom QuestMap button is clicked."),
             BindColor(config, "Highlight colors", "Selected quest", 0xEFD470,
                 "Selected cards, selected filter outlines, pinned quest emphasis, and active selection accents."),
             BindColor(config, "Highlight colors", "Prerequisite quest", 0x7AB5D9,

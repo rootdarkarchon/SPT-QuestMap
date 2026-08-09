@@ -47,7 +47,7 @@ Support:
 
 This view is not a dependency graph. It has no edges, pan, zoom, Fit, Center, horizontal scrolling, or topology-rank positioning. Its fixed columns are Trader, Quest, Location, Status, Progress, and Tasks. Trader and Quest are distinct sort keys but share one quest-card cell in each row. Location uses the existing SPT banner, Status distinguishes active from ready-to-finish/restartable states, Progress uses the authoritative server percentage where available, and Tasks lists every ordered objective with truthful numeric and bar progress where known.
 
-Trader, Quest, Location, Status, and Progress headers cycle inactive -> ascending -> descending -> inactive. Multiple active keys retain click order as sort priority. With no manual keys, the internal stable order is Trader, Location, Quest. Daily and Weekly are independent leading sections regardless of sorting, use the same active sort criteria within their own section, and are visibly separated from ordinary active quests. Sort state and vertical scroll position persist per profile/topology In Progress scope.
+Trader, Quest, Location, Status, and Progress headers cycle inactive -> ascending -> descending -> inactive. Multiple active keys retain click order as sort priority. With no manual keys, the internal stable order is Trader, Location, Quest. Repeatables are leading sections regardless of sorting, use the same active sort criteria within their section, and are visibly separated from ordinary active quests. Scav dailies retain Daily mechanics and carry an explicit Scav denomination. Sort state and vertical scroll position persist per profile/topology In Progress scope.
 
 Objective density is bounded: the table shows four matching tasks per quest by default and provides an explicit row expander for the remainder. A persisted filter hides completed tasks. Completed objectives use a checkmark and omit redundant full progress bars; `1 / 1` completion omits the numerical duplicate. Ready-to-turn-in quests report 100% overall progress. Quest and location images are width-driven at their original aspect ratio and vertically centered, so expanding a row never stretches its artwork to the row height.
 
@@ -78,12 +78,12 @@ Ordinary selection must reveal the selected quest's complete applicable recursiv
 
 Do not invent client state unavailable from the verified data adapter.
 
-## Daily and Weekly band
+## Repeatable quest bands
 
 Profile-generated operational quests must not be inserted into the ordinary dependency ranks where they can be lost among static quests. Match the web composition:
 
 - render a dedicated repeatable band above the ordinary dependency graph;
-- split Daily and Weekly quests into clearly labeled groups, with Daily before Weekly;
+- split PMC Daily, Scav Daily, and Weekly quests into clearly labeled groups, in that order;
 - retain established trader ordering within each group;
 - show status, objective progress, handover-ready state, and live remaining/expired time where available;
 - apply the same search, trader, level, and status/finished semantics as the web band;

@@ -34,6 +34,8 @@ public sealed record QuestNodeDto(
 {
     public UnknownConditionDto[] UnknownConditions { get; init; } = [];
 
+    public bool ScavRepeatable { get; init; }
+
     [JsonIgnore]
     public string? Summary { get; init; }
 }
@@ -55,7 +57,10 @@ public sealed record ProfileStateDto(string ProfileId, string Nickname, string S
 {
     public IReadOnlyList<RepeatableQuestGroupDto> RepeatableQuestGroups { get; init; } = [];
 }
-public sealed record RepeatableQuestGroupDto(string Kind, long EndTime, IReadOnlyList<RepeatableQuestEntryDto> Quests);
+public sealed record RepeatableQuestGroupDto(string Kind, long EndTime, IReadOnlyList<RepeatableQuestEntryDto> Quests)
+{
+    public bool Scav { get; init; }
+}
 public sealed record RepeatableQuestEntryDto(QuestNodeDto Node, QuestStateDto State);
 public sealed record QuestStateDto(string QuestId, string? ExactStatus, string DisplayState, bool AuthoritativelyVisible, bool InProfile, double? AvailableAfter, QuestBlockerDto[] Blockers, QuestExclusionDto? Exclusion, ObjectiveProgressDto[] Objectives, double? ProgressPercent);
 public sealed record QuestBlockerDto(string Kind, string? SubjectId, string? Compare, double? RequiredValue, string[] RequiredStatuses);

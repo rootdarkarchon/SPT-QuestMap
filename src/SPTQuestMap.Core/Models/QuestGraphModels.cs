@@ -115,6 +115,8 @@ public sealed record QuestGraphNode(
 {
     public string? Summary { get; init; }
 
+    public bool ScavRepeatable { get; init; }
+
     /// <summary>Stable order supplied by the authoritative topology feed.</summary>
     public int NaturalOrder { get; init; } = int.MaxValue;
 }

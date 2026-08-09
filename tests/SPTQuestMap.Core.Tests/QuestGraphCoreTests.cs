@@ -42,7 +42,9 @@ public sealed class QuestGraphCoreTests
         var feed = Feed(
             [Node("b", "Prapor", "Any"), Node("a", "Therapist", "USEC")],
             [Edge("a", "b", "Success")]);
-        feed.ProfileGeneratedQuests = [Node("daily", "Prapor", "Any")];
+        var scavDaily = Node("daily", "Prapor", "Any");
+        scavDaily.ScavRepeatable = true;
+        feed.ProfileGeneratedQuests = [scavDaily];
 
         var topology = QuestTopologyNormalizer.Normalize(feed);
 
@@ -50,6 +52,7 @@ public sealed class QuestGraphCoreTests
         {
             Assert.That(topology.Nodes.Select(node => node.Id), Is.EqualTo(new[] { "a", "b", "daily" }));
             Assert.That(topology.NodesById["daily"].ProfileGenerated, Is.True);
+            Assert.That(topology.NodesById["daily"].ScavRepeatable, Is.True);
             Assert.That(topology.IncomingEdgesByTarget["b"].Single().SourceId, Is.EqualTo("a"));
             Assert.That(topology.OutgoingEdgesBySource["a"].Single().TargetId, Is.EqualTo("b"));
             Assert.That(topology.TradersById.ContainsKey("prapor"), Is.True);

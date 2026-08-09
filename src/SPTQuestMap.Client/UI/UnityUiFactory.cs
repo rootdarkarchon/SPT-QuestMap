@@ -1,7 +1,9 @@
 using System;
 using EFT.UI;
+using SPTQuestMap.Client.Configuration;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace SPTQuestMap.Client.UI;
@@ -111,7 +113,10 @@ internal static class UnityUiFactory
 
 internal sealed class QuestMapButtonFeedback : ButtonFeedback
 {
+    private static QuestMapClientConfiguration? _configuration;
     private Button? _button;
+
+    public static void Configure(QuestMapClientConfiguration configuration) => _configuration = configuration;
 
     public override bool Interactable
     {
@@ -121,5 +126,15 @@ internal sealed class QuestMapButtonFeedback : ButtonFeedback
             return (_button?.interactable ?? true) && base.Interactable;
         }
         set => base.Interactable = value;
+    }
+
+    public override void PointerEnterHandler()
+    {
+        if (_configuration?.PlayHoverSounds.Value != false) base.PointerEnterHandler();
+    }
+
+    public override void OnPointerClick(PointerEventData eventData)
+    {
+        if (_configuration?.PlayClickSounds.Value != false) base.OnPointerClick(eventData);
     }
 }

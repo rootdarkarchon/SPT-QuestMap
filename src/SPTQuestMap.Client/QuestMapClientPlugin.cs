@@ -24,6 +24,7 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
         var configuration = QuestMapClientConfiguration.Bind(Config);
         QuestMapDebugLog.Configure(configuration.EnableDebugLogging);
         QuestGraphPalette.Configure(configuration);
+        QuestMapButtonFeedback.Configure(configuration);
         var compatibility = CompatibilityValidator.Validate();
         _dataRuntime = new QuestMapDataRuntime(this, Logger, configuration);
         _patchRegistration = new PatchRegistration(PluginGuid);

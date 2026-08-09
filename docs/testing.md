@@ -15,7 +15,7 @@ Cover pure state and graph logic with small fixtures:
 - trader-filter direct-successor context seeded only by available/active/completed quests, with finished/level filtering;
 - trader-filter selection matching unfiltered recursive-prerequisite visibility across traders;
 - trader-filter merge quests showing only direct unmet prerequisites across traders;
-- Daily/Weekly-only group inclusion with `Daily_Savage` exclusion;
+- Daily/Weekly/`Daily_Savage` group inclusion, Daily band normalization, and explicit Scav identity propagation;
 - unaccepted repeatables classified as available and elapsed groups classified as expired;
 - repeatable search, trader, and finished filtering, default-on persisted calendar visibility, plus selection/details without focused-chain activation;
 - hide-finished behavior;

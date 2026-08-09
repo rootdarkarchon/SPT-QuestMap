@@ -242,6 +242,7 @@ internal sealed class QuestProfileStateBuilder(
             .Where(group => RepeatableQuestRules.ShouldIncludeGroup(group.Name))
             .Select(group =>
             {
+                var scav = RepeatableQuestRules.IsScavGroup(group.Name);
                 var endTime = group.EndTime ?? 0;
                 var expired = endTime <= generatedAt;
                 var entries = (group.ActiveQuests ?? [])
@@ -253,17 +254,21 @@ internal sealed class QuestProfileStateBuilder(
                         items,
                         locationsById,
                         pmc.TaskConditionCounters,
-                        expired
+                        expired,
+                        scav
                     ))
                     .OrderBy(entry => QuestTraderOrder.Rank(entry.Node.TraderId))
                     .ThenBy(entry => entry.Node.TraderName, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(entry => entry.Node.Name, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(entry => entry.Node.Id, StringComparer.Ordinal)
                     .ToArray();
-                return new RepeatableQuestGroupDto(group.Name!, endTime, entries);
+                return new RepeatableQuestGroupDto(RepeatableQuestRules.DisplayKind(group.Name), endTime, entries)
+                {
+                    Scav = scav,
+                };
             })
             .Where(group => group.Quests.Count > 0)
-            .OrderBy(group => group.Kind == "Daily" ? 0 : 1)
+            .OrderBy(group => group.Scav ? 1 : group.Kind == "Daily" ? 0 : 2)
             .ToArray();
     }
 
@@ -275,7 +280,8 @@ internal sealed class QuestProfileStateBuilder(
         IReadOnlyDictionary<MongoId, TemplateItem> items,
         IReadOnlyDictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location> locationsById,
         Dictionary<MongoId, TaskConditionCounter>? counters,
-        bool expired
+        bool expired,
+        bool scav
     )
     {
         traders.TryGetValue(quest.TraderId, out var trader);
@@ -324,7 +330,10 @@ internal sealed class QuestProfileStateBuilder(
             objectives,
             [],
             rewards
-        );
+        )
+        {
+            ScavRepeatable = scav,
+        };
 
         var exactStatus = profileQuest?.Status ?? RepeatableQuestRules.ExactStatus(quest.QuestStatus?.Status);
         var displayState = RepeatableQuestRules.Classify(exactStatus, expired);
