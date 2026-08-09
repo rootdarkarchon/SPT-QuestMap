@@ -4,6 +4,7 @@ using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Enums;
 using SPTQuestMap.Services;
+using CoreProgressRules = SPTQuestMap.Core.Rules.QuestProgressRules;
 
 namespace SPTQuestMap.Tests;
 
@@ -678,14 +679,14 @@ public sealed class QuestMapDataServiceTests
             new("tushonka", false, 0, 2, true),
         ];
 
-        var partial = QuestProfileRules.CalculateObjectiveProgress(objectives);
+        var partial = CalculateObjectiveProgress(objectives);
         ObjectiveProgressDto[] completedFirstStage =
         [
             objectives[0] with { Complete = true, Current = 10 },
             objectives[1],
             objectives[2],
         ];
-        var firstStageComplete = QuestProfileRules.CalculateObjectiveProgress(completedFirstStage);
+        var firstStageComplete = CalculateObjectiveProgress(completedFirstStage);
 
         Assert.Multiple(() =>
         {
@@ -697,12 +698,12 @@ public sealed class QuestMapDataServiceTests
     [Test]
     public void ObjectiveProgressClampsOverCompletionAndHandlesNoObjectives()
     {
-        var clamped = QuestProfileRules.CalculateObjectiveProgress([new("over", false, 15, 10, true)]);
+        var clamped = CalculateObjectiveProgress([new("over", false, 15, 10, true)]);
 
         Assert.Multiple(() =>
         {
             Assert.That(clamped, Is.EqualTo(100));
-            Assert.That(QuestProfileRules.CalculateObjectiveProgress([]), Is.Null);
+            Assert.That(CalculateObjectiveProgress([]), Is.Null);
         });
     }
 
@@ -711,14 +712,14 @@ public sealed class QuestMapDataServiceTests
     {
         Assert.Multiple(() =>
         {
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(0, 1), Is.EqualTo(0));
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(1, 1), Is.EqualTo(1));
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(2, 1), Is.EqualTo(1));
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(1.25, 1), Is.EqualTo(1));
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(2, 0), Is.EqualTo(0));
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(-1, 1), Is.EqualTo(-1));
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(null, 1), Is.Null);
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(2, null), Is.EqualTo(2));
+            Assert.That(CoreProgressRules.CapCurrent(0, 1), Is.EqualTo(0));
+            Assert.That(CoreProgressRules.CapCurrent(1, 1), Is.EqualTo(1));
+            Assert.That(CoreProgressRules.CapCurrent(2, 1), Is.EqualTo(1));
+            Assert.That(CoreProgressRules.CapCurrent(1.25, 1), Is.EqualTo(1));
+            Assert.That(CoreProgressRules.CapCurrent(2, 0), Is.EqualTo(0));
+            Assert.That(CoreProgressRules.CapCurrent(-1, 1), Is.EqualTo(-1));
+            Assert.That(CoreProgressRules.CapCurrent(null, 1), Is.Null);
+            Assert.That(CoreProgressRules.CapCurrent(2, null), Is.EqualTo(2));
         });
     }
 
@@ -727,13 +728,20 @@ public sealed class QuestMapDataServiceTests
     {
         Assert.Multiple(() =>
         {
-            Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 3, 3, null), Is.True);
-            Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 2, 3, null), Is.False);
-            Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 3, 3, ">"), Is.False);
-            Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 2, 1, "=="), Is.False);
-            Assert.That(QuestProfileRules.ObjectiveIsComplete(true, null, 3, null), Is.True);
+            Assert.That(CoreProgressRules.IsComplete(false, 3, 3, null), Is.True);
+            Assert.That(CoreProgressRules.IsComplete(false, 2, 3, null), Is.False);
+            Assert.That(CoreProgressRules.IsComplete(false, 3, 3, ">"), Is.False);
+            Assert.That(CoreProgressRules.IsComplete(false, 2, 1, "=="), Is.False);
+            Assert.That(CoreProgressRules.IsComplete(true, null, 3, null), Is.True);
         });
     }
+
+    private static double? CalculateObjectiveProgress(IReadOnlyCollection<ObjectiveProgressDto> objectives) =>
+        CoreProgressRules.CalculateObjectiveProgressPercent(
+            objectives,
+            objective => objective.Complete,
+            objective => objective.Current,
+            objective => objective.Required);
 
     private static QuestCondition Condition(string id, int index) => new()
     {

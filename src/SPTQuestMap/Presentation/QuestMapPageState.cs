@@ -1,6 +1,7 @@
 using SPTQuestMap.Services;
 using System.Text.Json.Serialization;
 using CoreQuestGraphRules = SPTQuestMap.Core.Rules.QuestGraphRules;
+using QuestTraderOrder = SPTQuestMap.Core.Rules.QuestTraderOrder;
 
 namespace SPTQuestMap.Presentation;
 
@@ -186,7 +187,7 @@ public sealed class QuestMapPageState
     {
         if (Topology is null) return [];
         var questTraderIds = _nodeById.Values.Select(quest => quest.TraderId).ToHashSet(StringComparer.Ordinal);
-        var ranks = QuestMapTraderOrder.Ids.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
+        var ranks = QuestTraderOrder.Ids.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
         return Topology.Traders
             .Where(trader => questTraderIds.Contains(trader.Id))
             .OrderBy(trader => ranks.GetValueOrDefault(trader.Id, int.MaxValue))
@@ -198,7 +199,7 @@ public sealed class QuestMapPageState
     {
         if (Topology is null || Profile is null) return [];
         var traderMeta = Topology.Traders.ToDictionary(trader => trader.Id, StringComparer.Ordinal);
-        var ranks = QuestMapTraderOrder.Ids.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
+        var ranks = QuestTraderOrder.Ids.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
         var ids = Profile.Quests.Where(state => state.DisplayState == "InProgress").Select(state => state.QuestId)
             .Concat(ComparisonProfile?.Quests.Where(state => state.DisplayState == "InProgress").Select(state => state.QuestId) ?? [])
             .Distinct(StringComparer.Ordinal);

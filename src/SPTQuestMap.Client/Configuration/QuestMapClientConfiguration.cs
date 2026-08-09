@@ -200,7 +200,7 @@ internal sealed class QuestMapClientConfiguration
             config.Bind(
                 "Quest tracking",
                 "Tracked quest list hotkey",
-                new KeyboardShortcut(KeyCode.L),
+                new KeyboardShortcut(KeyCode.I),
                 "Show or hide the compact in-raid list of tracked quests applicable to the current map, Any, or transit."),
             BindColor(config, "Highlight colors", "Selected quest", 0xEFD470,
                 "Selected cards, selected filter outlines, pinned quest emphasis, and active selection accents."),

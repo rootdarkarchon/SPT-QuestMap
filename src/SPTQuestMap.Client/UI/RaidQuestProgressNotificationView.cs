@@ -2,6 +2,7 @@ using System;
 using BepInEx.Logging;
 using SPTQuestMap.Client.Data;
 using SPTQuestMap.Core.Models;
+using SPTQuestMap.Core.Rules;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -116,7 +117,7 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
 
         _portrait!.sprite = null;
         _portrait.gameObject.SetActive(false);
-        _portraitFallback!.text = Initials(node.TraderName);
+        _portraitFallback!.text = UnityUiFactory.Initials(node.TraderName);
         _portraitFallback.gameObject.SetActive(!minimal);
         if (!minimal) _assetCache.Request(node.TraderImageUrl, sprite =>
         {
@@ -306,15 +307,13 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
     }
 
     private static double CappedCurrent(QuestObjectiveProgress progress) =>
-        progress.Current.HasValue && progress.Required.HasValue
-            ? Math.Min(progress.Current.Value, progress.Required.Value)
-            : progress.Current ?? 0;
+        QuestProgressRules.CapCurrent(progress.Current, progress.Required) ?? 0;
 
     private static double? ObjectivePercent(QuestObjectiveProgress? progress)
     {
         if (progress is null || !progress.ProgressKnown || !progress.Current.HasValue || progress.Required is not > 0)
             return null;
-        return Math.Clamp(progress.Current.Value / progress.Required.Value * 100d, 0d, 100d);
+        return QuestProgressRules.CalculatePercent(progress.Current, progress.Required);
     }
 
     private float BackgroundOpacity => Mathf.Clamp(_opacity?.Invoke() ?? 1f, 0.2f, 1f);
@@ -375,12 +374,4 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         _ => QuestMapDisplayStateKind.InProgress,
     };
 
-    private static string Initials(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return "?";
-        var words = value.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
-        return words.Length == 1
-            ? words[0].Substring(0, Math.Min(2, words[0].Length)).ToUpperInvariant()
-            : string.Concat(words[0][0], words[1][0]).ToUpperInvariant();
-    }
 }

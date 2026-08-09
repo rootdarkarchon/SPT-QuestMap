@@ -30,6 +30,12 @@ internal static class QuestGraphPalette
     public static Color Terminal => Configured(_configuration?.EndOfLineColor.Value, 0xD1B35F);
     public static Color CompletedMarker => Completed;
     public static Color ControlActive => DarkSurface(Selected);
+    public static Color WarningControl => DarkSurface(Failed);
+    public static Color WarningControlActive => new(
+        Failed.r * 0.62f,
+        Failed.g * 0.48f,
+        Failed.b * 0.42f,
+        1f);
 
     public static void Configure(QuestMapClientConfiguration configuration) => _configuration = configuration;
 

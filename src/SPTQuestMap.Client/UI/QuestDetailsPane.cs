@@ -328,9 +328,9 @@ internal sealed class QuestDetailsPane : IDisposable
             portrait.anchoredPosition = new Vector2(10, -10);
             portrait.sizeDelta = new Vector2(54, 54);
             portrait.gameObject.AddComponent<Image>().color = new Color(0.16f, 0.16f, 0.14f, 0.96f);
-            var fallback = UnityUiFactory.AddText(portrait.gameObject, Initials(node.TraderName), 14,
+            var fallback = UnityUiFactory.AddText(portrait.gameObject, UnityUiFactory.Initials(node.TraderName), 14,
                 TextAlignmentOptions.Center, new Color(0.95f, 0.85f, 0.58f, 1f));
-            AddPortrait(portrait, node.TraderImageUrl, fallback);
+            UnityUiFactory.AddPortrait(portrait, node.TraderImageUrl, fallback, _assetCache);
         }
 
         var title = UnityUiFactory.AddText(questBanner.gameObject, node.Name, 22,
@@ -768,24 +768,6 @@ internal sealed class QuestDetailsPane : IDisposable
         shade.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, shadeAlpha);
     }
 
-    private void AddPortrait(RectTransform parent, string? url, TMP_Text fallback)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return;
-        var imageRect = UnityUiFactory.CreateRect("Image", parent);
-        UnityUiFactory.Stretch(imageRect, 2, 2, 2, 2);
-        var image = imageRect.gameObject.AddComponent<Image>();
-        image.preserveAspect = true;
-        image.raycastTarget = false;
-        imageRect.gameObject.SetActive(false);
-        _assetCache.Request(url, sprite =>
-        {
-            if (image == null || sprite is null) return;
-            image.sprite = sprite;
-            imageRect.gameObject.SetActive(true);
-            if (fallback != null) fallback.gameObject.SetActive(false);
-        });
-    }
-
     private RectTransform TopRect(string name, float top, float height)
     {
         var rect = UnityUiFactory.CreateRect(name, Root);
@@ -976,15 +958,6 @@ internal sealed class QuestDetailsPane : IDisposable
         var value = reward.Value.HasValue ? $" {reward.Value.Value:+0.##;-0.##;0}" : string.Empty;
         var loyalty = reward.LoyaltyLevel.HasValue ? $" LL{reward.LoyaltyLevel.Value}" : string.Empty;
         return $"{hidden}{reward.Type}{(string.IsNullOrWhiteSpace(subject) ? string.Empty : $" · {subject}")}{value}{loyalty}";
-    }
-
-    private static string Initials(string name)
-    {
-        var words = name.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length == 0) return "?";
-        return words.Length == 1
-            ? words[0].Substring(0, Math.Min(2, words[0].Length)).ToUpperInvariant()
-            : $"{char.ToUpperInvariant(words[0][0])}{char.ToUpperInvariant(words[1][0])}";
     }
 
     private static void AddTextShadow(TMP_Text text)

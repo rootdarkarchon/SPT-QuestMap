@@ -1,3 +1,4 @@
+using System;
 using EFT.UI;
 using TMPro;
 using UnityEngine;
@@ -72,6 +73,39 @@ internal static class UnityUiFactory
         button.colors = colors;
         gameObject.AddComponent<QuestMapButtonFeedback>();
         return button;
+    }
+
+    public static string Initials(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "?";
+        var words = value.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0) return "?";
+        return words.Length == 1
+            ? words[0].Substring(0, Math.Min(2, words[0].Length)).ToUpperInvariant()
+            : string.Concat(words[0][0], words[1][0]).ToUpperInvariant();
+    }
+
+    public static void AddPortrait(
+        RectTransform parent,
+        string? url,
+        TMP_Text fallback,
+        QuestAssetSpriteCache assets,
+        float inset = 2f)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        var imageRect = CreateRect("Image", parent);
+        Stretch(imageRect, inset, inset, inset, inset);
+        var image = imageRect.gameObject.AddComponent<Image>();
+        image.preserveAspect = true;
+        image.raycastTarget = false;
+        imageRect.gameObject.SetActive(false);
+        assets.Request(url, sprite =>
+        {
+            if (image == null || sprite is null) return;
+            image.sprite = sprite;
+            imageRect.gameObject.SetActive(true);
+            if (fallback != null) fallback.gameObject.SetActive(false);
+        });
     }
 }
 

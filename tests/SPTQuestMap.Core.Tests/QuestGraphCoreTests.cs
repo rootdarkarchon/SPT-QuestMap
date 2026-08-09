@@ -194,54 +194,6 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
-    public void TraderProjection_CompactsRanksAndKeepsOnlyInternalEdges()
-    {
-        var topology = QuestTopologyNormalizer.Normalize(Feed(
-            [
-                Node("p0", "Prapor", "Any"),
-                Node("therapist", "Therapist", "Any"),
-                Node("p2", "Prapor", "Any"),
-                Node("p3", "Prapor", "Any"),
-            ],
-            [
-                Edge("p0", "therapist", "Success"),
-                Edge("therapist", "p2", "Success"),
-                Edge("p2", "p3", "Success"),
-            ]));
-        var layout = DeterministicGraphLayout.Build(topology);
-
-        var projection = TraderGraphProjectionBuilder.Build(topology, layout, "prapor");
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(projection.Nodes.Select(node => node.Id), Is.EqualTo(new[] { "p0", "p2", "p3" }));
-            Assert.That(projection.Edges.Select(edge => (edge.SourceId, edge.TargetId)), Is.EqualTo(new[] { ("p2", "p3") }));
-            Assert.That(projection.NodesById["p0"].X, Is.EqualTo(0));
-            Assert.That(projection.NodesById["p2"].X, Is.EqualTo(DeterministicGraphLayout.NodeWidth + DeterministicGraphLayout.LayerGap));
-            Assert.That(projection.NodesById["p3"].X, Is.EqualTo(2 * (DeterministicGraphLayout.NodeWidth + DeterministicGraphLayout.LayerGap)));
-        });
-    }
-
-    [Test]
-    public void OverlayRefresh_DoesNotReplaceTopologyOrLayout()
-    {
-        var topology = QuestTopologyNormalizer.Normalize(Feed([Node("a", "Prapor", "Any")], []));
-        var data = new QuestGraphDataSet(topology);
-        var originalLayout = data.Layout;
-
-        var first = data.RefreshOverlay(Snapshot(Quest("a", "Started")));
-        var second = data.RefreshOverlay(Snapshot(Quest("a", "Success")));
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(data.Topology, Is.SameAs(topology));
-            Assert.That(data.Layout, Is.SameAs(originalLayout));
-            Assert.That(second, Is.Not.SameAs(first));
-            Assert.That(second.QuestsById["a"].ExactStatus, Is.EqualTo("Success"));
-        });
-    }
-
-    [Test]
     public void GlobalProjection_UsesAuthoritativeFrontierAndApplicableSets()
     {
         var feed = Feed(
@@ -1064,7 +1016,13 @@ public sealed class QuestGraphCoreTests
         var topology = QuestTopologyNormalizer.Normalize(Feed(
             [Node("source", "Prapor", "Any"), Node("upper", "Prapor", "Any"), Node("lower", "Prapor", "Any")],
             [Edge("source", "upper", "Success"), Edge("source", "lower", "Fail")]));
-        var projection = TraderGraphProjectionBuilder.Build(topology, DeterministicGraphLayout.Build(topology), "prapor");
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("source", "Started"), Quest("upper", "Started"), Quest("lower", "Started")));
+        var projection = GlobalQuestGraphProjectionBuilder.Build(
+            topology,
+            DeterministicGraphLayout.Build(topology),
+            overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.Full, true, false, false, null, null, null, null, QuestRouteFilter.None));
 
         var first = QuestEdgeRoutePlanner.Build(projection);
         var second = QuestEdgeRoutePlanner.Build(projection);

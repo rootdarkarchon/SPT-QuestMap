@@ -24,7 +24,7 @@ Feature-complete; final polish active as of 2026-08-09. The reusable pane is imp
 ### Existing handoff assets
 
 - QuestMap details and native action bridges are mandatory parts of either enabled Tasks replacement. There is no independent detail-pane feature toggle; disabling the relevant global or trader replacement restores that complete vanilla screen.
-- The transitional `TraderGraphScreenController` is excluded from the client build. `TraderTasksScreenController` replaces the complete `QuestsScreen` workspace and hosts the shared custom components while leaving the surrounding trader navigation intact.
+- The transitional M03 `TraderGraphScreenController`/`TraderGraphView` implementation has been removed. `TraderTasksScreenController` replaces the complete `QuestsScreen` workspace and hosts the shared production components while leaving the surrounding trader navigation intact.
 - Global selection now owns a reusable QuestMap pane in place of the temporary M06 two-line summary when the feature is enabled.
 - Existing topology/overlay models already carry names, trader/location, status/display state, requirements, ordered objective definitions/live progress, repeatable expiry, route membership, and relationship data. Audit missing reward, exclusion-cause, inventory-eligibility, and native-action capability data before expanding transport contracts.
 

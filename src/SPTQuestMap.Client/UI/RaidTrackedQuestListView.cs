@@ -5,6 +5,7 @@ using BepInEx.Logging;
 using SPTQuestMap.Client.Data;
 using SPTQuestMap.Core.Layout;
 using SPTQuestMap.Core.Models;
+using SPTQuestMap.Core.Rules;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -233,7 +234,7 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
         image.color = new Color(0.12f, 0.13f, 0.13f, 0.9f);
         image.preserveAspect = true;
         image.raycastTarget = false;
-        var fallback = UnityUiFactory.AddText(portraitRoot.gameObject, Initials(group.Trader.Name), 9,
+        var fallback = UnityUiFactory.AddText(portraitRoot.gameObject, UnityUiFactory.Initials(group.Trader.Name), 9,
             TextAlignmentOptions.Center, Color.white);
         _assetCache.Request(group.Trader.ImageUrl, sprite =>
         {
@@ -335,17 +336,9 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
         && progress.Current.HasValue && progress.Required is > 1d;
 
     private static double CappedCurrent(QuestObjectiveProgress progress) =>
-        Math.Min(progress.Current.GetValueOrDefault(), progress.Required.GetValueOrDefault());
+        QuestProgressRules.CapCurrent(progress.Current, progress.Required).GetValueOrDefault();
 
     private static bool IsPressed(KeyboardShortcut shortcut)
         => shortcut.MainKey != KeyCode.None && shortcut.IsDown();
 
-    private static string Initials(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return "?";
-        var words = value.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
-        return words.Length == 1
-            ? words[0].Substring(0, Math.Min(2, words[0].Length)).ToUpperInvariant()
-            : string.Concat(words[0][0], words[1][0]).ToUpperInvariant();
-    }
 }

@@ -160,7 +160,7 @@ internal sealed class QuestGraphCardNodeView
         Root.name = $"Node-{node.Id}";
         Root.anchoredPosition = new Vector2((float)position.X, (float)-position.Y);
         Root.sizeDelta = new Vector2((float)position.Width, (float)position.Height);
-        _portraitFallback.text = Initials(node.TraderName);
+        _portraitFallback.text = UnityUiFactory.Initials(node.TraderName);
         _portraitFallback.gameObject.SetActive(true);
         _name.text = node.Name;
         SetRoutes(collector, lightkeeper);
@@ -335,14 +335,6 @@ internal sealed class QuestGraphCardNodeView
         return $"{seconds / 3600:00}:{seconds % 3600 / 60:00}";
     }
 
-    private static string Initials(string name)
-    {
-        var words = name.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length == 0) return "?";
-        return words.Length == 1
-            ? words[0].Substring(0, Math.Min(2, words[0].Length)).ToUpperInvariant()
-            : $"{char.ToUpperInvariant(words[0][0])}{char.ToUpperInvariant(words[1][0])}";
-    }
 }
 
 internal sealed class QuestNodeClickHandler : MonoBehaviour, IPointerClickHandler

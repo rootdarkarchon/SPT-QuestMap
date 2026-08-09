@@ -839,9 +839,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             portraitRoot.anchoredPosition = new Vector2(16, 0);
             portraitRoot.sizeDelta = new Vector2(52, 52);
             portraitRoot.gameObject.AddComponent<Image>().color = new Color(0.22f, 0.21f, 0.18f, 0.98f);
-            var fallback = UnityUiFactory.AddText(portraitRoot.gameObject, Initials(node.TraderName), 14,
+            var fallback = UnityUiFactory.AddText(portraitRoot.gameObject, UnityUiFactory.Initials(node.TraderName), 14,
                 TextAlignmentOptions.Center, new Color(0.94f, 0.88f, 0.68f, 1));
-            AddPortrait(portraitRoot, node.TraderImageUrl, fallback);
+            UnityUiFactory.AddPortrait(portraitRoot, node.TraderImageUrl, fallback, AssetCache);
         }
 
         var titleRect = UnityUiFactory.CreateRect("Title", content);
@@ -1116,20 +1116,15 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         progress?.Complete == true ? "  ✓" : string.Empty;
 
     private static double? CappedCurrent(QuestObjectiveProgress progress)
-    {
-        if (!progress.Current.HasValue) return null;
-        return progress.Required.HasValue
-            ? Math.Min(progress.Current.Value, progress.Required.Value)
-            : progress.Current.Value;
-    }
+        => QuestProgressRules.CapCurrent(progress.Current, progress.Required);
 
     private static double? ObjectivePercent(QuestObjectiveProgress? progress)
     {
         if (progress is null) return null;
         if (progress.Complete || progress.Required == 1) return null;
-        if (progress.ProgressKnown && progress.Current.HasValue && progress.Required is > 0)
-            return Math.Clamp(progress.Current.Value / progress.Required.Value * 100d, 0d, 100d);
-        return null;
+        return progress.ProgressKnown
+            ? QuestProgressRules.CalculatePercent(progress.Current, progress.Required)
+            : null;
     }
 
     private IReadOnlyList<QuestObjectiveDefinition> VisibleObjectives(QuestGraphNode node, QuestLiveState? live)
@@ -1305,24 +1300,6 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             image.preserveAspect = false;
             fitter.Bind(parent, sprite.rect.width / sprite.rect.height);
             imageRoot.gameObject.SetActive(true);
-        });
-    }
-
-    private void AddPortrait(RectTransform parent, string? url, TMP_Text fallback)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return;
-        var imageRect = UnityUiFactory.CreateRect("Image", parent);
-        UnityUiFactory.Stretch(imageRect, 2, 2, 2, 2);
-        var image = imageRect.gameObject.AddComponent<Image>();
-        image.preserveAspect = true;
-        image.raycastTarget = false;
-        imageRect.gameObject.SetActive(false);
-        AssetCache.Request(url, sprite =>
-        {
-            if (image == null || sprite is null) return;
-            image.sprite = sprite;
-            imageRect.gameObject.SetActive(true);
-            if (fallback != null) fallback.gameObject.SetActive(false);
         });
     }
 
@@ -1522,15 +1499,6 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private static string FormatRequirementValue(double value) => Math.Abs(value - Math.Round(value)) < 0.0001d
         ? Math.Round(value).ToString("0")
         : value.ToString("0.##");
-
-    private static string Initials(string name)
-    {
-        var words = name.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length == 0) return "?";
-        return words.Length == 1
-            ? words[0].Substring(0, Math.Min(2, words[0].Length)).ToUpperInvariant()
-            : $"{char.ToUpperInvariant(words[0][0])}{char.ToUpperInvariant(words[1][0])}";
-    }
 
     private sealed class QuestTableRow
     {

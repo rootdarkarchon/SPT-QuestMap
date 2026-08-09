@@ -26,13 +26,6 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private const float CharacterNavigationInset = 44f;
     private const string FallbackLocationBannerUrl = "/files/banners/norvinskzone.png";
 
-    private static readonly string[] TraderOrder =
-    [
-        "54cb50c76803fa8b248b4571", "54cb57776803fa99248b456e", "579dc571d53a0658a154fbec",
-        "58330581ace78e27b8b10cee", "5935c25fb3acc3127c3d8cd9", "5a7c2eca46aef81a7ca2145d",
-        "5ac3b934156ae10c4430e83c", "5c0647fdd443bc2504c2d371", "6617beeaa9cfa777ca915b7c",
-        "638f541a29ffd1183d187f57", "656f0f98d80a697f855d34b1",
-    ];
     private static readonly FieldInfo TasksPanelField = RequiredField("_tasksPanel");
     private static readonly FieldInfo DefaultToggleField = RequiredField("_defaultQuestsToggleSpawner");
     private static readonly FieldInfo DailyToggleField = RequiredField("_dailyQuestsToggleSpawner");
@@ -87,6 +80,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private TextMeshProUGUI? _selectionSummaryText;
     private Image? _notesButtonImage;
     private Image? _questItemsButtonImage;
+    private TMP_Text? _questItemsButtonLabel;
+    private GameObject? _questItemsWarningBadge;
+    private TMP_Text? _questItemsWarningCount;
     private Image? _questDescriptionButtonImage;
     private Button? _questDescriptionButton;
     private QuestDetailsPane? _detailPane;
@@ -132,6 +128,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     {
         _screen = screen;
         _inventoryController = inventoryController;
+        _inventoryController.OnProfileUpdate += OnInventoryProfileUpdate;
         _questController = questController;
         _session = session;
         _log = log;
@@ -214,7 +211,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         QuestProfileOverlay overlay)
     {
         if (!CanResume) return "screen-cache-invalid";
-        _inventoryController = inventoryController;
+        RebindInventoryController(inventoryController);
         _questController = questController;
         _session = session;
         _overlay = overlay;
@@ -254,6 +251,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             if (_customDetailsEnabled && _selectedQuestId is not null) ShowSelectedQuestDetails();
         }
         _visible = true;
+        UpdateQuestItemsButtonState();
         var cachedRows = (_graphView as InProgressQuestTableView)?.CachedRowCount ?? 0;
         QuestMapDebugLog.Info(_log,
             "QUESTMAP_M06_RESUME " +
@@ -279,6 +277,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         if (_disposed || !_mounted || _topology is null || _layout is null || _graphView is null) return "screen-inactive";
         var locationsChanged = EnableLocationsForNewTaskStates(_overlay, overlay);
         _overlay = overlay;
+        UpdateQuestItemsButtonState();
         var nextProjection = BuildProjection();
         var membershipChanged = _projection is null
             || !_projection.Nodes.Select(node => node.Id).SequenceEqual(nextProjection.Nodes.Select(node => node.Id), StringComparer.Ordinal)
@@ -314,6 +313,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     {
         if (_disposed || !_mounted || _graphView is null) return "screen-inactive";
         _overlay = overlay;
+        UpdateQuestItemsButtonState();
         var nextProjection = BuildProjection();
         var membershipChanged = _projection is null
             || !_projection.Nodes.Select(node => node.Id).SequenceEqual(nextProjection.Nodes.Select(node => node.Id), StringComparer.Ordinal)
@@ -414,6 +414,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         PersistCurrentState();
         QuestGraphViewStateStore.Flush();
         _disposed = true;
+        _inventoryController.OnProfileUpdate -= OnInventoryProfileUpdate;
         _visible = false;
         foreach (var pair in _nativeControlStates)
             if (pair.Key != null) pair.Key.SetActive(pair.Value);
@@ -427,6 +428,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
         _selectionSummaryText = null;
         _notesButtonImage = null;
         _questItemsButtonImage = null;
+        _questItemsButtonLabel = null;
+        _questItemsWarningBadge = null;
+        _questItemsWarningCount = null;
         _questDescriptionButtonImage = null;
         _questDescriptionButton = null;
         RestoreNativeSidePanelLayout();
@@ -833,6 +837,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             _overlayMode == GlobalOverlayMode.Notes, () => ToggleNativeOverlay(true));
         _questItemsButtonImage = AddRightHeaderButton(header, "QuestItems", "QUEST ITEMS", 6, 104,
             _overlayMode == GlobalOverlayMode.QuestItems, () => ToggleNativeOverlay(false));
+        BuildQuestItemsWarningBadge();
         if (_customDetailsEnabled)
         {
             var detailSeparator = UnityUiFactory.CreateRect("DetailOverlaySeparator", header);
@@ -1208,7 +1213,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             portraitRoot.anchoredPosition = new Vector2(0, -1);
             portraitRoot.sizeDelta = new Vector2(34, 34);
             portraitRoot.gameObject.AddComponent<Image>().color = new Color(0.13f, 0.15f, 0.14f, 1);
-            var fallback = UnityUiFactory.AddText(portraitRoot.gameObject, id is null ? string.Empty : Initials(label), 9,
+            var fallback = UnityUiFactory.AddText(portraitRoot.gameObject, id is null ? string.Empty : UnityUiFactory.Initials(label), 9,
                 TextAlignmentOptions.Center, QuestGraphPalette.Text);
             if (imageUrl is not null)
             {
@@ -1252,17 +1257,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
     private static int TraderRank(string traderId)
     {
-        var rank = Array.IndexOf(TraderOrder, traderId);
-        return rank < 0 ? int.MaxValue : rank;
-    }
-
-    private static string Initials(string name)
-    {
-        var words = name.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length == 0) return "?";
-        return words.Length == 1
-            ? words[0].Substring(0, Math.Min(2, words[0].Length)).ToUpperInvariant()
-            : $"{char.ToUpperInvariant(words[0][0])}{char.ToUpperInvariant(words[1][0])}";
+        return QuestTraderOrder.Rank(traderId);
     }
 
     private Toggle ResolveSingleToggle(FieldInfo field, string description)
@@ -1470,13 +1465,94 @@ internal sealed class GlobalTasksScreenController : IDisposable
     {
         if (_notesButtonImage is not null)
             _notesButtonImage.color = _overlayMode == GlobalOverlayMode.Notes ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control;
-        if (_questItemsButtonImage is not null)
-            _questItemsButtonImage.color = _overlayMode == GlobalOverlayMode.QuestItems ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control;
+        UpdateQuestItemsButtonState();
         if (_questDescriptionButtonImage is not null)
             _questDescriptionButtonImage.color = _overlayMode == GlobalOverlayMode.QuestDescription
                 ? QuestGraphPalette.ControlActive
                 : QuestGraphPalette.Control;
         if (_questDescriptionButton is not null) _questDescriptionButton.interactable = _selectedQuestId is not null;
+    }
+
+    private void BuildQuestItemsWarningBadge()
+    {
+        if (_questItemsButtonImage is null) return;
+        var buttonRect = _questItemsButtonImage.rectTransform;
+        _questItemsButtonLabel = buttonRect.GetComponentInChildren<TMP_Text>(true);
+        if (_questItemsButtonLabel is not null)
+        {
+            _questItemsButtonLabel.margin = new Vector4(4, 0, 34, 0);
+            _questItemsButtonLabel.fontSize = 11;
+        }
+
+        var badge = UnityUiFactory.CreateRect("CarriedQuestItemsWarning", buttonRect);
+        badge.anchorMin = badge.anchorMax = badge.pivot = new Vector2(1, 0.5f);
+        badge.anchoredPosition = new Vector2(-4, 0);
+        badge.sizeDelta = new Vector2(34, 22);
+        _questItemsWarningBadge = badge.gameObject;
+
+        var countRect = UnityUiFactory.CreateRect("Count", badge);
+        countRect.anchorMin = countRect.anchorMax = countRect.pivot = new Vector2(0, 0.5f);
+        countRect.anchoredPosition = new Vector2(0, 0);
+        countRect.sizeDelta = new Vector2(18, 20);
+        _questItemsWarningCount = UnityUiFactory.AddText(
+            countRect.gameObject,
+            string.Empty,
+            10,
+            TextAlignmentOptions.Center,
+            new Color(1f, 0.78f, 0.78f, 1f));
+        _questItemsWarningCount.fontStyle = FontStyles.Bold;
+
+        var triangleRect = UnityUiFactory.CreateRect("Triangle", badge);
+        triangleRect.anchorMin = triangleRect.anchorMax = triangleRect.pivot = new Vector2(1, 0.5f);
+        triangleRect.anchoredPosition = Vector2.zero;
+        triangleRect.sizeDelta = new Vector2(16, 15);
+        var triangle = triangleRect.gameObject.AddComponent<QuestItemWarningTriangleGraphic>();
+        triangle.color = QuestGraphPalette.Failed;
+        triangle.raycastTarget = false;
+        var exclamation = UnityUiFactory.AddText(
+            triangleRect.gameObject,
+            "!",
+            9,
+            TextAlignmentOptions.Center,
+            Color.white);
+        exclamation.fontStyle = FontStyles.Bold;
+        exclamation.raycastTarget = false;
+
+        UpdateQuestItemsButtonState();
+    }
+
+    private void UpdateQuestItemsButtonState()
+    {
+        if (_questItemsButtonImage is null) return;
+        var count = GetCarriedQuestItemCount();
+        var warning = count > 0;
+        if (_questItemsWarningBadge is not null) _questItemsWarningBadge.SetActive(warning);
+        if (_questItemsWarningCount is not null) _questItemsWarningCount.text = count.ToString();
+        _questItemsButtonImage.color = warning
+            ? (_overlayMode == GlobalOverlayMode.QuestItems
+                ? QuestGraphPalette.WarningControlActive
+                : QuestGraphPalette.WarningControl)
+            : (_overlayMode == GlobalOverlayMode.QuestItems
+                ? QuestGraphPalette.ControlActive
+                : QuestGraphPalette.Control);
+    }
+
+    private int GetCarriedQuestItemCount()
+    {
+        return _questController.Profile.Inventory.QuestRaidItems?.Grid?.Items?.Count() ?? 0;
+    }
+
+    private void OnInventoryProfileUpdate()
+    {
+        if (!_disposed && _mounted) UpdateQuestItemsButtonState();
+    }
+
+    private void RebindInventoryController(InventoryController inventoryController)
+    {
+        if (ReferenceEquals(_inventoryController, inventoryController)) return;
+        _inventoryController.OnProfileUpdate -= OnInventoryProfileUpdate;
+        _inventoryController = inventoryController;
+        _inventoryController.OnProfileUpdate += OnInventoryProfileUpdate;
     }
 
     private void HideNativeTasksWorkspace()
@@ -1871,5 +1947,18 @@ internal sealed class GlobalTasksScreenController : IDisposable
             rect.localScale = _localScale;
             rect.localRotation = _localRotation;
         }
+    }
+}
+
+internal sealed class QuestItemWarningTriangleGraphic : MaskableGraphic
+{
+    protected override void OnPopulateMesh(VertexHelper helper)
+    {
+        helper.Clear();
+        var rect = GetPixelAdjustedRect();
+        helper.AddVert(new Vector2(rect.center.x, rect.yMax), color, Vector2.zero);
+        helper.AddVert(new Vector2(rect.xMax, rect.yMin), color, Vector2.zero);
+        helper.AddVert(new Vector2(rect.xMin, rect.yMin), color, Vector2.zero);
+        helper.AddTriangle(0, 1, 2);
     }
 }

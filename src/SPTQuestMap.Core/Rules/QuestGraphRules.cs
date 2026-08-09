@@ -98,17 +98,11 @@ public static class QuestGraphRules
         or QuestMapDisplayStateKind.ReadyToFinish or QuestMapDisplayStateKind.Completed;
 
     public static double? CalculateObjectiveProgressPercent(IReadOnlyCollection<QuestObjectiveProgress> objectives)
-    {
-        if (objectives.Count == 0) return null;
-        var completedShare = objectives.Sum(objective =>
-        {
-            if (objective.Complete) return 1d;
-            if (objective.Current.HasValue && objective.Required is > 0)
-                return Math.Clamp(objective.Current.Value / objective.Required.Value, 0d, 1d);
-            return 0d;
-        });
-        return Math.Round(completedShare / objectives.Count * 100d, 1, MidpointRounding.AwayFromZero);
-    }
+        => QuestProgressRules.CalculateObjectiveProgressPercent(
+            objectives,
+            objective => objective.Complete,
+            objective => objective.Current,
+            objective => objective.Required);
 
     public static double? ResolveProfileProgressPercent(string questId, QuestProfileOverlay overlay)
     {

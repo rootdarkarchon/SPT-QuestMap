@@ -12,6 +12,7 @@ using SPTarkov.Server.Core.Models.Enums;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using CoreProgressRules = SPTQuestMap.Core.Rules.QuestProgressRules;
 
 namespace SPTQuestMap.Tests;
 
@@ -283,14 +284,14 @@ public sealed class BlazorMigrationTests
         var primaryObjective = new ObjectiveProgressDto(
             "objective",
             true,
-            QuestProfileRules.CapObjectiveCurrent(2, 1),
+            CoreProgressRules.CapCurrent(2, 1),
             1,
             true
         );
         var comparisonObjective = new ObjectiveProgressDto(
             "objective",
             true,
-            QuestProfileRules.CapObjectiveCurrent(1, 1),
+            CoreProgressRules.CapCurrent(1, 1),
             1,
             true
         );
@@ -489,7 +490,7 @@ public sealed class BlazorMigrationTests
         var progress = new ObjectiveProgressDto(
             objective.Id,
             true,
-            QuestProfileRules.CapObjectiveCurrent(2, objective.RequiredValue),
+            CoreProgressRules.CapCurrent(2, objective.RequiredValue),
             objective.RequiredValue,
             true
         );

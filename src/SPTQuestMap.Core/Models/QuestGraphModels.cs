@@ -296,14 +296,6 @@ public interface IQuestGraphProjection
     double Height { get; }
 }
 
-public sealed record TraderGraphProjection(
-    string TraderId,
-    IReadOnlyList<QuestGraphNode> Nodes,
-    IReadOnlyList<QuestGraphEdge> Edges,
-    IReadOnlyDictionary<string, QuestNodePosition> NodesById,
-    double Width,
-    double Height) : IQuestGraphProjection;
-
 public enum GlobalQuestGraphMode
 {
     InProgress,

@@ -7,6 +7,7 @@ using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Services;
+using SPTQuestMap.Core.Rules;
 
 namespace SPTQuestMap.Services;
 
@@ -94,14 +95,18 @@ internal sealed class QuestProfileStateBuilder(
                 var conditionRecorded = completed.Contains(objective.Id);
                 return new ObjectiveProgressDto(
                     objective.Id,
-                    QuestProfileRules.ObjectiveIsComplete(conditionRecorded, counter?.Value, objective.RequiredValue, objective.Compare),
-                    QuestProfileRules.CapObjectiveCurrent(counter?.Value, objective.RequiredValue),
+                    QuestProgressRules.IsComplete(conditionRecorded, counter?.Value, objective.RequiredValue, objective.Compare),
+                    QuestProgressRules.CapCurrent(counter?.Value, objective.RequiredValue),
                     objective.RequiredValue,
                     counter is not null || conditionRecorded
                 );
             }).ToArray();
             var progressPercent = displayState == "InProgress"
-                ? QuestProfileRules.CalculateObjectiveProgress(objectives)
+                ? QuestProgressRules.CalculateObjectiveProgressPercent(
+                    objectives,
+                    objective => objective.Complete,
+                    objective => objective.Current,
+                    objective => objective.Required)
                 : null;
 
             states.Add(new QuestStateDto(
@@ -250,7 +255,7 @@ internal sealed class QuestProfileStateBuilder(
                         pmc.TaskConditionCounters,
                         expired
                     ))
-                    .OrderBy(entry => QuestMapTraderOrder.Rank(entry.Node.TraderId))
+                    .OrderBy(entry => QuestTraderOrder.Rank(entry.Node.TraderId))
                     .ThenBy(entry => entry.Node.TraderName, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(entry => entry.Node.Name, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(entry => entry.Node.Id, StringComparer.Ordinal)
@@ -330,8 +335,8 @@ internal sealed class QuestProfileStateBuilder(
             var conditionRecorded = completed.Contains(objective.Id);
             return new ObjectiveProgressDto(
                 objective.Id,
-                QuestProfileRules.ObjectiveIsComplete(conditionRecorded, counter?.Value, objective.RequiredValue, objective.Compare),
-                QuestProfileRules.CapObjectiveCurrent(counter?.Value, objective.RequiredValue),
+                QuestProgressRules.IsComplete(conditionRecorded, counter?.Value, objective.RequiredValue, objective.Compare),
+                QuestProgressRules.CapCurrent(counter?.Value, objective.RequiredValue),
                 objective.RequiredValue,
                 counter is not null || conditionRecorded
             );
@@ -346,7 +351,13 @@ internal sealed class QuestProfileStateBuilder(
             [],
             null,
             objectiveProgress,
-            displayState == "InProgress" ? QuestProfileRules.CalculateObjectiveProgress(objectiveProgress) : null
+            displayState == "InProgress"
+                ? QuestProgressRules.CalculateObjectiveProgressPercent(
+                    objectiveProgress,
+                    objective => objective.Complete,
+                    objective => objective.Current,
+                    objective => objective.Required)
+                : null
         );
         return new RepeatableQuestEntryDto(node, state);
     }

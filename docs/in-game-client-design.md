@@ -380,9 +380,9 @@ QuestsScreen.Close()
 
 The mounted graph is a sibling of the verified `MainArea/Center/QuestList` root and copies that root's `RectTransform`. It does not mount inside the list mask and does not cover `MainArea/Center/QuestView`. The future-detail root separately mirrors the native quest-view rectangle and is active only for a topology-only selection.
 
-`TraderGraphProjectionBuilder` derives a read-only view from the stable M02 topology and layout. It filters nodes by exact `TraderId`, removes every edge with a hidden endpoint, and compacts only the retained rank coordinates. It does not rebuild or mutate the global topology/layout. External prerequisites therefore do not draw across the trader filter but remain available as related IDs in read-only details.
+This section records the M03 proof rather than the current implementation. Its trader-only projection, controller, node view, future-detail view, and single edge graphic were removed after M07 replaced the complete trader workspace with the shared production table, graph, and detail components. Current trader membership is parameterized through `GlobalQuestGraphProjectionBuilder`; topology and deterministic layout remain immutable inputs.
 
-The milestone renderer creates one node button per visible quest and one `QuestGraphEdgeGraphic` for all visible edges. The edge component emits every connection into one `VertexHelper` mesh, preserving the shared-contract ban on one GameObject per edge. A viewport mask plus one input handler owns drag panning and wheel zoom; fit-to-visible changes only the content transform.
+The production renderer uses pooled `QuestGraphCardNodeView` instances and fixed-size `ProductionQuestGraphEdgeGraphic` batches through `QuestGraphEdgeLayer`. A viewport mask plus one input handler owns drag panning and wheel zoom; fit-to-visible changes only the content transform.
 
 After the first visual pass, the M03 batched edge mesh was refined without changing its ownership model. Each source and target receives stable vertically distributed ports; forward edges use cubic Bézier curves, backward/cyclic edges use deterministic upper lanes, and arrowheads expose direction. This is the M03 readability floor, not the final router. Crossing minimization, obstacle-aware lanes, layout refinement, and production performance remain Milestone 5 scope.
 
@@ -396,7 +396,7 @@ QuestView.Show(ISession, InventoryController, AbstractQuestControllerClass, Ques
 
 QuestMap does not copy native buttons or invoke quest transports. A topology-only selection closes and hides the native view and shows an action-free QuestMap pane containing the template description, effective requirements, ordered objectives, and related quest IDs. It never fabricates a live quest.
 
-The runtime stores at most one owned controller per `QuestsScreen`. A repeated `Show` disposes the prior controller before mounting another; a pending async topology load is canceled logically when the screen closes. Feature disable and the forced-initialization diagnostic never hide the vanilla list. Initialization failures destroy partial roots, reactivate the list and native detail, and emit structured `QUESTMAP_M03_ERROR`/`STATE` diagnostics with screen and trader context.
+The runtime stores at most one owned controller per `QuestsScreen`. A repeated `Show` disposes the prior controller before mounting another; a pending async topology load is canceled logically when the screen closes. Feature disable never hides the vanilla list. Real initialization failures destroy partial roots, reactivate native ownership, and emit structured error/state diagnostics with screen and trader context.
 
 The verified M03 list-area mount is deliberately transitional. User review requires the final trader graph to occupy the complete Tasks pane, with selected details presented in a narrower side panel comparable to the browser QuestMap. That composition belongs to Milestone 7: it requires the QuestMap-owned detail pane while continuing to delegate live actions to the native controllers. M03 must not prematurely resize or clone the native `QuestView` merely to approximate that final layout.
 
@@ -445,7 +445,7 @@ With debug logging enabled, each coalesced batch emits exact old/new quest statu
 
 ## Milestone 5 production renderer and shared core
 
-The M03 view was replaced at the screen-controller boundary by reusable `QuestGraphView`, which depends on `IQuestGraphProjection` rather than trader-screen types. The trader adapter still mounts it into the exact M04-validated vanilla scroll viewport and retains the native control/detail ownership; M05 does not expand into the M07 full-pane detail redesign.
+The M03 view was replaced at the screen-controller boundary by reusable `QuestGraphView`, which depends on `IQuestGraphProjection` rather than trader-screen types. M07 subsequently moved both global and trader workspaces onto the same table, graph, chrome, selection, and detail components; the obsolete M03 adapter and renderer types are no longer retained in the solution.
 
 Node GameObjects are now a bounded viewport pool. A runtime-neutral spatial index returns only nodes intersecting the padded graph-space viewport, and the pool rebinds static content only when a node enters that set. Overlay refreshes update the active node status layer in place. Selection is a separate pure-core set containing the selected quest, every recursive prerequisite, and direct successors.
 
