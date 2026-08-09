@@ -132,12 +132,12 @@ internal sealed class QuestMapClientConfiguration
             config.Bind(
                 "Features",
                 "Replace trader task screens",
-                false,
+                true,
                 "Replace each trader's vanilla quest list with the pooled native QuestMap graph."),
             config.Bind(
                 "Features",
                 "Replace global Tasks screen",
-                false,
+                true,
                 "Replace the global Tasks quest views with Tasks and full QuestMap views while retaining native Notes and Quest Items."),
             config.Bind(
                 "Quest details",
@@ -147,7 +147,7 @@ internal sealed class QuestMapClientConfiguration
             config.Bind(
                 "Quest details",
                 "Prefer quest summary",
-                false,
+                true,
                 "Open the Summary tab by default when the selected quest has a QuestMap summary."),
             config.Bind(
                 "Quest tracking",
@@ -167,10 +167,10 @@ internal sealed class QuestMapClientConfiguration
             config.Bind(
                 "Raid overlays",
                 "Background opacity",
-                0.92f,
+                0.25f,
                 new ConfigDescription(
                     "Background-only opacity for QuestMap's in-raid progression overlays: the normal notification's composited artwork/backdrop and the translucent black minimal-notification/tracked-list panels. Text, icons, rails, and progress bars remain fully opaque outside the fade animation.",
-                    new AcceptableValueRange<float>(0.2f, 1f))),
+                    new AcceptableValueRange<float>(0.1f, 1f))),
             config.Bind(
                 "Raid overlays",
                 "Use minimal progress notifications",
