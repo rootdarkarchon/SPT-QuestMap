@@ -41,12 +41,14 @@ When either in-game Tasks replacement is enabled, QuestMap renders a completely 
 ## Installation
 
 1. Stop the SPT server.
-2. Download the release archive and extract it into the directory that contains your existing `SPT` folder. The archive already includes the complete `SPT/user/mods/SPT-QuestMap` path.
-3. Allow the archive's `SPT` folder to merge with the existing one, then confirm the resulting path looks like:
+2. Download the combined release archive and extract it into the directory that contains your existing `SPT` and `BepInEx` folders. The archive already includes both complete install-relative paths.
+3. Allow the archive's `SPT` and `BepInEx` folders to merge with the existing ones, then confirm the resulting paths look like:
 
    ```text
    <install parent>/SPT/user/mods/SPT-QuestMap/SPTQuestMap.dll
    <install parent>/SPT/user/mods/SPT-QuestMap/SPTQuestMap.Core.dll
+   <install parent>/BepInEx/plugins/SPTQuestMap/SPTQuestMap.Client.dll
+   <install parent>/BepInEx/plugins/SPTQuestMap/SPTQuestMap.Core.dll
    ```
 
 4. Start the SPT server and let it finish loading.
