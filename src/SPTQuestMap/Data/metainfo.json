@@ -328,6 +328,7 @@
   "5ac23c6186f7741247042bad": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_1",
     "relevantItems": [
+      "54491c4f4bdc2db1078b4568",
       "55d45f484bdc2d972f8b456d",
       "56083a334bdc2dc8488b4571",
       "5cc9c20cd7f00c001336c65d"
@@ -336,6 +337,7 @@
   "5ac2426c86f774138762edfe": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_2",
     "relevantItems": [
+      "57dc2fa62459775949412633",
       "57ffa9f4245977728561e844",
       "5c87ca002e221600114cb150",
       "55d482194bdc2d1d4e8b456b"
@@ -344,17 +346,16 @@
   "5ac2428686f77412450b42bf": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_3",
     "relevantItems": [
+      "5926bb2186f7744b1c6c6e60",
       "5a351711c4a282000b1521a4",
       "59c63b4486f7747afb151c1c",
-      "5cc9c20cd7f00c001336c65d",
-      "5926f34786f77469195bfe92",
-      "5926f2e086f7745aae644231",
-      "5926d33d86f77410de68ebc0"
+      "5cc9c20cd7f00c001336c65d"
     ]
   },
   "5ac242ab86f77412464f68b4": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_16",
     "relevantItems": [
+      "588892092459774ac91d4b11",
       "5cc9c20cd7f00c001336c65d",
       "5aa66be6e5b5b0214e506e97",
       "5c86592b2e2216000e69e77c"
@@ -363,6 +364,7 @@
   "5ac244c486f77413e12cf945": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_13",
     "relevantItems": [
+      "5a367e5dc4a282000e49738f",
       "59bffc1f86f77435b128b872",
       "59bffbb386f77435b379b9c2",
       "5c0102b20db834001d23eebc",
@@ -377,15 +379,15 @@
   "5ac244eb86f7741356335af1": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_7",
     "relevantItems": [
+      "5447a9cd4bdc2dbd208b4567",
       "544a37c44bdc2d25388b4567",
       "59db7e1086f77448be30ddf3",
       "5fbbaa86f9986c4cff3fe5f6",
-      "5a339805c4a2826c6e06d73d",
       "5c78f2792e221600106f4683",
       "55d35ee94bdc2d61338b4568",
       "55d6190f4bdc2d87028b4567",
       "56ea8d2fd2720b7c698b4570",
-      "651a8e529829226ceb67c319",
+      "651a8bf3a8520e48047bf708",
       "5c7fb51d2e2216001219ce11"
     ]
   },
@@ -438,6 +440,7 @@
   "5ae3267986f7742a413592fe": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_5",
     "relevantItems": [
+      "5a7828548dc32e5a9c28b516",
       "5c0111ab0db834001966914d",
       "58272d7f2459774f6311ddfd",
       "5a788068c5856700137e4c8f",
@@ -451,6 +454,7 @@
   "5ae3270f86f77445ba41d4dd": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_6",
     "relevantItems": [
+      "59d6088586f774275f37482f",
       "59f8a37386f7747af3328f06",
       "59bffc1f86f77435b128b872",
       "59bffbb386f77435b379b9c2",
@@ -465,6 +469,7 @@
   "5ae3277186f7745973054106": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_8",
     "relevantItems": [
+      "5ab8e9fcd8ce870019439434",
       "59ecc3dd86f7746dc827481c",
       "59ecc28286f7746d7a68aa8c",
       "5649ae4a4bdc2d1b2b8b4588",
@@ -479,6 +484,7 @@
   "5ae327c886f7745c7b3f2f3f": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_10",
     "relevantItems": [
+      "5ac66d9b5acfc4001633997a",
       "55d482194bdc2d1d4e8b456b",
       "5cbda392ae92155f3c17c39f",
       "5c87ca002e221600114cb150",
@@ -488,12 +494,14 @@
       "59bffbb386f77435b379b9c2",
       "5ac78eaf5acfc4001926317a",
       "5b222d405acfc400153af4fe",
-      "6477772ea8a38bb2050ed4db"
+      "5c1cdd512e22161b267d91ae",
+      "5c1cdd302e221602b3137250"
     ]
   },
   "5ae3280386f7742a41359364": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_15",
     "relevantItems": [
+      "57c44b372459772d2b39b8ce",
       "5a9eb32da2750c00171b3f9c",
       "5a7c74b3e899ef0014332c29",
       "544909bb4bdc2d6f028b4577",
@@ -577,33 +585,36 @@
   "5b47749f86f7746c5d6a5fd4": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_17",
     "relevantItems": [
+      "5ac66d015acfc400180ae6e4",
       "5e21ca18e4d47f0da15e77dd",
-      "5947f92f86f77427344a76b1",
-      "5648b4534bdc2d3d1c8b4580",
-      "5649af884bdc2d1b2b8b4589",
-      "5beec8b20db834001961942a",
-      "5c0548ae0db834001966a3c2",
-      "6130ca3fd92c473c77020dbd",
-      "588226ef24597767af46e39c",
-      "5b3a337e5acfc4704b4a19a0",
       "5f6372e2865db925d54f3869",
       "5f6339d53ada5942720e2dc3",
+      "5947f92f86f77427344a76b1",
+      "5beec8b20db834001961942a",
       "5fbbaa86f9986c4cff3fe5f6",
+      "5648b4534bdc2d3d1c8b4580",
+      "588226ef24597767af46e39c",
+      "5b3a337e5acfc4704b4a19a0",
+      "5c0548ae0db834001966a3c2",
+      "6130ca3fd92c473c77020dbd",
+      "5649af884bdc2d1b2b8b4589",
       "6477772ea8a38bb2050ed4db"
     ]
   },
   "5b47799d86f7746c5d6a5fd8": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_12",
     "relevantItems": [
+      "58948c8e86f77409493f7266",
       "5b07db875acfc40dc528a5f6",
+      "64806bdd26c80811d408d37a",
       "5b3a16655acfc40016387a2a",
-      "5b07dd285acfc4001754240d",
-      "64806bdd26c80811d408d37a"
+      "5b07dd285acfc4001754240d"
     ]
   },
   "5b477b6f86f7747290681823": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_18",
     "relevantItems": [
+      "5a0ec13bfcdbcb00165aa685",
       "57cff947245977638e6f2a19",
       "57cffb66245977632f391a99",
       "5b0e794b5acfc47a877359b2",
@@ -617,6 +628,7 @@
   "5b477f7686f7744d1b23c4d2": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_20",
     "relevantItems": [
+      "5aafa857e5b5b00018480968",
       "5aaf8a0be5b5b00015693243",
       "5addbf175acfc408fb13965b",
       "5addbfbb5acfc400194dbcf7",
@@ -631,6 +643,7 @@
   "5b47825886f77468074618d3": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_22",
     "relevantItems": [
+      "5447a9cd4bdc2dbd208b4567",
       "544a37c44bdc2d25388b4567",
       "5b30bc285acfc47a8608615d",
       "64806bdd26c80811d408d37a",
@@ -641,6 +654,7 @@
       "57dbb57e2459774673234890",
       "56eabcd4d2720b66698b4574",
       "5a1ead28fcdbcb001912fa9f",
+      "5a1eaa87fcdbcb001865f75e",
       "5a1eacb3fcdbcb09800872be",
       "591aef7986f774139d495f03"
     ]
@@ -1437,13 +1451,13 @@
   "639872f9decada40426d3447": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_4",
     "relevantItems": [
+      "587e02ff24597743df3deaeb",
       "587df583245977373c4f1129",
-      "6415d33eda439c6a97048b5b",
-      "5dff772da3651922b360bf91",
-      "5dff77c759400025ea5150cf",
+      "587e08ee245977446b4410cf",
+      "5cf638cbd7f00c06595bc936",
       "5afd7ded5acfc40017541f5e",
       "5afd7e095acfc40017541f61",
-      "5947f92f86f77427344a76b1",
+      "5afd7e445acfc4001637e35a",
       "55d4ae6c4bdc2d8b2f8b456e",
       "593d490386f7745ee97a1555"
     ]
@@ -1451,6 +1465,7 @@
   "639872fa9b4fb827b200d8e5": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_9",
     "relevantItems": [
+      "56d59856d2720bd8418b456a",
       "5c0009510db834001966907f",
       "5c00076d0db834001d23ee1f",
       "5c920e902e221644f31c3c99",
@@ -1462,6 +1477,7 @@
   "639872fc93ae507d5858c3a6": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_11",
     "relevantItems": [
+      "5fc3f2d5900b1d5091531e57",
       "5fbb978207e8a97d1f0902d3",
       "5f6340d3ca442212f4047eb2",
       "5a7ad2e851dfba0016153692",
@@ -1475,6 +1491,7 @@
   "639872fe8871e1272b10ccf6": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_14",
     "relevantItems": [
+      "5bb2475ed4351e00853264e3",
       "55d4887d4bdc2d962f8b4570",
       "5c6d10fa2e221600106f3f23",
       "6269220d70b6c02e665f2635",
@@ -1486,7 +1503,7 @@
       "5b7be4895acfc400170e2dd5",
       "5fce0cf655375d18a253eff0",
       "5c06595c0db834001a66af6c",
-      "5c18b9192e2216398b5a8104",
+      "5bc09a18d4351e003562b68e",
       "5bc09a30d4351e00367fb7c8",
       "558022b54bdc2dac148b458d"
     ]
@@ -1494,6 +1511,7 @@
   "639873003693c63d86328f25": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_19",
     "relevantItems": [
+      "5c46fbd72e2216398b5a8c9c",
       "6516b129609aaf354b34b3a8",
       "5b30ac585acfc433000eb79c",
       "6197b229af1f5202c57a9bea",
@@ -1509,6 +1527,7 @@
   "63987301e11ec11ff5504036": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_21",
     "relevantItems": [
+      "5bfea6e90db834001b7347f3",
       "5cde739cd7f00c0010373bd3",
       "5a339805c4a2826c6e06d73d",
       "5cde7afdd7f00c000d36b89d",
@@ -1518,7 +1537,12 @@
       "5d1f819086f7744b355c219b",
       "5cff9e84d7ad1a049e54ed55",
       "61713cc4d8e3106d9806c109",
-      "62850c28da09541f43158cca"
+      "62850c28da09541f43158cca",
+      "5e81c3cbac2bb513793cdc75",
+      "5ef366938cef260c0642acad",
+      "5ef61964ec7f42238c31e0c1",
+      "5ef369b08cef260c0642acaf",
+      "5cc9c20cd7f00c001336c65d"
     ]
   },
   "639dbaf17c898a131e1cffff": {
@@ -1650,6 +1674,7 @@
   "64f83bb69878a0569d6ecfbe": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_23",
     "relevantItems": [
+      "606587252535c57a13424cfd",
       "5d00ef6dd7ad1a0940739b16",
       "6065878ac9cf8012264142fd",
       "5bbdb8bdd4351e4502011460",
@@ -1664,6 +1689,7 @@
   "64f83bcdde58fc437700d8fa": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_24",
     "relevantItems": [
+      "5df8ce05b11454561e39243b",
       "5d025cc1d7ad1a53845279ef",
       "5df8f535bb49d91fb446d6b0",
       "5d44069ca4b9361ebd26fc37",
@@ -1675,23 +1701,23 @@
       "5b057b4f5acfc4771e1bd3e9",
       "5649a2464bdc2d91118b45a8",
       "577d128124597739d65d0e56",
-      "577d141e24597739c5255e01",
-      "5dfa3cd1b33c0951220c079b"
+      "577d141e24597739c5255e01"
     ]
   },
   "64f83bd983cfca080a362c82": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Part_25",
     "relevantItems": [
+      "64ca3d3954fc657e230529cc",
       "6491c6f6ef312a876705191b",
       "646371faf2404ab67905c8e9",
       "6492ef63cfcf7c89e701abf1",
       "6492d7847363b8a52206bc52",
-      "5947f92f86f77427344a76b1",
+      "5649ad3f4bdc2df8348b4585",
+      "5a0c59791526d8dba737bba7",
       "5cf638cbd7f00c06595bc936",
       "5cf639aad7f00c065703d455",
       "5cc9c20cd7f00c001336c65d",
-      "5a0c59791526d8dba737bba7",
-      "5649ad3f4bdc2df8348b4585"
+      "5947f92f86f77427344a76b1"
     ]
   },
   "655e427b64d09b4122018228": {
@@ -1988,7 +2014,17 @@
   },
   "66a74c628410476dd65543be": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Special_Order",
-    "relevantItems": []
+    "relevantItems": [
+      "5447a9cd4bdc2dbd208b4567",
+      "58491f3324597764bc48fa02",
+      "5aaa5e60e5b5b000140293d6",
+      "5c0e2f94d174af029f650d56",
+      "56eabcd4d2720b66698b4574",
+      "5c78f26f2e221601da3581d1",
+      "651a8bf3a8520e48047bf708",
+      "638de3603a1a4031d8260b8c",
+      "5fbbaa86f9986c4cff3fe5f6"
+    ]
   },
   "66a75b44243a6548ff5e5ff9": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gun_Connoisseur",
@@ -2360,7 +2396,35 @@
   },
   "676529af9c90953d090882e7": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/Gunsmith_-_Old_Friend's_Request",
-    "relevantItems": []
+    "relevantItems": [
+      "59984ab886f7743e98271174",
+      "59985a6c86f77414ec448d17",
+      "58d39d3d86f77445bb794ae7",
+      "58d39b0386f77443380bf13c",
+      "58d399e486f77442e0016fe7",
+      "5ac78eaf5acfc4001926317a",
+      "59ecc3dd86f7746dc827481c",
+      "5649ae4a4bdc2d1b2b8b4588",
+      "59bfc5c886f7743bf6794e62",
+      "676177df1f08ed5e8800b7ae",
+      "5b7be4895acfc400170e2dd5",
+      "5c1bc7752e221602b1779b34",
+      "544909bb4bdc2d6f028b4577",
+      "5b7be47f5acfc400170e2dd2",
+      "560d657b4bdc2da74d8b4572",
+      "5df24cf80dee1b22f862e9bc",
+      "5888961624597754281f93f3",
+      "5c86592b2e2216000e69e77c",
+      "5aa66be6e5b5b0214e506e97",
+      "59bffc1f86f77435b128b872",
+      "59bffbb386f77435b379b9c2",
+      "5a7ae0c351dfba0017554310",
+      "5a6b5e468dc32e001207faf5",
+      "5a6b592c8dc32e00094b97bf",
+      "5a7b4960e899ef197b331a2d",
+      "5a718da68dc32e000d46d264",
+      "560d657b4bdc2da74d8b4572"
+    ]
   },
   "676c243577f0257dd50239e6": {
     "wiki": "https://escapefromtarkov.fandom.com/wiki/The_Price_of_Celebration",
