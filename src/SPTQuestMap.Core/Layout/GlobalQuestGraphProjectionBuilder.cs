@@ -51,8 +51,9 @@ public static class GlobalQuestGraphProjectionBuilder
         QuestProfileOverlay overlay,
         GlobalQuestGraphOptions options)
     {
-        var applicableSource = overlay.ApplicableQuestIds.Count > 0 ? overlay.ApplicableQuestIds : topology.ApplicableQuestIds;
-        var defaultSource = overlay.DefaultVisibleQuestIds.Count > 0 ? overlay.DefaultVisibleQuestIds : topology.DefaultVisibleQuestIds;
+        var hasAuthoritativeProjection = overlay.AuthoritativeDisplayStates.Count > 0;
+        var applicableSource = hasAuthoritativeProjection ? overlay.ApplicableQuestIds : topology.ApplicableQuestIds;
+        var defaultSource = hasAuthoritativeProjection ? overlay.DefaultVisibleQuestIds : topology.DefaultVisibleQuestIds;
         var applicable = applicableSource.ToHashSet(StringComparer.Ordinal);
         if (options.TraderTasksContext)
         {

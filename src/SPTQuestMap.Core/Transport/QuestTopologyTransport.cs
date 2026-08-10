@@ -132,6 +132,7 @@ public sealed class QuestObjectivePayload
     public double? RequiredValue { get; set; }
     public string? Compare { get; set; }
     public string[] DependsOn { get; set; } = [];
+    public string[] ZoneIds { get; set; } = [];
 }
 
 public sealed class QuestUnknownConditionPayload

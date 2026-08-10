@@ -64,7 +64,12 @@ public static class QuestGraphRules
         overlay.QuestsById.TryGetValue(node.Id, out var state);
         var exact = ClassifyDisplayState(state?.ExactStatus, state?.HasLiveQuest == true, node.Restartable);
         if (TryClassifyLiveDynamicState(exact, out var liveDynamic)) return liveDynamic;
-        if (overlay.AuthoritativeDisplayStates.TryGetValue(node.Id, out var authoritative)) return authoritative;
+        if (overlay.AuthoritativeDisplayStates.TryGetValue(node.Id, out var authoritative))
+        {
+            if (authoritative == QuestMapDisplayStateKind.Available && state?.HasLiveQuest != true)
+                return QuestMapDisplayStateKind.Locked;
+            return authoritative;
+        }
 
         if (IsExcluded(node, overlay)) return QuestMapDisplayStateKind.Excluded;
         if (HasUnavailableTrader(node, overlay)) return QuestMapDisplayStateKind.TraderUnavailable;

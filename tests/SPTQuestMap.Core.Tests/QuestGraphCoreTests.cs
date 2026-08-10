@@ -268,6 +268,46 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
+    public void NativeAvailabilityGuard_HidesServerAvailableQuestMissingFromClient()
+    {
+        var feed = Feed(
+            [Node("native", "Prapor", "Any"), Node("rejected", "Prapor", "Any"), Node("future", "Prapor", "Any")],
+            []);
+        feed.DefaultVisibleQuestIds = ["native", "rejected", "future"];
+        feed.AllApplicableQuestIds = ["native", "rejected", "future"];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(Quest("native", "AvailableForStart"))) with
+        {
+            AuthoritativeDisplayStates = new Dictionary<string, QuestMapDisplayStateKind>(StringComparer.Ordinal)
+            {
+                ["native"] = QuestMapDisplayStateKind.Available,
+                ["rejected"] = QuestMapDisplayStateKind.Available,
+                ["future"] = QuestMapDisplayStateKind.PrerequisiteGated,
+            },
+            DefaultVisibleQuestIds = ["native", "rejected", "future"],
+            ApplicableQuestIds = ["native", "rejected", "future"],
+        };
+
+        var rejected = QuestOverlayBuilder.FindServerAvailableQuestsMissingFromNativeClient(overlay);
+        overlay = QuestOverlayBuilder.RejectServerAvailableQuestsMissingFromNativeClient(overlay, rejected);
+        var projection = GlobalQuestGraphProjectionBuilder.Build(
+            topology,
+            DeterministicGraphLayout.Build(topology),
+            overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.Full, true, false, false, null, null, null, null, QuestRouteFilter.None));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rejected, Is.EqualTo(new[] { "rejected" }));
+            Assert.That(overlay.ApplicableQuestIds, Is.EquivalentTo(new[] { "native", "future" }));
+            Assert.That(overlay.DefaultVisibleQuestIds, Is.EquivalentTo(new[] { "native", "future" }));
+            Assert.That(projection.Nodes.Select(node => node.Id), Is.EquivalentTo(new[] { "native", "future" }));
+            Assert.That(QuestGraphRules.ClassifyProfileDisplayState(topology, topology.NodesById["rejected"], overlay),
+                Is.EqualTo(QuestMapDisplayStateKind.Locked));
+        });
+    }
+
+    [Test]
     public void ApplyProfileGeneratedDelta_ReusesStaticTopologyAndSwapsOnlyGeneratedNodes()
     {
         var feed = Feed(
@@ -969,6 +1009,59 @@ public sealed class QuestGraphCoreTests
                 Does.Not.Contain("any-bravo"));
             Assert.That(projection.Groups[0].Quests[1].Objectives.Select(objective => objective.Definition.Id),
                 Is.EqualTo(new[] { "open" }));
+        });
+    }
+
+    [Test]
+    public void RaidTrackedList_FiltersAnyQuestObjectivesByCurrentMapZones()
+    {
+        var mixedAny = Node("mixed-any", "Prapor", "Any");
+        mixedAny.Objectives =
+        [
+            new QuestObjectivePayload { Id = "global", Text = "Global" },
+            new QuestObjectivePayload { Id = "matching", Text = "Matching", ZoneIds = ["zone-customs"] },
+            new QuestObjectivePayload { Id = "other", Text = "Other", ZoneIds = ["zone-woods"] },
+        ];
+        var otherOnlyAny = Node("other-only-any", "Prapor", "Any");
+        otherOnlyAny.Objectives =
+        [
+            new QuestObjectivePayload { Id = "other-only", Text = "Other only", ZoneIds = ["zone-woods"] },
+        ];
+        var specific = Node("specific", "Prapor", "Any");
+        specific.Location = new QuestLocationPayload { Id = "customs", Name = "Customs" };
+        specific.Objectives =
+        [
+            new QuestObjectivePayload { Id = "specific-zone", Text = "Specific", ZoneIds = ["zone-woods"] },
+        ];
+        var nodes = new[] { mixedAny, otherOnlyAny, specific };
+        var feed = Feed(nodes, []);
+        feed.DefaultVisibleQuestIds = nodes.Select(node => node.Id).ToArray();
+        feed.AllApplicableQuestIds = nodes.Select(node => node.Id).ToArray();
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("mixed-any", "Started"),
+            Quest("other-only-any", "Started"),
+            Quest("specific", "Started"))) with
+        {
+            ApplicableQuestIds = nodes.Select(node => node.Id).ToArray(),
+        };
+
+        var projection = RaidTrackedQuestListProjectionBuilder.Build(
+            topology,
+            overlay,
+            nodes.Select(node => node.Id).ToArray(),
+            ["any", "customs"],
+            ["zone-customs"]);
+        var quests = projection.Groups.SelectMany(group => group.Quests)
+            .ToDictionary(entry => entry.Quest.Id, StringComparer.Ordinal);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(quests.Keys, Is.EquivalentTo(new[] { "mixed-any", "specific" }));
+            Assert.That(quests["mixed-any"].Objectives.Select(entry => entry.Definition.Id),
+                Is.EqualTo(new[] { "global", "matching" }));
+            Assert.That(quests["specific"].Objectives.Select(entry => entry.Definition.Id),
+                Is.EqualTo(new[] { "specific-zone" }));
         });
     }
 

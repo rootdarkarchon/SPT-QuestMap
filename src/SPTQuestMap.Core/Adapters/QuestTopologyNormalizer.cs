@@ -183,7 +183,8 @@ public static class QuestTopologyNormalizer
                 objective.ParentId,
                 objective.RequiredValue,
                 objective.Compare,
-                objective.DependsOn ?? [])).ToArray(),
+                objective.DependsOn ?? [],
+                objective.ZoneIds ?? [])).ToArray(),
             (node.ExclusionRules ?? []).Select(rule => new QuestExclusionRule(
                 rule.CausedByQuestId,
                 rule.RequiredStatuses ?? [])).ToArray(),

@@ -3,6 +3,7 @@ using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Enums;
+using SPTarkov.Server.Core.Utils.Json;
 using SPTQuestMap.Services;
 using CoreProgressRules = SPTQuestMap.Core.Rules.QuestProgressRules;
 
@@ -733,6 +734,55 @@ public sealed class QuestMapDataServiceTests
             Assert.That(CoreProgressRules.IsComplete(false, 3, 3, ">"), Is.False);
             Assert.That(CoreProgressRules.IsComplete(false, 2, 1, "=="), Is.False);
             Assert.That(CoreProgressRules.IsComplete(true, null, 3, null), Is.True);
+        });
+    }
+
+    [Test]
+    public void ObjectiveZonesIncludeDirectVisitAndNestedCounterZones()
+    {
+        var direct = Condition("000000000000000000000021", 0) with
+        {
+            ConditionType = "LeaveItemAtLocation",
+            ZoneId = "zone-direct",
+        };
+        var visit = Condition("000000000000000000000022", 1) with
+        {
+            ConditionType = "VisitPlace",
+            Target = new ListOrT<string>(null, "zone-visit"),
+        };
+        var counter = Condition("000000000000000000000023", 2) with
+        {
+            Counter = new QuestConditionCounter
+            {
+                Conditions =
+                [
+                    new QuestConditionCounterCondition
+                    {
+                        ConditionType = "InZone",
+                        Zones = ["zone-counter-b", "zone-counter-a"],
+                    },
+                    new QuestConditionCounterCondition
+                    {
+                        ConditionType = "VisitPlace",
+                        Target = new ListOrT<string>(null, "zone-counter-visit"),
+                    },
+                ],
+            },
+        };
+
+        var result = QuestTemplateMapper.OrderObjectives([direct, visit, counter], [])
+            .ToDictionary(objective => objective.Id, StringComparer.Ordinal);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result[direct.Id.ToString()].ZoneIds, Is.EqualTo(new[] { "zone-direct" }));
+            Assert.That(result[visit.Id.ToString()].ZoneIds, Is.EqualTo(new[] { "zone-visit" }));
+            Assert.That(result[counter.Id.ToString()].ZoneIds, Is.EqualTo(new[]
+            {
+                "zone-counter-a",
+                "zone-counter-b",
+                "zone-counter-visit",
+            }));
         });
     }
 

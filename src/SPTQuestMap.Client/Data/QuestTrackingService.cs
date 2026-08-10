@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SPTQuestMap.Client.Configuration;
 using SPTQuestMap.Core.Models;
+using SPTQuestMap.Core.Rules;
 
 namespace SPTQuestMap.Client.Data;
 
@@ -68,7 +69,8 @@ internal sealed class QuestTrackingService : IDisposable
     public void ApplyNewQuestTransitions(
         QuestProfileOverlay previous,
         QuestProfileOverlay current,
-        IReadOnlyCollection<string> changedQuestIds)
+        IReadOnlyCollection<string> changedQuestIds,
+        IReadOnlyDictionary<string, QuestGraphNode> nodesById)
     {
         if (!_configuration.AutoTrackNewQuests.Value
             || !string.Equals(previous.ProfileId, current.ProfileId, StringComparison.Ordinal)) return;
@@ -80,6 +82,19 @@ internal sealed class QuestTrackingService : IDisposable
             current.QuestsById.TryGetValue(questId, out var currentState);
             previous.QuestsById.TryGetValue(questId, out var previousState);
             if (!IsActiveStatus(currentState?.ExactStatus) || IsActiveStatus(previousState?.ExactStatus)) continue;
+            if (!nodesById.TryGetValue(questId, out var node))
+            {
+                _log.LogWarning($"QUESTMAP_M06_TRACKING autoTrackSkipped=True; reason=missing-topology; quest={questId}");
+                continue;
+            }
+            if (!QuestAutoTrackingRules.ShouldAutoTrackNewQuest(
+                    node.Location.Any,
+                    node.Objectives.Select(objective => objective.ConditionType)))
+            {
+                QuestMapDebugLog.Info(_log,
+                    $"QUESTMAP_M06_TRACKING autoTrackSkipped=True; reason=passive-any-objectives; quest={questId}");
+                continue;
+            }
             if (ids.Add(questId)) added.Add(questId);
         }
 

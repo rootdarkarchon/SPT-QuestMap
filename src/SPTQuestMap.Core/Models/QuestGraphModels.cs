@@ -68,7 +68,8 @@ public sealed record QuestObjectiveDefinition(
     string? ParentId,
     double? RequiredValue,
     string? Compare,
-    IReadOnlyList<string> DependsOn);
+    IReadOnlyList<string> DependsOn,
+    IReadOnlyList<string> ZoneIds);
 
 public sealed record QuestUnknownCondition(string Stage, string ConditionType, string? ConditionId);
 

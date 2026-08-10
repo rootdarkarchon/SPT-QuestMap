@@ -109,8 +109,24 @@ internal static class QuestTemplateMapper
             item.Condition.ParentId,
             item.Condition.Value,
             item.Condition.CompareMethod,
-            item.Condition.VisibilityConditions?.Select(condition => condition.Target).Where(target => !string.IsNullOrEmpty(target)).Cast<string>().ToArray() ?? []
+            item.Condition.VisibilityConditions?.Select(condition => condition.Target).Where(target => !string.IsNullOrEmpty(target)).Cast<string>().ToArray() ?? [],
+            GetObjectiveZoneIds(item.Condition)
         ));
+    }
+
+    internal static string[] GetObjectiveZoneIds(QuestCondition condition)
+    {
+        var zoneIds = new HashSet<string>(StringComparer.Ordinal);
+        AddZone(zoneIds, condition.ZoneId);
+        if (condition.ConditionType == "VisitPlace") AddZones(zoneIds, GetTargets(condition.Target));
+
+        foreach (var child in condition.Counter?.Conditions ?? [])
+        {
+            AddZones(zoneIds, child.Zones ?? []);
+            if (child.ConditionType == "VisitPlace") AddZones(zoneIds, GetTargets(child.Target));
+        }
+
+        return zoneIds.OrderBy(zoneId => zoneId, StringComparer.Ordinal).ToArray();
     }
 
     internal static QuestRewardDto[] BuildRewards(
@@ -169,10 +185,23 @@ internal static class QuestTemplateMapper
     }
 
     internal static IEnumerable<string> GetTargets(QuestCondition condition)
+        => GetTargets(condition.Target);
+
+    private static IEnumerable<string> GetTargets(SPTarkov.Server.Core.Utils.Json.ListOrT<string>? target)
     {
-        if (condition.Target is null) return [];
-        if (condition.Target.IsList) return condition.Target.List ?? [];
-        return condition.Target.Item is null ? [] : [condition.Target.Item];
+        if (target is null) return [];
+        if (target.IsList) return target.List ?? [];
+        return target.Item is null ? [] : [target.Item];
+    }
+
+    private static void AddZones(HashSet<string> destination, IEnumerable<string> zoneIds)
+    {
+        foreach (var zoneId in zoneIds) AddZone(destination, zoneId);
+    }
+
+    private static void AddZone(HashSet<string> destination, string? zoneId)
+    {
+        if (!string.IsNullOrWhiteSpace(zoneId)) destination.Add(zoneId);
     }
 
     internal static string Localize(Dictionary<string, string> locale, string key, string fallback) =>

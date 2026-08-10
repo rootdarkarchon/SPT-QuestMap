@@ -28,6 +28,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
     private readonly QuestMapClientConfiguration _configuration;
     private readonly QuestAssetSpriteCache _assetCache;
     private readonly QuestTrackingService _tracking;
+    private readonly RaidQuestZoneCatalog _raidZoneCatalog;
     private readonly RaidQuestProgressNotificationStack _raidNotification;
     private readonly RaidTrackedQuestListView _raidTrackedList;
     private readonly Dictionary<QuestsScreen, TraderTasksScreenController> _traderControllers = new();
@@ -46,6 +47,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
     private AbstractQuestControllerClass? _raidQuestController;
     private RaidQuestProgressMonitor? _raidProgressMonitor;
     private string? _raidLocationId;
+    private readonly HashSet<string> _raidZoneIds = new(StringComparer.Ordinal);
     private float _nextRaidPollAt;
     private float _nextRaidPerformanceLogAt;
     private int _raidPollCount;
@@ -78,6 +80,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         _assetCache = coroutineOwner.gameObject.AddComponent<QuestAssetSpriteCache>();
         _assetCache.Bind(log);
         _tracking = new QuestTrackingService(configuration, log);
+        _raidZoneCatalog = new RaidQuestZoneCatalog(log);
         _raidNotification = RaidQuestProgressNotificationStack.Create(
             coroutineOwner.transform,
             log,
@@ -122,6 +125,8 @@ internal sealed class QuestMapDataRuntime : IDisposable
             _raidMonitorActive = true;
             _raidQuestController = raid.QuestController;
             _raidLocationId = raid.LocationId;
+            _raidZoneIds.Clear();
+            _raidZoneIds.UnionWith(_raidZoneCatalog.CaptureOnce(raid.LocationId));
             _tracking.BeginRaid(raid.TrackingLocationIds());
             if (_adapter.Overlay is not null) _tracking.ReloadFavorites(_adapter.Overlay.ProfileId);
             _raidProgressMonitor = new RaidQuestProgressMonitor(
@@ -335,6 +340,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         _raidProgressMonitor?.Dispose();
         _raidProgressMonitor = null;
         _raidLocationId = null;
+        _raidZoneIds.Clear();
         _raidMonitorActive = false;
         InRaidQuestProgressChanged -= _raidNotification.Show;
         InRaidQuestProgressChanged = null;
@@ -567,8 +573,8 @@ internal sealed class QuestMapDataRuntime : IDisposable
             .Where(questId => QuestStateChanged(oldOverlay, newOverlay, questId))
             .OrderBy(questId => questId, StringComparer.Ordinal)
             .ToArray();
-        _tracking.ApplyNewQuestTransitions(oldOverlay, newOverlay, changedQuestIds);
         var topology = _adapter.Topology!;
+        _tracking.ApplyNewQuestTransitions(oldOverlay, newOverlay, changedQuestIds, topology.NodesById);
         var layout = _adapter.Layout!;
         if (inRaid) PublishRaidProgressChanges(
             topology,
@@ -747,7 +753,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
                 .Where(questId => QuestStateChanged(targetedOldOverlay, newOverlay, questId))
                 .OrderBy(questId => questId, StringComparer.Ordinal)
                 .ToArray();
-            _tracking.ApplyNewQuestTransitions(targetedOldOverlay, newOverlay, changedQuestIds);
+            _tracking.ApplyNewQuestTransitions(targetedOldOverlay, newOverlay, changedQuestIds, topology.NodesById);
             PublishRaidProgressChanges(
                 topology,
                 targetedOldOverlay,
@@ -813,6 +819,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         _raidMonitorActive = false;
         _raidQuestController = null;
         _raidLocationId = null;
+        _raidZoneIds.Clear();
         _raidProgressMonitor?.Dispose();
         _raidProgressMonitor = null;
         _raidPreferredObjectiveIds.Clear();
@@ -858,12 +865,14 @@ internal sealed class QuestMapDataRuntime : IDisposable
                 .Where(objective => !previousById.TryGetValue(objective.ObjectiveId, out var prior) || prior != objective)
                 .ToArray();
             var notificationObjectives = changedObjectives
+                .Where(objective => IsActiveRaidObjective(node, objective.ObjectiveId))
                 .Where(objective => ShouldNotifyProgress(objective, previousById))
                 .ToArray();
 
             if (notificationObjectives.Length == 0)
             {
-                if (!string.Equals(previous?.ExactStatus, current.ExactStatus, StringComparison.Ordinal))
+                if (HasActiveRaidObjective(node)
+                    && !string.Equals(previous?.ExactStatus, current.ExactStatus, StringComparison.Ordinal))
                 {
                     InRaidQuestProgressChanged?.Invoke(new InRaidQuestProgressChange(
                         node,
@@ -918,7 +927,8 @@ internal sealed class QuestMapDataRuntime : IDisposable
             topology,
             overlay,
             trackedQuestIds,
-            raid.DefaultLocationIds());
+            raid.DefaultLocationIds(),
+            _raidZoneIds);
     }
 
     private void OnTrackingChanged(string? profileId, string? questId) =>
@@ -988,6 +998,15 @@ internal sealed class QuestMapDataRuntime : IDisposable
         string? objectiveId,
         RaidQuestChangeKind changeKind)
     {
+        if (!string.IsNullOrWhiteSpace(questId)
+            && !string.IsNullOrWhiteSpace(objectiveId)
+            && _adapter.Topology?.NodesById.TryGetValue(questId, out var node) == true
+            && !IsActiveRaidObjective(node, objectiveId!))
+        {
+            QuestMapDebugLog.Info(_log,
+                $"QUESTMAP_M06_RAID_OBJECTIVE_SUPPRESSED quest={questId}; objective={objectiveId}; reason=zone-not-on-map");
+            return;
+        }
         if (!string.IsNullOrWhiteSpace(questId) && !string.IsNullOrWhiteSpace(objectiveId))
             _raidPreferredObjectiveIds[questId] = objectiveId!;
         RequestReactiveRefresh(
@@ -1000,6 +1019,22 @@ internal sealed class QuestMapDataRuntime : IDisposable
             },
             string.IsNullOrWhiteSpace(questId) ? null : questId);
     }
+
+    private bool IsActiveRaidObjective(QuestGraphNode node, string objectiveId)
+    {
+        var definition = node.Objectives.FirstOrDefault(objective =>
+            string.Equals(objective.Id, objectiveId, StringComparison.Ordinal));
+        return definition is null
+            || RaidObjectiveLocationRules.IsActiveOnMap(
+                node,
+                definition,
+                _raidZoneIds);
+    }
+
+    private bool HasActiveRaidObjective(QuestGraphNode node) =>
+        node.Objectives.Count == 0
+        || node.Objectives.Any(objective =>
+            RaidObjectiveLocationRules.IsActiveOnMap(node, objective, _raidZoneIds));
 
     private void ResetRaidPerformanceTelemetry()
     {

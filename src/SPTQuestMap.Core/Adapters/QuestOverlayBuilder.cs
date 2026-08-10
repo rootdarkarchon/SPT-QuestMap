@@ -6,6 +6,27 @@ namespace SPTQuestMap.Core.Adapters;
 
 public static class QuestOverlayBuilder
 {
+    public static IReadOnlyList<string> FindServerAvailableQuestsMissingFromNativeClient(QuestProfileOverlay overlay) =>
+        overlay.AuthoritativeDisplayStates
+            .Where(pair => pair.Value == QuestMapDisplayStateKind.Available
+                && (!overlay.QuestsById.TryGetValue(pair.Key, out var state) || !state.HasLiveQuest))
+            .Select(pair => pair.Key)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+
+    public static QuestProfileOverlay RejectServerAvailableQuestsMissingFromNativeClient(
+        QuestProfileOverlay overlay,
+        IReadOnlyCollection<string> rejectedQuestIds)
+    {
+        if (rejectedQuestIds.Count == 0) return overlay;
+        var rejected = rejectedQuestIds.ToHashSet(StringComparer.Ordinal);
+        return overlay with
+        {
+            DefaultVisibleQuestIds = overlay.DefaultVisibleQuestIds.Where(id => !rejected.Contains(id)).ToArray(),
+            ApplicableQuestIds = overlay.ApplicableQuestIds.Where(id => !rejected.Contains(id)).ToArray(),
+        };
+    }
+
     public static QuestProfileOverlay Build(QuestGraphTopology topology, LiveProfileSnapshot snapshot)
     {
         if (topology is null) throw new ArgumentNullException(nameof(topology));

@@ -17,6 +17,7 @@ internal sealed class QuestMapDataAdapter
     private readonly IQuestTopologySource _topologySource;
     private readonly ManualLogSource _log;
     private Dictionary<string, QuestLiveState>? _liveQuestStates;
+    private readonly HashSet<string> _reportedNativeRejectedQuestIds = new(StringComparer.Ordinal);
 
     public QuestMapDataAdapter(IQuestTopologySource topologySource, ManualLogSource log)
     {
@@ -135,6 +136,16 @@ internal sealed class QuestMapDataAdapter
                 DefaultVisibleQuestIds = topology.DefaultVisibleQuestIds,
                 ApplicableQuestIds = topology.ApplicableQuestIds,
             };
+        }
+        var nativeRejected = QuestOverlayBuilder.FindServerAvailableQuestsMissingFromNativeClient(overlay);
+        overlay = QuestOverlayBuilder.RejectServerAvailableQuestsMissingFromNativeClient(overlay, nativeRejected);
+        foreach (var questId in nativeRejected.Where(_reportedNativeRejectedQuestIds.Add))
+        {
+            var node = topology.NodesById.GetValueOrDefault(questId);
+            _log.LogWarning(
+                "QUESTMAP_M07_NATIVE_QUEST_REJECTED " +
+                $"quest={questId}; name={node?.Name ?? "unknown"}; serverState=Available; " +
+                "reason=missing-native-quest; visible=False; accept=False");
         }
         stopwatch.Stop();
         _liveQuestStates = new Dictionary<string, QuestLiveState>(overlay.QuestsById, StringComparer.Ordinal);

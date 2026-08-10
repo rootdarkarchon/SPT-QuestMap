@@ -58,7 +58,16 @@ public sealed record QuestEdgeDto(string SourceId, string TargetId, string[] Req
 }
 
 public sealed record RequirementDto(string Kind, string? TraderId, string Compare, double Value);
-public sealed record ObjectiveDefinitionDto(string Id, string Text, string ConditionType, int? Index, string? ParentId, double? RequiredValue, string? Compare, string[] DependsOn);
+public sealed record ObjectiveDefinitionDto(
+    string Id,
+    string Text,
+    string ConditionType,
+    int? Index,
+    string? ParentId,
+    double? RequiredValue,
+    string? Compare,
+    string[] DependsOn,
+    string[]? ZoneIds = null);
 public sealed record QuestRewardDto(string Id, string Type, string? TargetId, string? TargetName, double? Value, int? LoyaltyLevel, string? TraderName, bool Unknown, bool Hidden, QuestRewardItemDto[] Items);
 public sealed record QuestRewardItemDto(string TemplateId, string Name, double Count);
 public sealed record QuestExclusionRuleDto(string CausedByQuestId, string[] RequiredStatuses);
