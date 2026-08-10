@@ -76,6 +76,18 @@ public sealed class QuestMapClientStaticRouter(
                         .Where(node => !string.IsNullOrWhiteSpace(node.Summary))
                         .GroupBy(node => node.Id, StringComparer.Ordinal)
                         .ToDictionary(group => group.Key, group => group.Last().Summary!, StringComparer.Ordinal);
+                    var questMetaInfo = topology.Quests
+                        .Concat(generated)
+                        .Where(node => !string.IsNullOrWhiteSpace(node.WikiUrl))
+                        .GroupBy(node => node.Id, StringComparer.Ordinal)
+                        .ToDictionary(
+                            group => group.Key,
+                            group =>
+                            {
+                                var node = group.Last();
+                                return new QuestMetaInfoDto(node.WikiUrl!, node.RelevantItems);
+                            },
+                            StringComparer.Ordinal);
                     return new ValueTask<string>(httpResponseUtil.NoBody(
                         new QuestMapClientTopologyFeedDto(
                             topology,
@@ -87,7 +99,8 @@ public sealed class QuestMapClientStaticRouter(
                             progressPercentages,
                             repeatableEndTimes,
                             prerequisiteBlockerIds,
-                            questSummaries)));
+                            questSummaries,
+                            questMetaInfo)));
                 }),
             new RouteAction<EmptyRequestData>(
                 "/questmap/client/repeatables",
@@ -138,6 +151,17 @@ public sealed class QuestMapClientStaticRouter(
                         .Where(node => !string.IsNullOrWhiteSpace(node.Summary))
                         .GroupBy(node => node.Id, StringComparer.Ordinal)
                         .ToDictionary(group => group.Key, group => group.Last().Summary!, StringComparer.Ordinal);
+                    var questMetaInfo = generated
+                        .Where(node => !string.IsNullOrWhiteSpace(node.WikiUrl))
+                        .GroupBy(node => node.Id, StringComparer.Ordinal)
+                        .ToDictionary(
+                            group => group.Key,
+                            group =>
+                            {
+                                var node = group.Last();
+                                return new QuestMetaInfoDto(node.WikiUrl!, node.RelevantItems);
+                            },
+                            StringComparer.Ordinal);
                     return new ValueTask<string>(httpResponseUtil.NoBody(
                         new QuestMapClientRepeatableFeedDto(
                             generated,
@@ -148,7 +172,8 @@ public sealed class QuestMapClientStaticRouter(
                             progressPercentages,
                             repeatableEndTimes,
                             prerequisiteBlockerIds,
-                            summaries)));
+                            summaries,
+                            questMetaInfo)));
                 })
         ])
 {

@@ -1,4 +1,5 @@
 using SPTarkov.DI.Annotations;
+using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Helpers;
 using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Models.Utils;
@@ -7,10 +8,12 @@ using SPTarkov.Server.Core.Services;
 
 namespace SPTQuestMap.Services;
 
-[Injectable(InjectionType.Singleton)]
-public sealed class QuestMapDataService
+[Injectable(InjectionType.Singleton, TypePriority = OnLoadOrder.PostDBModLoader + 1)]
+public sealed class QuestMapDataService : IOnLoad
 {
+    private readonly DatabaseService _databaseService;
     private readonly QuestMapLocalizationService _localization;
+    private readonly QuestMetaInfoCatalog _metaInfoCatalog;
     private readonly QuestTopologyBuilder _topology;
     private readonly QuestProfileStateBuilder _profiles;
     private readonly SaveServer _saveServer;
@@ -27,8 +30,11 @@ public sealed class QuestMapDataService
     )
 #pragma warning restore CS0618
     {
+        _databaseService = databaseService;
         _saveServer = saveServer;
         _localization = new QuestMapLocalizationService(databaseService, localeService);
+        _metaInfoCatalog = new QuestMetaInfoCatalog(
+            warning: message => logger.Warning(message));
         _topology = new QuestTopologyBuilder(
             databaseService,
             localeService,
@@ -38,6 +44,7 @@ public sealed class QuestMapDataService
             configServer.GetConfig<QuestConfig>(),
 #pragma warning restore CS0618
             new QuestSummaryCatalog(warning: message => logger.Warning(message)),
+            _metaInfoCatalog,
             logger
         );
         _profiles = new QuestProfileStateBuilder(
@@ -51,6 +58,12 @@ public sealed class QuestMapDataService
 #pragma warning restore CS0618
             logger
         );
+    }
+
+    public Task OnLoad()
+    {
+        _metaInfoCatalog.Resolve(_databaseService);
+        return Task.CompletedTask;
     }
 
     public QuestTopologyDto GetTopology(string? requestedLanguage = null) =>

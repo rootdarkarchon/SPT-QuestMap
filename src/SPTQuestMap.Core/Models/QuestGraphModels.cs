@@ -76,6 +76,8 @@ public sealed record QuestExclusionRule(string CausedByQuestId, IReadOnlyList<st
 
 public sealed record QuestRewardItem(string TemplateId, string Name, double Count);
 
+public sealed record QuestRelevantItem(string TemplateId, string Name, bool FleaEligible);
+
 public sealed record QuestReward(
     string Id,
     string Type,
@@ -114,6 +116,10 @@ public sealed record QuestGraphNode(
     string? RepeatableKind)
 {
     public string? Summary { get; init; }
+
+    public string? WikiUrl { get; init; }
+
+    public IReadOnlyList<QuestRelevantItem> RelevantItems { get; init; } = [];
 
     public bool ScavRepeatable { get; init; }
 

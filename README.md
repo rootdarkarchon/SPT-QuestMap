@@ -19,6 +19,7 @@ SPT-QuestMap is an independent community project. It is not affiliated with or e
 - Displays ordered objectives and known progress, including partial counter progress.
 - Shows quest descriptions, locations, rewards, prerequisites, and direct successors.
 - Adds Description/Summary tabs when a static localized summary exists, with the preferred tab remembered across quests and reloads.
+- Adds authoritative quest Wiki links and resolved relevant-item lists; the in-game pane can open Tarkov's native Filter by item search for eligible items outside raids.
 - Marks Collector and Lightkeeper routes.
 - Uses the quest, trader, item, and location artwork already served by SPT; no game artwork is copied into the mod.
 - Filters automatically for faction and active seasonal/event applicability.
@@ -104,6 +105,10 @@ dotnet test .\src\SPTQuestMap\SPTQuestMap.slnx -c Release -p:SptInstallRoot="D:\
 `SptInstallRoot` is the directory containing the `SPT` folder. See [build and deployment notes](docs/deployment.md) for the guarded deployment flow, and [architecture](docs/architecture.md) for the Blazor/Canvas boundary.
 
 The product requirements and implementation record remain available under [`docs/`](docs/). They are useful for contributors, but ordinary users do not need them to install the mod.
+
+## Data attribution
+
+The relevant-item data for Gunsmith quests and quest-required keys was initially derived from [CJ-SPT's Expanded Task Text](https://github.com/CJ-SPT/Expanded-Task-Text). It was converted to QuestMap's `metainfo.json` format, updated, and supplemented with missing entries using information from the [Escape from Tarkov Wiki](https://escapefromtarkov.fandom.com/wiki/Escape_from_Tarkov_Wiki).
 
 ## License
 

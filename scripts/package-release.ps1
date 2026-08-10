@@ -36,12 +36,16 @@ $archive = Join-Path $outputFull "SPT-QuestMap-$Version.zip"
 $buildOutput = Join-Path $root 'dist/server'
 $dll = Join-Path $buildOutput 'SPTQuestMap.dll'
 $coreDll = Join-Path $buildOutput 'SPTQuestMap.Core.dll'
+$metaInfo = Join-Path $buildOutput 'Data/metainfo.json'
 
 if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) {
     throw "Staged server mod DLL was not found: $dll. Run scripts/build.ps1 -Target Server first."
 }
 if (-not (Test-Path -LiteralPath $coreDll -PathType Leaf)) {
     throw "Built shared core DLL was not found: $coreDll"
+}
+if (-not (Test-Path -LiteralPath $metaInfo -PathType Leaf)) {
+    throw "Staged quest metadata was not found: $metaInfo"
 }
 
 New-Item -ItemType Directory -Path $outputFull -Force | Out-Null
@@ -58,6 +62,9 @@ if (Test-Path -LiteralPath $packageRoot) {
 New-Item -ItemType Directory -Path $modDirectory -Force | Out-Null
 Copy-Item -LiteralPath $dll -Destination $modDirectory
 Copy-Item -LiteralPath $coreDll -Destination $modDirectory
+$dataDirectory = Join-Path $modDirectory 'Data'
+New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
+Copy-Item -LiteralPath $metaInfo -Destination $dataDirectory
 
 $pdb = Join-Path $buildOutput 'SPTQuestMap.pdb'
 if (Test-Path -LiteralPath $pdb -PathType Leaf) {
@@ -87,6 +94,10 @@ try {
     $requiredCoreEntry = 'SPT/user/mods/SPT-QuestMap/SPTQuestMap.Core.dll'
     if ($entries -notcontains $requiredCoreEntry) {
         throw "Release archive is missing required entry '$requiredCoreEntry'."
+    }
+    $requiredMetaInfoEntry = 'SPT/user/mods/SPT-QuestMap/Data/metainfo.json'
+    if ($entries -notcontains $requiredMetaInfoEntry) {
+        throw "Release archive is missing required entry '$requiredMetaInfoEntry'."
     }
 
     $filesOutsideModDirectory = @($entries | Where-Object {

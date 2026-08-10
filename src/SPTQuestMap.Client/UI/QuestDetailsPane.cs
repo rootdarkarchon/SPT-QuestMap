@@ -9,6 +9,7 @@ using EFT;
 using EFT.InventoryLogic;
 using EFT.Quests;
 using EFT.UI;
+using EFT.UI.Ragfair;
 using HarmonyLib;
 using SPTQuestMap.Client.Data;
 using SPTQuestMap.Core.Models;
@@ -24,9 +25,6 @@ internal sealed class QuestDetailsPane : IDisposable
     private const float PaneWidth = 640f;
     private const float HeaderHeight = 166f;
     private const float ActionsHeight = 48f;
-    private const float MaximumDescriptionHeight = 152f;
-    private const float MaximumObjectivesHeight = 258f;
-    private const float MinimumRewardsHeight = 150f;
     private const float SectionGap = 2f;
     private const string FallbackLocationBannerUrl = "/files/banners/norvinskzone.png";
     private const string LightkeeperTraderId = "638f541a29ffd1183d187f57";
@@ -208,50 +206,45 @@ internal sealed class QuestDetailsPane : IDisposable
             && _actionHost?.Bind(liveQuest, node.TraderId) == true;
         var descriptionHeight = DesiredDescriptionHeight(node);
         var objectivesHeight = DesiredObjectivesHeight(node, liveState);
-        var sectionBudget = Mathf.Max(0f,
-            Root.rect.height - _headerHeight - ActionsHeight - SectionGap * 4f - MinimumRewardsHeight);
-        if (descriptionHeight + objectivesHeight > sectionBudget)
-        {
-            var overflow = descriptionHeight + objectivesHeight - sectionBudget;
-            var objectiveReduction = Mathf.Min(overflow, objectivesHeight - 90f);
-            objectivesHeight -= objectiveReduction;
-            overflow -= objectiveReduction;
-            descriptionHeight -= Mathf.Min(overflow, descriptionHeight - 72f);
-        }
 
-        var y = 0f;
-        BuildHeader(node, y, _headerHeight);
-        y += _headerHeight;
-        AddDivider(y);
-        y += SectionGap;
-        BuildActions(node, liveQuest, actionBound, raidOnlyTrader, y, ActionsHeight);
-        y += ActionsHeight;
-        AddDivider(y);
-        y += SectionGap;
-        BuildDescription(node, y, descriptionHeight);
-        y += descriptionHeight;
-        AddDivider(y);
-        y += SectionGap;
-        BuildObjectives(node, liveState, liveQuest, future, y, objectivesHeight);
-        y += objectivesHeight;
-        AddDivider(y);
-        y += SectionGap;
-        BuildRewards(node, liveQuest, future, y, Mathf.Max(120f, Root.rect.height - y));
+        BuildHeader(node, 0, _headerHeight);
+        AddFixedDivider(_headerHeight);
+        var actionsTop = _headerHeight + SectionGap;
+        BuildActions(Root, node, liveQuest, actionBound, raidOnlyTrader, actionsTop, ActionsHeight);
+        var bodyTop = actionsTop + ActionsHeight;
+        AddFixedDivider(bodyTop);
+        bodyTop += SectionGap;
+        var bodyViewport = CreateScrollViewport(Root, "DetailsBodyViewport", bodyTop, 0, out var body);
+        ConfigureExpandingBody(body);
+        BuildDescription(body, node, descriptionHeight);
+        AddStackDivider(body);
+        BuildObjectives(body, node, liveState, liveQuest, future, objectivesHeight);
+        AddStackDivider(body);
+        var rewardsHeight = BuildRewards(body, node, liveQuest, future);
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(body);
+        bodyViewport.GetComponent<ScrollRect>().verticalNormalizedPosition = 1f;
         _nativeHostRoot.SetAsLastSibling();
         QuestMapDebugLog.Info(_log,
             "QUESTMAP_M07_DETAILS " +
             $"quest={node.Id}; live={!future}; actionBound={actionBound}; raidOnlyTrader={raidOnlyTrader}; objectives={node.Objectives.Count}; " +
             $"rewards={node.Rewards.Count}; summary={!string.IsNullOrWhiteSpace(node.Summary)}; hiddenRewards={_showHiddenRewards()}; " +
-            $"descriptionHeight={descriptionHeight:0.#}; objectivesHeight={objectivesHeight:0.#}; rewardsHeight={Mathf.Max(MinimumRewardsHeight, Root.rect.height - y):0.#}");
+            $"descriptionHeight={descriptionHeight:0.#}; objectivesHeight={objectivesHeight:0.#}; rewardsHeight={rewardsHeight:0.#}; fixedHeaderAndActions=True; nestedScroll=False");
     }
 
     private float DesiredDescriptionHeight(QuestGraphNode node)
     {
         var hasSummary = !string.IsNullOrWhiteSpace(node.Summary);
+        var hasRelevantItems = node.RelevantItems.Count > 0;
+        var tabs = hasSummary || hasRelevantItems ? 34f : 0f;
+        if (_textTab == DetailTextTab.RelevantItems && hasRelevantItems)
+        {
+            var rows = node.RelevantItems.Count * 36f + Math.Max(0, node.RelevantItems.Count - 1) * 3f;
+            return tabs + 4f + rows + 6f;
+        }
         var text = _textTab == DetailTextTab.Summary && hasSummary ? node.Summary : node.Description;
-        var lines = EstimateWrappedLines(text, 78);
-        var tabs = hasSummary ? 34f : 0f;
-        return Mathf.Clamp(tabs + 20f + lines * 18.9f, hasSummary ? 92f : 72f, MaximumDescriptionHeight);
+        var estimatedTextHeight = EstimateWrappedLines(text, 78) * 18.9f + 18f;
+        return Mathf.Max(tabs > 0 ? 92f : 72f, tabs + 4f + estimatedTextHeight + 8f);
     }
 
     private static float DesiredObjectivesHeight(QuestGraphNode node, QuestLiveState? liveState)
@@ -268,7 +261,7 @@ internal sealed class QuestDetailsPane : IDisposable
             if (index < node.Objectives.Count - 1) rows += 3f;
         }
         if (node.Objectives.Count == 0) rows = 42f;
-        return Mathf.Clamp(42f + rows, 90f, MaximumObjectivesHeight);
+        return Mathf.Max(90f, 42f + rows);
     }
 
     private static float ObjectiveRowHeight(QuestObjectiveDefinition objective, QuestObjectiveProgress? progress)
@@ -314,7 +307,7 @@ internal sealed class QuestDetailsPane : IDisposable
 
     private void BuildHeader(QuestGraphNode node, float top, float height)
     {
-        var header = TopRect("Header", top, height);
+        var header = TopRect("Header", Root, top, height);
         var questBanner = FractionRect("QuestBanner", header, 0f, 0.67f);
         var locationBanner = FractionRect("LocationBanner", header, 0.67f, 1f);
         AddArtwork(questBanner, node.ImageUrl, new Color(0.02f, 0.025f, 0.028f, 1f), 0.42f);
@@ -341,7 +334,8 @@ internal sealed class QuestDetailsPane : IDisposable
         title.fontStyle = FontStyles.Bold;
         AddTextShadow(title);
         AddRouteBar(questBanner, collector, lightkeeper);
-        if (node.ScavRepeatable) AddScavBadge(questBanner);
+        if (!string.IsNullOrWhiteSpace(node.WikiUrl)) AddWikiButton(questBanner, node.WikiUrl);
+        if (node.ScavRepeatable) AddScavBadge(questBanner, string.IsNullOrWhiteSpace(node.WikiUrl) ? 10f : 46f);
 
         var locationName = node.Location.Any ? "Any" : node.Location.Name ?? node.Location.Id;
         var location = UnityUiFactory.AddText(locationBanner.gameObject, locationName, 16,
@@ -351,6 +345,7 @@ internal sealed class QuestDetailsPane : IDisposable
     }
 
     private void BuildActions(
+        RectTransform parent,
         QuestGraphNode node,
         QuestClass? liveQuest,
         bool actionBound,
@@ -358,7 +353,7 @@ internal sealed class QuestDetailsPane : IDisposable
         float top,
         float height)
     {
-        var area = TopRect("Actions", top, height);
+        var area = TopRect("Actions", parent, top, height);
         if (!QuestMutationsAllowed())
         {
             var disabled = UnityUiFactory.AddText(area.gameObject, "QUEST ACTIONS DISABLED IN RAID", 12,
@@ -423,21 +418,151 @@ internal sealed class QuestDetailsPane : IDisposable
         }
     }
 
-    private void BuildDescription(QuestGraphNode node, float top, float height)
+    private void BuildDescription(RectTransform parent, QuestGraphNode node, float height)
     {
-        var section = TopRect("DescriptionSection", top, height);
+        var section = StackRect("DescriptionSection", parent, height);
         var hasSummary = !string.IsNullOrWhiteSpace(node.Summary);
-        var tabHeight = hasSummary ? 30f : 0f;
-        if (hasSummary)
+        var hasRelevantItems = node.RelevantItems.Count > 0;
+        var tabCount = 1 + (hasSummary ? 1 : 0) + (hasRelevantItems ? 1 : 0);
+        var tabHeight = tabCount > 1 ? 30f : 0f;
+        if (tabCount > 1)
         {
-            AddTab(section, "DescriptionTab", "DESCRIPTION", 0, 0.5f, _textTab == DetailTextTab.Description,
+            var tabIndex = 0;
+            AddTab(section, "DescriptionTab", "DESCRIPTION", TabStart(tabIndex++, tabCount), TabStart(tabIndex, tabCount), _textTab == DetailTextTab.Description,
                 () => SelectTextTab(DetailTextTab.Description));
-            AddTab(section, "SummaryTab", "SUMMARY", 0.5f, 1f, _textTab == DetailTextTab.Summary,
-                () => SelectTextTab(DetailTextTab.Summary));
+            if (hasSummary)
+            {
+                AddTab(section, "SummaryTab", "SUMMARY", TabStart(tabIndex++, tabCount), TabStart(tabIndex, tabCount), _textTab == DetailTextTab.Summary,
+                    () => SelectTextTab(DetailTextTab.Summary));
+            }
+            if (hasRelevantItems)
+            {
+                AddTab(section, "RelevantItemsTab", "RELEVANT ITEMS", TabStart(tabIndex++, tabCount), TabStart(tabIndex, tabCount), _textTab == DetailTextTab.RelevantItems,
+                    () => SelectTextTab(DetailTextTab.RelevantItems));
+            }
+        }
+        if (_textTab == DetailTextTab.RelevantItems && hasRelevantItems)
+        {
+            BuildRelevantItems(section, node.RelevantItems, tabHeight + 4);
+            return;
         }
         var text = _textTab == DetailTextTab.Summary && hasSummary ? node.Summary! : node.Description;
-        CreateTextScroll(section, "DescriptionViewport", text, tabHeight + 4, 8, 14,
-            new Color(0.88f, 0.88f, 0.82f, 1f));
+        CreateExpandedText(section, parent, "DescriptionContent", text, tabHeight + 4, 8, 14,
+            new Color(0.88f, 0.88f, 0.82f, 1f), tabHeight + 12f, tabHeight > 0 ? 92f : 72f);
+    }
+
+    private static float TabStart(int index, int count) => index / (float)count;
+
+    private void BuildRelevantItems(
+        RectTransform section,
+        IReadOnlyList<QuestRelevantItem> items,
+        float top)
+    {
+        const float rowHeight = 36f;
+        const float gap = 3f;
+        var inRaid = InRaidQuestContext.TryCapture(out _);
+        var contentHeight = items.Count * rowHeight + Math.Max(0, items.Count - 1) * gap;
+        var content = CreateExpandedRegion(section, "RelevantItemsContent", top, contentHeight);
+        var y = 0f;
+        foreach (var item in items)
+        {
+            var row = ContentRow(content, $"RelevantItem-{item.TemplateId}", y, rowHeight);
+            row.gameObject.AddComponent<Image>().color = new Color(0.10f, 0.11f, 0.11f, 0.86f);
+            var itemName = item.FleaEligible ? item.Name : $"{item.Name}  (FLEA INELIGIBLE)";
+            var label = UnityUiFactory.AddText(row.gameObject, itemName, 13,
+                TextAlignmentOptions.MidlineLeft,
+                item.FleaEligible ? new Color(0.88f, 0.88f, 0.82f, 1f) : QuestGraphPalette.MutedText);
+            label.margin = new Vector4(10, 3, item.FleaEligible ? 188 : 110, 3);
+
+            var haveRect = UnityUiFactory.CreateRect("Have", row);
+            haveRect.anchorMin = haveRect.anchorMax = haveRect.pivot = new Vector2(1, 0.5f);
+            haveRect.anchoredPosition = new Vector2(item.FleaEligible ? -82 : -6, 0);
+            haveRect.sizeDelta = new Vector2(100, 26);
+            var haveLabel = UnityUiFactory.AddText(haveRect.gameObject, $"(Have: {OwnedItemCount(item.TemplateId)})", 11,
+                TextAlignmentOptions.MidlineRight, QuestGraphPalette.MutedText);
+            haveLabel.fontStyle = FontStyles.Bold;
+            if (item.FleaEligible)
+            {
+                var buttonRect = UnityUiFactory.CreateRect("Flea", row);
+                buttonRect.anchorMin = buttonRect.anchorMax = buttonRect.pivot = new Vector2(1, 0.5f);
+                buttonRect.anchoredPosition = new Vector2(-6, 0);
+                buttonRect.sizeDelta = new Vector2(70, 26);
+                var button = UnityUiFactory.AddButton(buttonRect.gameObject, QuestGraphPalette.Control);
+                button.interactable = !inRaid;
+                var buttonLabel = UnityUiFactory.AddText(buttonRect.gameObject, "FLEA", 11,
+                    TextAlignmentOptions.Center,
+                    inRaid ? QuestGraphPalette.MutedText : Color.white);
+                buttonLabel.fontStyle = FontStyles.Bold;
+                var templateId = item.TemplateId;
+                button.onClick.AddListener(() => OpenFlea(templateId));
+            }
+            y += rowHeight + gap;
+        }
+    }
+
+    private long OwnedItemCount(string templateId)
+    {
+        try
+        {
+            return _inventoryController.Inventory.GetAllItemByTemplate(templateId)
+                .Where(item => item is not Mod || !HasWeaponAncestor(item))
+                .Sum(item => (long)Math.Max(0, item.StackObjectsCount));
+        }
+        catch (Exception exception)
+        {
+            _log.LogWarning($"QUESTMAP_RELEVANT_ITEM_COUNT_ERROR template={templateId}; {exception.Message}");
+            return 0;
+        }
+    }
+
+    private static bool HasWeaponAncestor(Item item)
+    {
+        var parent = item.Parent?.Container?.ParentItem;
+        for (var depth = 0; parent is not null && depth < 32; depth++)
+        {
+            if (parent is Weapon) return true;
+            parent = parent.Parent?.Container?.ParentItem;
+        }
+        return false;
+    }
+
+    private void OpenFlea(string templateId)
+    {
+        if (_disposed || InRaidQuestContext.TryCapture(out _)) return;
+        try
+        {
+            var itemUiContext = ItemUiContext.Instance;
+            if (itemUiContext is null)
+            {
+                _log.LogWarning($"QUESTMAP_RELEVANT_ITEM_FLEA_UNAVAILABLE item={templateId}; reason=ItemUiContext unavailable");
+                return;
+            }
+
+            // FilterSearch is Tarkov's native "Filter by item" action. LinkedSearch instead
+            // searches for compatible items and can select a category with no offers.
+            itemUiContext.ExternalRagfairSearch(new GClass3943(EFilterType.FilterSearch, templateId, true));
+        }
+        catch (Exception exception)
+        {
+            _log.LogError($"QUESTMAP_RELEVANT_ITEM_FLEA_ERROR item={templateId}; {exception}");
+        }
+    }
+
+    private void OpenWiki(string wikiUrl)
+    {
+        if (_disposed
+            || !Uri.TryCreate(wikiUrl, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) return;
+        try
+        {
+            // Unity delegates the URL to Windows' configured browser and
+            // returns immediately without waiting for that browser process.
+            Application.OpenURL(uri.AbsoluteUri);
+        }
+        catch (Exception exception)
+        {
+            _log.LogError($"QUESTMAP_WIKI_ERROR quest={_selectedQuestId}; {exception}");
+        }
     }
 
     private void SelectTextTab(DetailTextTab tab)
@@ -448,14 +573,14 @@ internal sealed class QuestDetailsPane : IDisposable
     }
 
     private void BuildObjectives(
+        RectTransform parent,
         QuestGraphNode node,
         QuestLiveState? liveState,
         QuestClass? liveQuest,
         bool future,
-        float top,
         float height)
     {
-        var section = TopRect("ObjectivesSection", top, height);
+        var section = StackRect("ObjectivesSection", parent, height);
         var progress = liveState is null ? null : QuestGraphRules.CalculateObjectiveProgressPercent(liveState.Objectives);
         var displayState = QuestGraphRules.ClassifyProfileDisplayState(_topology!, node, _overlay!);
         if (displayState is QuestMapDisplayStateKind.ReadyToFinish or QuestMapDisplayStateKind.Completed) progress = 100d;
@@ -466,7 +591,6 @@ internal sealed class QuestDetailsPane : IDisposable
         title.fontStyle = FontStyles.Bold;
         if (progress.HasValue) AddProgressBar(section, progress.Value / 100d, 10, height - 31, QuestGraphPalette.Status(displayState));
 
-        var viewport = CreateScrollViewport(section, "ObjectivesViewport", 38, 4, out var content);
         var progressById = (liveState?.Objectives ?? [])
             .GroupBy(value => value.ObjectiveId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
@@ -476,6 +600,14 @@ internal sealed class QuestDetailsPane : IDisposable
             .OrderBy(value => value.Index ?? int.MaxValue)
             .ThenBy(value => value.Id, StringComparer.Ordinal)
             .ToArray();
+        var contentHeight = orderedObjectives.Length == 0
+            ? 42f
+            : orderedObjectives.Select((objective, index) =>
+            {
+                progressById.TryGetValue(objective.Id, out var objectiveProgress);
+                return ObjectiveRowHeight(objective, objectiveProgress) + (index < orderedObjectives.Length - 1 ? 3f : 0f);
+            }).Sum();
+        var content = CreateExpandedRegion(section, "ObjectivesContent", 38, contentHeight);
         for (var index = 0; index < orderedObjectives.Length; index++)
         {
             var objective = orderedObjectives[index];
@@ -552,25 +684,27 @@ internal sealed class QuestDetailsPane : IDisposable
                 TextAlignmentOptions.Center, QuestGraphPalette.MutedText);
             y = 42;
         }
-        ConfigureScrollableContent(viewport, content, y);
     }
 
-    private void BuildRewards(QuestGraphNode node, QuestClass? liveQuest, bool future, float top, float height)
+    private float BuildRewards(RectTransform parent, QuestGraphNode node, QuestClass? liveQuest, bool future)
     {
-        var section = TopRect("RewardsSection", top, height);
+        var rewards = node.Rewards.Where(reward => _showHiddenRewards() || !reward.Hidden).ToArray();
+        var fallbackContentHeight = rewards.Length == 0 ? 42f : rewards.Length * 47f;
+        var section = StackRect("RewardsSection", parent, 32f + fallbackContentHeight);
         var title = UnityUiFactory.AddText(section.gameObject, "REWARDS", 14,
             TextAlignmentOptions.TopLeft, Color.white);
         title.margin = new Vector4(10, 5, 10, 0);
         title.fontStyle = FontStyles.Bold;
-        var viewport = CreateScrollViewport(section, "RewardsViewport", 28, 4, out var content);
+        var content = CreateExpandedRegion(section, "RewardsContent", 28, fallbackContentHeight);
 
-        if (!future && liveQuest is not null && TryBuildNativeRewards(node, liveQuest, viewport, content, out var nativeHeight))
+        if (!future && liveQuest is not null
+            && TryBuildNativeRewards(node, liveQuest, section, parent, content, out var nativeHeight))
         {
-            content.sizeDelta = new Vector2(0, Mathf.Max(nativeHeight, viewport.rect.height));
-            return;
+            content.sizeDelta = new Vector2(content.sizeDelta.x, nativeHeight);
+            SetPreferredHeight(section, 32f + nativeHeight);
+            return 32f + nativeHeight;
         }
 
-        var rewards = node.Rewards.Where(reward => _showHiddenRewards() || !reward.Hidden).ToArray();
         var y = 0f;
         foreach (var reward in rewards)
         {
@@ -588,13 +722,16 @@ internal sealed class QuestDetailsPane : IDisposable
                 TextAlignmentOptions.Center, QuestGraphPalette.MutedText);
             y = 42;
         }
-        content.sizeDelta = new Vector2(0, Mathf.Max(y, viewport.rect.height));
+        content.sizeDelta = new Vector2(content.sizeDelta.x, y);
+        SetPreferredHeight(section, 32f + y);
+        return 32f + y;
     }
 
     private bool TryBuildNativeRewards(
         QuestGraphNode node,
         QuestClass quest,
-        RectTransform viewport,
+        RectTransform section,
+        RectTransform layoutRoot,
         RectTransform content,
         out float height)
     {
@@ -646,7 +783,7 @@ internal sealed class QuestDetailsPane : IDisposable
             hostCanvas.blocksRaycasts = false;
             if (instance.transform is RectTransform hostRect) hostRect.sizeDelta = Vector2.zero;
             container.gameObject.AddComponent<QuestDetailsRewardLayoutNormalizer>()
-                .Bind(container, content, viewport, rows);
+                .Bind(container, content, section.GetComponent<LayoutElement>(), layoutRoot, 32f, rows);
         }
         else
         {
@@ -769,9 +906,9 @@ internal sealed class QuestDetailsPane : IDisposable
         shade.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, shadeAlpha);
     }
 
-    private RectTransform TopRect(string name, float top, float height)
+    private static RectTransform TopRect(string name, RectTransform parent, float top, float height)
     {
-        var rect = UnityUiFactory.CreateRect(name, Root);
+        var rect = UnityUiFactory.CreateRect(name, parent);
         rect.anchorMin = new Vector2(0, 1);
         rect.anchorMax = new Vector2(1, 1);
         rect.pivot = new Vector2(0.5f, 1);
@@ -780,10 +917,63 @@ internal sealed class QuestDetailsPane : IDisposable
         return rect;
     }
 
-    private void AddDivider(float top)
+    private static RectTransform StackRect(string name, RectTransform parent, float height)
     {
-        var divider = TopRect("Divider", top, 1);
+        var rect = TopRect(name, parent, 0, height);
+        var layout = rect.gameObject.AddComponent<LayoutElement>();
+        layout.minHeight = height;
+        layout.preferredHeight = height;
+        layout.flexibleHeight = 0;
+        return rect;
+    }
+
+    private void AddFixedDivider(float top)
+    {
+        var divider = TopRect("HeaderDivider", Root, top, 1);
         divider.gameObject.AddComponent<Image>().color = QuestGraphPalette.Border;
+    }
+
+    private static void AddStackDivider(RectTransform parent)
+    {
+        var divider = StackRect("Divider", parent, 1);
+        divider.gameObject.AddComponent<Image>().color = QuestGraphPalette.Border;
+    }
+
+    private static void SetPreferredHeight(RectTransform section, float height)
+    {
+        var layout = section.GetComponent<LayoutElement>();
+        layout.minHeight = height;
+        layout.preferredHeight = height;
+    }
+
+    private static RectTransform CreateExpandedRegion(
+        RectTransform parent,
+        string name,
+        float top,
+        float height)
+    {
+        var content = UnityUiFactory.CreateRect(name, parent);
+        content.anchorMin = new Vector2(0, 1);
+        content.anchorMax = new Vector2(1, 1);
+        content.pivot = new Vector2(0.5f, 1);
+        content.anchoredPosition = new Vector2(-2.5f, -top);
+        content.sizeDelta = new Vector2(-15, Mathf.Max(1f, height));
+        return content;
+    }
+
+    private static void ConfigureExpandingBody(RectTransform content)
+    {
+        var layout = content.gameObject.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(0, 0, 0, 0);
+        layout.spacing = SectionGap;
+        layout.childAlignment = TextAnchor.UpperCenter;
+        layout.childControlWidth = true;
+        layout.childControlHeight = true;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+        var fitter = content.gameObject.AddComponent<ContentSizeFitter>();
+        fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
     }
 
     private static RectTransform FractionRect(string name, RectTransform parent, float minimum, float maximum)
@@ -864,30 +1054,19 @@ internal sealed class QuestDetailsPane : IDisposable
         return scrollbar;
     }
 
-    private static void ConfigureScrollableContent(RectTransform viewport, RectTransform content, float desiredHeight)
-    {
-        // Unity layout values can differ by a fraction of a pixel on the first
-        // frame. Do not expose a scrollbar merely because that rounding makes
-        // otherwise fitting objective rows microscopically taller.
-        var viewportHeight = viewport.rect.height;
-        var scrollable = desiredHeight > viewportHeight + 2f;
-        content.sizeDelta = new Vector2(0, scrollable ? desiredHeight : viewportHeight);
-        var scroll = viewport.GetComponent<ScrollRect>();
-        scroll.vertical = scrollable;
-        scroll.verticalNormalizedPosition = 1f;
-        if (scroll.verticalScrollbar != null) scroll.verticalScrollbar.gameObject.SetActive(scrollable);
-    }
-
-    private static void CreateTextScroll(
+    private static void CreateExpandedText(
         RectTransform parent,
+        RectTransform layoutRoot,
         string name,
         string text,
         float top,
         float bottom,
         float fontSize,
-        Color color)
+        Color color,
+        float chromeHeight,
+        float minimumHeight)
     {
-        var viewport = CreateScrollViewport(parent, name, top, bottom, out var content);
+        var content = CreateExpandedRegion(parent, name, top, Mathf.Max(1f, parent.rect.height - top - bottom));
         var value = string.IsNullOrWhiteSpace(text) ? "No description is available." : text;
         var label = UnityUiFactory.AddText(content.gameObject,
             value,
@@ -897,21 +1076,12 @@ internal sealed class QuestDetailsPane : IDisposable
         label.margin = new Vector4(9, 7, 9, 7);
         label.richText = true;
         label.enableWordWrapping = true;
-        // Start with a safe estimate, then replace it with TMP's actual rendered
-        // bounds after the font/material and viewport have completed layout.
+        // Start with a safe estimate, then replace the section's preferred
+        // height with TMP's actual rendered bounds after font/material layout.
         // Measuring preferredHeight synchronously here can dereference an
         // uninitialised TMP material during an EFT screen transition.
-        var lineCount = EstimateWrappedLines(value, 78);
-        var estimatedHeight = lineCount * (fontSize * 1.35f) + 18f;
-        var scroll = viewport.GetComponent<ScrollRect>();
-        var scrollable = estimatedHeight > viewport.rect.height + 1f;
-        content.sizeDelta = new Vector2(0, scrollable ? estimatedHeight : viewport.rect.height);
-        content.anchoredPosition = Vector2.zero;
-        scroll.vertical = scrollable;
-        scroll.verticalNormalizedPosition = 1f;
-        if (scroll.verticalScrollbar is not null) scroll.verticalScrollbar.gameObject.SetActive(scrollable);
         content.gameObject.AddComponent<QuestDetailsTextContentSizer>()
-            .Bind(label, viewport, content, scroll);
+            .Bind(label, content, parent.GetComponent<LayoutElement>(), layoutRoot, chromeHeight, minimumHeight);
     }
 
     private static void AddTab(
@@ -991,11 +1161,24 @@ internal sealed class QuestDetailsPane : IDisposable
             collector ? 0.5f : 0f, 1f, height);
     }
 
-    private static void AddScavBadge(RectTransform parent)
+    private void AddWikiButton(RectTransform parent, string wikiUrl)
+    {
+        var rect = UnityUiFactory.CreateRect("Wiki", parent);
+        rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1, 1);
+        rect.anchoredPosition = new Vector2(-10, -10);
+        rect.sizeDelta = new Vector2(74, 28);
+        var button = UnityUiFactory.AddButton(rect.gameObject, new Color(0.20f, 0.22f, 0.19f, 0.96f));
+        var label = UnityUiFactory.AddText(rect.gameObject, "WIKI", 11, TextAlignmentOptions.Center,
+            new Color(0.95f, 0.90f, 0.72f, 1f));
+        label.fontStyle = FontStyles.Bold;
+        button.onClick.AddListener(() => OpenWiki(wikiUrl));
+    }
+
+    private static void AddScavBadge(RectTransform parent, float top)
     {
         var badge = UnityUiFactory.CreateRect("ScavBadge", parent);
         badge.anchorMin = badge.anchorMax = badge.pivot = new Vector2(1, 1);
-        badge.anchoredPosition = new Vector2(-10, -10);
+        badge.anchoredPosition = new Vector2(-10, -top);
         badge.sizeDelta = new Vector2(58, 22);
         badge.gameObject.AddComponent<Image>().color = new Color(0.40f, 0.34f, 0.16f, 0.96f);
         var label = UnityUiFactory.AddText(badge.gameObject, "SCAV", 10,
@@ -1059,6 +1242,7 @@ internal sealed class QuestDetailsPane : IDisposable
     {
         Description,
         Summary,
+        RelevantItems,
     }
 
     private sealed class NativeQuestViewHost : IDisposable
@@ -1151,45 +1335,50 @@ internal enum QuestDetailsActionKind
 internal sealed class QuestDetailsTextContentSizer : MonoBehaviour
 {
     private TextMeshProUGUI? _label;
-    private RectTransform? _viewport;
     private RectTransform? _content;
-    private ScrollRect? _scroll;
+    private LayoutElement? _sectionLayout;
+    private RectTransform? _layoutRoot;
+    private float _chromeHeight;
+    private float _minimumHeight;
     private int _attempts;
 
     public QuestDetailsTextContentSizer Bind(
         TextMeshProUGUI label,
-        RectTransform viewport,
         RectTransform content,
-        ScrollRect scroll)
+        LayoutElement sectionLayout,
+        RectTransform layoutRoot,
+        float chromeHeight,
+        float minimumHeight)
     {
         _label = label;
-        _viewport = viewport;
         _content = content;
-        _scroll = scroll;
+        _sectionLayout = sectionLayout;
+        _layoutRoot = layoutRoot;
+        _chromeHeight = chromeHeight;
+        _minimumHeight = minimumHeight;
         return this;
     }
 
     private void LateUpdate()
     {
-        if (_label is null || _viewport is null || _content is null || _scroll is null)
+        if (_label is null || _content is null || _sectionLayout is null || _layoutRoot is null)
         {
             enabled = false;
             return;
         }
-        if (++_attempts < 2 || _label.font is null || _viewport.rect.width <= 1f) return;
+        if (++_attempts < 2 || _label.font is null || _label.rectTransform.rect.width <= 1f) return;
 
         try
         {
             _label.ForceMeshUpdate(true, true);
             var renderedHeight = _label.GetRenderedValues(false).y;
-            var exactHeight = Mathf.Max(1f, renderedHeight + _label.margin.y + _label.margin.w + 4f);
-            var scrollable = exactHeight > _viewport.rect.height + 1f;
-            _content.sizeDelta = new Vector2(0, scrollable ? exactHeight : _viewport.rect.height);
-            _content.anchoredPosition = Vector2.zero;
-            _scroll.vertical = scrollable;
-            _scroll.verticalNormalizedPosition = 1f;
-            if (_scroll.verticalScrollbar is not null)
-                _scroll.verticalScrollbar.gameObject.SetActive(scrollable);
+            var contentHeight = Mathf.Max(1f, renderedHeight + _label.margin.y + _label.margin.w + 4f);
+            _content.sizeDelta = new Vector2(_content.sizeDelta.x, contentHeight);
+            var exactHeight = Mathf.Max(_minimumHeight,
+                _chromeHeight + contentHeight);
+            _sectionLayout.minHeight = exactHeight;
+            _sectionLayout.preferredHeight = exactHeight;
+            LayoutRebuilder.MarkLayoutForRebuild(_layoutRoot);
             enabled = false;
         }
         catch
@@ -1206,26 +1395,32 @@ internal sealed class QuestDetailsRewardLayoutNormalizer : MonoBehaviour
 {
     private RectTransform? _container;
     private RectTransform? _content;
-    private RectTransform? _viewport;
+    private LayoutElement? _sectionLayout;
+    private RectTransform? _layoutRoot;
+    private float _chromeHeight;
     private int _rows;
     private int _passes;
 
     public QuestDetailsRewardLayoutNormalizer Bind(
         RectTransform container,
         RectTransform content,
-        RectTransform viewport,
+        LayoutElement sectionLayout,
+        RectTransform layoutRoot,
+        float chromeHeight,
         int rows)
     {
         _container = container;
         _content = content;
-        _viewport = viewport;
+        _sectionLayout = sectionLayout;
+        _layoutRoot = layoutRoot;
+        _chromeHeight = chromeHeight;
         _rows = Mathf.Max(1, rows);
         return this;
     }
 
     private void LateUpdate()
     {
-        if (_container is null || _content is null || _viewport is null)
+        if (_container is null || _content is null || _sectionLayout is null || _layoutRoot is null)
         {
             enabled = false;
             return;
@@ -1264,18 +1459,11 @@ internal sealed class QuestDetailsRewardLayoutNormalizer : MonoBehaviour
             var height = Mathf.Max(expectedHeight, renderedHeight);
             _container.sizeDelta = new Vector2(0, height);
             _container.anchoredPosition = new Vector2(0, float.IsInfinity(maximum) ? 0 : -maximum);
-            _content.sizeDelta = new Vector2(0, Mathf.Max(height, _viewport.rect.height));
-            _content.anchoredPosition = Vector2.zero;
-
-            var scroll = _viewport.GetComponent<ScrollRect>();
-            if (scroll is not null)
-            {
-                var scrollable = height > _viewport.rect.height + 1f;
-                scroll.vertical = scrollable;
-                scroll.verticalNormalizedPosition = 1f;
-                if (scroll.verticalScrollbar is not null)
-                    scroll.verticalScrollbar.gameObject.SetActive(scrollable);
-            }
+            _content.sizeDelta = new Vector2(_content.sizeDelta.x, height);
+            var sectionHeight = _chromeHeight + height;
+            _sectionLayout.minHeight = sectionHeight;
+            _sectionLayout.preferredHeight = sectionHeight;
+            LayoutRebuilder.MarkLayoutForRebuild(_layoutRoot);
 
             // EFT may finish populating/layout one frame after Init. Reapply for
             // a few bounded frames so first-open and subsequent-open geometry

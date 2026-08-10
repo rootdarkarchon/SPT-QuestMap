@@ -21,6 +21,8 @@ public sealed class QuestTopologyFeed
     public Dictionary<string, string[]> PrerequisiteBlockerIds { get; set; } = new(StringComparer.Ordinal);
 
     public Dictionary<string, string> QuestSummaries { get; set; } = new(StringComparer.Ordinal);
+
+    public Dictionary<string, QuestMetaInfoPayload> QuestMetaInfo { get; set; } = new(StringComparer.Ordinal);
 }
 
 public sealed class QuestRepeatableFeed
@@ -34,6 +36,20 @@ public sealed class QuestRepeatableFeed
     public Dictionary<string, long> RepeatableEndTimes { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, string[]> PrerequisiteBlockerIds { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> QuestSummaries { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, QuestMetaInfoPayload> QuestMetaInfo { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class QuestMetaInfoPayload
+{
+    public string WikiUrl { get; set; } = string.Empty;
+    public QuestRelevantItemPayload[] RelevantItems { get; set; } = [];
+}
+
+public sealed class QuestRelevantItemPayload
+{
+    public string TemplateId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public bool FleaEligible { get; set; }
 }
 
 public sealed class QuestTopologyPayload

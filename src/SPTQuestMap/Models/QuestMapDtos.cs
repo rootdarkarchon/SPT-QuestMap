@@ -38,7 +38,17 @@ public sealed record QuestNodeDto(
 
     [JsonIgnore]
     public string? Summary { get; init; }
+
+    [JsonIgnore]
+    public string? WikiUrl { get; init; }
+
+    [JsonIgnore]
+    public QuestRelevantItemDto[] RelevantItems { get; init; } = [];
 }
+
+public sealed record QuestRelevantItemDto(string TemplateId, string Name, bool FleaEligible);
+
+public sealed record QuestMetaInfoDto(string WikiUrl, QuestRelevantItemDto[] RelevantItems);
 
 public sealed record QuestLocationDto(string Id, string? Name, bool Any, string? BannerImageUrl);
 
@@ -80,7 +90,8 @@ public sealed record QuestMapClientTopologyFeedDto(
     IReadOnlyDictionary<string, double?> ProgressPercentages,
     IReadOnlyDictionary<string, long> RepeatableEndTimes,
     IReadOnlyDictionary<string, string[]> PrerequisiteBlockerIds,
-    IReadOnlyDictionary<string, string> QuestSummaries);
+    IReadOnlyDictionary<string, string> QuestSummaries,
+    IReadOnlyDictionary<string, QuestMetaInfoDto> QuestMetaInfo);
 public sealed record QuestMapClientRepeatableFeedDto(
     QuestNodeDto[] ProfileGeneratedQuests,
     IReadOnlyDictionary<string, string> RepeatableKinds,
@@ -90,4 +101,5 @@ public sealed record QuestMapClientRepeatableFeedDto(
     IReadOnlyDictionary<string, double?> ProgressPercentages,
     IReadOnlyDictionary<string, long> RepeatableEndTimes,
     IReadOnlyDictionary<string, string[]> PrerequisiteBlockerIds,
-    IReadOnlyDictionary<string, string> QuestSummaries);
+    IReadOnlyDictionary<string, string> QuestSummaries,
+    IReadOnlyDictionary<string, QuestMetaInfoDto> QuestMetaInfo);

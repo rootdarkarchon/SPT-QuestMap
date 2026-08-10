@@ -25,6 +25,7 @@ internal sealed class TraderTasksScreenController : IDisposable
 {
     private const float HeaderHeight = 48f;
     private static readonly Dictionary<string, TraderTasksFilterState> SharedFiltersByProfile = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, string> SharedSelectionByProfileAndTrader = new(StringComparer.Ordinal);
 
     private static readonly FieldInfo QuestsListField = AccessTools.Field(typeof(QuestsScreen), "_questsListView")
         ?? throw new MissingFieldException(typeof(QuestsScreen).FullName, "_questsListView");
@@ -128,6 +129,7 @@ internal sealed class TraderTasksScreenController : IDisposable
         _overlay = overlay;
         _filterProfileId = overlay.ProfileId;
         LoadSharedFilters();
+        LoadSharedSelection();
 
         BuildView(null, true);
         _vanillaList.gameObject.SetActive(false);
@@ -315,6 +317,7 @@ internal sealed class TraderTasksScreenController : IDisposable
         }
 
         _selectedQuestId = questId;
+        SaveSharedSelection();
         if (_mode == GlobalQuestGraphMode.Full)
         {
             var next = BuildProjection();
@@ -329,6 +332,7 @@ internal sealed class TraderTasksScreenController : IDisposable
     private void FocusQuest(string questId)
     {
         _selectedQuestId = questId;
+        SaveSharedSelection();
         _focusQuestId = questId;
         RebuildView(true);
     }
@@ -348,6 +352,7 @@ internal sealed class TraderTasksScreenController : IDisposable
     {
         if (_selectedQuestId is null && _focusQuestId is null) return;
         _selectedQuestId = null;
+        SaveSharedSelection();
         _detailsVisible = false;
         _detailPane?.Hide();
         UpdateDetailsButton();
@@ -515,6 +520,25 @@ internal sealed class TraderTasksScreenController : IDisposable
             _hideUnavailable,
             _search);
     }
+
+    private void LoadSharedSelection()
+    {
+        if (_filterProfileId is null
+            || !SharedSelectionByProfileAndTrader.TryGetValue(SelectionScope(_filterProfileId, _trader.Id), out var questId)
+            || _topology?.NodesById.ContainsKey(questId) != true)
+            return;
+        _selectedQuestId = questId;
+    }
+
+    private void SaveSharedSelection()
+    {
+        if (_filterProfileId is null) return;
+        var scope = SelectionScope(_filterProfileId, _trader.Id);
+        if (string.IsNullOrWhiteSpace(_selectedQuestId)) SharedSelectionByProfileAndTrader.Remove(scope);
+        else SharedSelectionByProfileAndTrader[scope] = _selectedQuestId;
+    }
+
+    private static string SelectionScope(string profileId, string traderId) => $"{profileId}|{traderId}";
 
     private void HandleQuestMutation(string questId, QuestDetailsActionKind kind)
     {

@@ -298,14 +298,33 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
-    public void Normalize_AttachesClientSummaryWithoutChangingNodeTransportShape()
+    public void Normalize_AttachesClientDetailMetadataWithoutChangingNodeTransportShape()
     {
         var feed = Feed([Node("quest", "Prapor", "Any")], []);
         feed.QuestSummaries["quest"] = "  Condensed quest summary.  ";
+        feed.QuestMetaInfo["quest"] = new QuestMetaInfoPayload
+        {
+            WikiUrl = "https://example.test/wiki/quest",
+            RelevantItems =
+            [
+                new QuestRelevantItemPayload
+                {
+                    TemplateId = "item",
+                    Name = "Quest item",
+                    FleaEligible = false,
+                },
+            ],
+        };
 
         var topology = QuestTopologyNormalizer.Normalize(feed);
 
-        Assert.That(topology.NodesById["quest"].Summary, Is.EqualTo("Condensed quest summary."));
+        var node = topology.NodesById["quest"];
+        Assert.Multiple(() =>
+        {
+            Assert.That(node.Summary, Is.EqualTo("Condensed quest summary."));
+            Assert.That(node.WikiUrl, Is.EqualTo("https://example.test/wiki/quest"));
+            Assert.That(node.RelevantItems, Is.EqualTo(new[] { new QuestRelevantItem("item", "Quest item", false) }));
+        });
     }
 
     [Test]

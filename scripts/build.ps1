@@ -112,6 +112,9 @@ if ($serverRequested) {
     Copy-StagedFile (Join-Path $serverOutput 'SPTQuestMap.pdb') $serverStage -Optional
     Copy-StagedFile (Join-Path $coreOutput 'SPTQuestMap.Core.dll') $serverStage
     Copy-StagedFile (Join-Path $coreOutput 'SPTQuestMap.Core.pdb') $serverStage -Optional
+    $metaInfoStage = Join-Path $serverStage 'Data'
+    New-Item -ItemType Directory -Path $metaInfoStage -Force | Out-Null
+    Copy-StagedFile (Join-Path $serverOutput 'Data/metainfo.json') $metaInfoStage
     $forbiddenScripts = @(Get-ChildItem -LiteralPath $serverStage -Recurse -File | Where-Object { $_.Extension -in @('.js', '.ts') })
     if ($forbiddenScripts.Count -gt 0) {
         throw "SPT 4.0.13 rejects server mods containing .js or .ts files: $($forbiddenScripts.FullName -join ', ')"

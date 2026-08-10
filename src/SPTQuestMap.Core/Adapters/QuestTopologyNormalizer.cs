@@ -19,6 +19,7 @@ public static class QuestTopologyNormalizer
                 true,
                 feed.RepeatableKinds?.GetValueOrDefault(node.Id),
                 feed.QuestSummaries?.GetValueOrDefault(node.Id),
+                feed.QuestMetaInfo?.GetValueOrDefault(node.Id),
                 staticNodes.Length + index))
             .GroupBy(node => node.Id, StringComparer.Ordinal)
             .Select(group => group.Last())
@@ -51,12 +52,19 @@ public static class QuestTopologyNormalizer
         var staticNodes = feed.Topology.Quests ?? [];
         var generatedNodes = feed.ProfileGeneratedQuests ?? [];
         var nodes = staticNodes
-            .Select((node, index) => MapNode(node, false, null, feed.QuestSummaries?.GetValueOrDefault(node.Id), index))
+            .Select((node, index) => MapNode(
+                node,
+                false,
+                null,
+                feed.QuestSummaries?.GetValueOrDefault(node.Id),
+                feed.QuestMetaInfo?.GetValueOrDefault(node.Id),
+                index))
             .Concat(generatedNodes.Select((node, index) => MapNode(
                 node,
                 true,
                 feed.RepeatableKinds?.GetValueOrDefault(node.Id),
                 feed.QuestSummaries?.GetValueOrDefault(node.Id),
+                feed.QuestMetaInfo?.GetValueOrDefault(node.Id),
                 staticNodes.Length + index)))
             .GroupBy(node => node.Id, StringComparer.Ordinal)
             .Select(group => group.OrderByDescending(node => node.ProfileGenerated).First())
@@ -149,6 +157,7 @@ public static class QuestTopologyNormalizer
         bool profileGenerated,
         string? repeatableKind,
         string? summary,
+        QuestMetaInfoPayload? metaInfo,
         int naturalOrder)
     {
         var location = node.Location ?? new QuestLocationPayload();
@@ -197,6 +206,11 @@ public static class QuestTopologyNormalizer
             repeatableKind)
         {
             Summary = string.IsNullOrWhiteSpace(summary) ? null : summary.Trim(),
+            WikiUrl = string.IsNullOrWhiteSpace(metaInfo?.WikiUrl) ? null : metaInfo.WikiUrl.Trim(),
+            RelevantItems = (metaInfo?.RelevantItems ?? [])
+                .Where(item => !string.IsNullOrWhiteSpace(item.TemplateId) && !string.IsNullOrWhiteSpace(item.Name))
+                .Select(item => new QuestRelevantItem(item.TemplateId, item.Name, item.FleaEligible))
+                .ToArray(),
             ScavRepeatable = node.ScavRepeatable,
             NaturalOrder = naturalOrder,
         };

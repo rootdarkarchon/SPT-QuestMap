@@ -17,6 +17,7 @@ internal sealed class QuestTopologyBuilder(
     SeasonalEventService seasonalEventService,
     QuestConfig questConfig,
     QuestSummaryCatalog summaryCatalog,
+    QuestMetaInfoCatalog metaInfoCatalog,
     ISptLogger<QuestMapDataService> logger
 )
 {
@@ -52,6 +53,7 @@ internal sealed class QuestTopologyBuilder(
         foreach (var quest in dbQuests)
         {
             var questId = quest.Id.ToString();
+            var metaInfo = metaInfoCatalog.Get(questId, locale);
             var startConditions = quest.Conditions?.AvailableForStart ?? [];
             var requirements = startConditions
                 .Where(condition => condition.ConditionType is "Level" or "TraderLoyalty" or "TraderStanding")
@@ -127,6 +129,8 @@ internal sealed class QuestTopologyBuilder(
             {
                 UnknownConditions = unknownConditions,
                 Summary = summaryCatalog.Get(questId, quest.TraderId.ToString(), language),
+                WikiUrl = metaInfo?.WikiUrl,
+                RelevantItems = metaInfo?.RelevantItems ?? [],
             });
         }
 

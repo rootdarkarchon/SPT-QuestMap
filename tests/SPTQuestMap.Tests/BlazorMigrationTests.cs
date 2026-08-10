@@ -33,6 +33,15 @@ public sealed class BlazorMigrationTests
     }
 
     [Test]
+    public void QuestMetadataResolutionUsesThePostDatabaseStartupBoundary()
+    {
+        Assert.That(
+            typeof(SPTarkov.Server.Core.DI.IOnLoad).IsAssignableFrom(typeof(QuestMapDataService)),
+            Is.True,
+            "Quest metadata must resolve only after SPT's database and post-DB mod loaders have run.");
+    }
+
+    [Test]
     public void SptMetadataVersionMatchesAssemblyVersion()
     {
         var assembly = typeof(QuestMapModMetadata).Assembly;
@@ -716,6 +725,32 @@ public sealed class BlazorMigrationTests
             Assert.That(RepeatableQuestRules.IsScavGroup("Daily"), Is.False);
             Assert.That(RepeatableQuestRules.DisplayKind("Daily_Savage"), Is.EqualTo("Daily"));
             Assert.That(RepeatableQuestRules.DisplayKind("Weekly"), Is.EqualTo("Weekly"));
+        });
+    }
+
+    [Test]
+    public void DetailMetadataRemainsOutsideCanvasTopologyJson()
+    {
+        var node = Node("quest", "Quest", "trader") with
+        {
+            Summary = "Summary",
+            WikiUrl = "https://example.test/wiki/quest",
+            RelevantItems = [new QuestRelevantItemDto("item", "Relevant item", false)],
+        };
+
+        var json = JsonSerializer.Serialize(node);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(json, Does.Not.Contain("Summary"));
+            Assert.That(json, Does.Not.Contain("WikiUrl"));
+            Assert.That(json, Does.Not.Contain("RelevantItems"));
+            Assert.That(QuestMapUiCatalog.English["details.relevantItems"], Is.EqualTo("Relevant items"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".wiki-button"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".flea-ineligible"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".relevant-items-section { border-top-color:"));
+            Assert.That(QuestDetails.RelevantItemMarkup("<b><color=#ca741f>Item</color></b>"),
+                Does.Contain("<strong>").And.Contain("style=\"color:#ca741f\"").And.Contain("Item"));
         });
     }
 

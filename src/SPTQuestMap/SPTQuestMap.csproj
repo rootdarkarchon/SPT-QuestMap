@@ -47,6 +47,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Data\metainfo.json" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="Localization\Locales\*.json" />
     <EmbeddedResource Include="Localization\Summaries\*.json" />
     <EmbeddedResource Include="Presentation\Assets\QuestMap.css" />
