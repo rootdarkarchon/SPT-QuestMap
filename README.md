@@ -106,9 +106,13 @@ dotnet test .\src\SPTQuestMap\SPTQuestMap.slnx -c Release -p:SptInstallRoot="D:\
 
 The product requirements and implementation record remain available under [`docs/`](docs/). They are useful for contributors, but ordinary users do not need them to install the mod.
 
-## Data attribution
+## Attribution and acknowledgements
 
-The relevant-item data for Gunsmith quests and quest-required keys was initially derived from [CJ-SPT's Expanded Task Text](https://github.com/CJ-SPT/Expanded-Task-Text). It was converted to QuestMap's `metainfo.json` format, updated, and supplemented with missing entries using information from the [Escape from Tarkov Wiki](https://escapefromtarkov.fandom.com/wiki/Escape_from_Tarkov_Wiki).
+The relevant-item data for Gunsmith quests and quest-required keys was derived from the quest data distributed with SPT and information from the [Escape from Tarkov Wiki](https://escapefromtarkov.fandom.com/wiki/Escape_from_Tarkov_Wiki), then assembled in QuestMap's `metainfo.json` format. The idea to surface this information alongside quest text was inspired by [CJ-SPT's Expanded Task Text](https://github.com/CJ-SPT/Expanded-Task-Text); its data is not the source of QuestMap's catalog.
+
+QuestMap's quest-tracking functionality and in-raid tracked-quest display were inspired by [DrakiaXYZ's SPT Quest Tracker](https://github.com/DrakiaXYZ/SPT-QuestTracker). QuestMap's implementation was written independently for its custom task tables and data model; it does not incorporate Quest Tracker source code.
+
+QuestMap's Wiki-link additions were inspired by [Tyfon's WikiLinks](https://github.com/tyfon7/WikiLinks). WikiLinks source code was not referenced while implementing the feature, and no WikiLinks code is incorporated into QuestMap.
 
 ## License
 

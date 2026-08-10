@@ -970,6 +970,14 @@ The following gate described the first deployed slice. It is retained as impleme
 - Corrected the native relevant-item Flea action from `EFilterType.LinkedSearch` to `EFilterType.FilterSearch`. The former asks Tarkov for compatible items and produced the observed `Linked search` chip/category with no offers; the latter is the exact 4.0.13 native Filter by item mode and searches offers for the selected template. Existing trader selection preservation, out-of-raid guard, and `ItemUiContext.ExternalRagfairSearch` navigation remain unchanged.
 - The exact-version client Release build passes with zero warnings/errors and shared-core regression remains 46/46. Client-only deployment completed with matching staged/installed client DLL `790108171F00F6BF7D4D5E9A335CFF0A00EE93975211AC93F26CD0DD3A75579B`, client PDB `38E8525F6E68DE26C930F32739BDF484A2239328275AB37B42A25BF1032A6124`, and unchanged shared core `35CBA7DD03BF1237C400632A242BDC5E71964AC4B16D84572F2CCAE343E6A60F`. No server restart was required; live confirmation that the Labs access card now returns its offers remains required.
 
-### 2026-08-10 relevant-item data attribution
+### 2026-08-10 relevant-item provenance and inspiration attribution
 
-- Added a public README attribution recording that the Gunsmith and required-key relevant-item data was initially derived from CJ-SPT's Expanded Task Text, converted and updated for QuestMap, then supplemented with missing entries from the Escape from Tarkov Wiki. This is documentation-only; no runtime artifacts changed and no rebuild or deployment was required.
+- Added a public README attribution recording that the Gunsmith and required-key relevant-item catalog was derived from SPT's distributed quest data and the Escape from Tarkov Wiki, then assembled in QuestMap's metadata format. CJ-SPT's Expanded Task Text is credited only as inspiration for surfacing this information; its data is not described as a source of QuestMap's catalog. This is documentation-only; no runtime artifacts changed and no rebuild or deployment was required.
+
+### 2026-08-10 Quest Tracker inspiration attribution
+
+- Compared QuestMap's tracking implementation with the vendored DrakiaXYZ SPT Quest Tracker reference. No Quest Tracker-specific identifiers or nontrivial source-line overlap were found; persistence, UI construction, patching, and projection structures are independent. Updated the README acknowledgements to credit Quest Tracker as the inspiration for QuestMap's tracking functionality and in-raid tracked-quest display without implying source-code reuse. This is documentation-only; no rebuild or deployment was required.
+
+### 2026-08-10 WikiLinks inspiration attribution
+
+- Updated the README acknowledgements to credit Tyfon's WikiLinks as the inspiration for QuestMap's Wiki-link additions. WikiLinks source was not referenced during implementation and no code was incorporated. This is documentation-only; no rebuild or deployment was required.
