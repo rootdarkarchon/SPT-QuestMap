@@ -981,3 +981,7 @@ The following gate described the first deployed slice. It is retained as impleme
 ### 2026-08-10 WikiLinks inspiration attribution
 
 - Updated the README acknowledgements to credit Tyfon's WikiLinks as the inspiration for QuestMap's Wiki-link additions. WikiLinks source was not referenced during implementation and no code was incorporated. This is documentation-only; no rebuild or deployment was required.
+
+### 2026-08-10 `ingame-ui` branch change summary
+
+- Added `docs/ingame-ui-branch-changes.md`, an exhaustive branch-versus-`main` summary led by player-facing release notes for the native screens, graph/table behavior, details/actions, tracking and raid overlays, repeatables, Wiki/relevant items, settings, persistence, compatibility, and installation. A short contributor appendix records the architecture, server/browser, tooling, testing, and documentation changes. Linked the summary from the public README. This is documentation-only; no rebuild or deployment was required.
