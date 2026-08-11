@@ -13,6 +13,7 @@ using EFT.UI;
 using EFT.UI.Ragfair;
 using HarmonyLib;
 using SPTQuestMap.Client.Data;
+using SPTQuestMap.Client.Localization;
 using SPTQuestMap.Core.Models;
 using SPTQuestMap.Core.Rules;
 using TMPro;
@@ -350,7 +351,7 @@ internal sealed class QuestDetailsPane : IDisposable
         if (!string.IsNullOrWhiteSpace(node.WikiUrl)) AddWikiButton(questBanner, node.WikiUrl);
         if (node.ScavRepeatable) AddScavBadge(questBanner, string.IsNullOrWhiteSpace(node.WikiUrl) ? 10f : 46f);
 
-        var locationName = node.Location.Any ? "Any" : node.Location.Name ?? node.Location.Id;
+        var locationName = node.Location.Any ? ClientLocale.Text("common.any") : node.Location.Name ?? node.Location.Id;
         var location = UnityUiFactory.AddText(locationBanner.gameObject, locationName, 16,
             TextAlignmentOptions.Center, Color.white);
         location.fontStyle = FontStyles.Bold;
@@ -369,7 +370,7 @@ internal sealed class QuestDetailsPane : IDisposable
         var area = TopRect("Actions", parent, top, height);
         if (!QuestMutationsAllowed())
         {
-            var disabled = UnityUiFactory.AddText(area.gameObject, "QUEST ACTIONS DISABLED IN RAID", 12,
+            var disabled = UnityUiFactory.AddText(area.gameObject, ClientLocale.Text("label.actionsDisabledInRaid"), 12,
                 TextAlignmentOptions.Center, QuestGraphPalette.MutedText);
             disabled.fontStyle = FontStyles.Bold;
             return;
@@ -378,7 +379,9 @@ internal sealed class QuestDetailsPane : IDisposable
         {
             var status = QuestGraphCardNodeView.StateLabel(
                 QuestGraphRules.ClassifyProfileDisplayState(_topology!, node, _overlay!));
-            if (raidOnlyTrader) status += " · IN-RAID QUEST GIVER";
+            if (raidOnlyTrader)
+                status += ClientLocale.Format("common.inlineDetail",
+                    ClientLocale.Arg("detail", ClientLocale.Text("label.inRaidQuestGiver")));
             var text = UnityUiFactory.AddText(area.gameObject, status.ToUpperInvariant(), 12,
                 TextAlignmentOptions.Center, new Color(0.55f, 0.57f, 0.57f, 1f));
             text.fontStyle = FontStyles.Bold;
@@ -389,20 +392,20 @@ internal sealed class QuestDetailsPane : IDisposable
         switch (liveQuest.QuestStatus)
         {
             case EQuestStatus.AvailableForStart:
-                actions.Add(("ACCEPT", QuestDetailsActionKind.Accept, () => _actionHost!.Accept(liveQuest)));
+                actions.Add((ClientLocale.Text("label.accept"), QuestDetailsActionKind.Accept, () => _actionHost!.Accept(liveQuest)));
                 break;
             case EQuestStatus.FailRestartable:
-                actions.Add(("RESTART", QuestDetailsActionKind.Restart, () => _actionHost!.Accept(liveQuest)));
+                actions.Add((ClientLocale.Text("label.restart"), QuestDetailsActionKind.Restart, () => _actionHost!.Accept(liveQuest)));
                 break;
             case EQuestStatus.AvailableForFinish:
                 // Tarkov's quest-level FinishQuest path is the native TURN IN
                 // operation. Objective HAND OVER remains the separate
                 // QuestObjectiveView/HandoverItem path below.
-                actions.Add(("TURN IN", QuestDetailsActionKind.Complete, () => _actionHost!.Complete(liveQuest)));
+                actions.Add((ClientLocale.Text("label.turnIn"), QuestDetailsActionKind.Complete, () => _actionHost!.Complete(liveQuest)));
                 break;
         }
         if (liveQuest.IsChangeAllowed)
-            actions.Add(("REPLACE", QuestDetailsActionKind.Replace, () => _actionHost!.Replace()));
+            actions.Add((ClientLocale.Text("label.replace"), QuestDetailsActionKind.Replace, () => _actionHost!.Replace()));
 
         if (actions.Count == 0)
         {
@@ -427,6 +430,13 @@ internal sealed class QuestDetailsPane : IDisposable
             var label = UnityUiFactory.AddText(rect.gameObject, action.Label, 12, TextAlignmentOptions.Center, Color.white);
             label.fontStyle = FontStyles.Bold;
             button.onClick.AddListener(() => RunNativeAction(action.Action, action.Kind, button));
+            QuestMapNativeTooltips.Bind(rect.gameObject, () => ClientLocale.Format(action.Kind switch
+            {
+                QuestDetailsActionKind.Accept => "tooltip.accept",
+                QuestDetailsActionKind.Restart => "tooltip.restart",
+                QuestDetailsActionKind.Complete => "tooltip.turnIn",
+                _ => "tooltip.replace",
+            }, ClientLocale.Arg("quest", node.Name)));
             x += width + gap;
         }
     }
@@ -441,17 +451,23 @@ internal sealed class QuestDetailsPane : IDisposable
         if (tabCount > 1)
         {
             var tabIndex = 0;
-            AddTab(section, "DescriptionTab", "DESCRIPTION", TabStart(tabIndex++, tabCount), TabStart(tabIndex, tabCount), _textTab == DetailTextTab.Description,
-                () => SelectTextTab(DetailTextTab.Description));
+            AddTab(section, "DescriptionTab", ClientLocale.Text("label.description"), TabStart(tabIndex++, tabCount), TabStart(tabIndex, tabCount), _textTab == DetailTextTab.Description,
+                () => SelectTextTab(DetailTextTab.Description), _textTab == DetailTextTab.Description
+                    ? null
+                    : () => ClientLocale.Text("tooltip.showDescription"));
             if (hasSummary)
             {
-                AddTab(section, "SummaryTab", "SUMMARY", TabStart(tabIndex++, tabCount), TabStart(tabIndex, tabCount), _textTab == DetailTextTab.Summary,
-                    () => SelectTextTab(DetailTextTab.Summary));
+                AddTab(section, "SummaryTab", ClientLocale.Text("label.summary"), TabStart(tabIndex++, tabCount), TabStart(tabIndex, tabCount), _textTab == DetailTextTab.Summary,
+                    () => SelectTextTab(DetailTextTab.Summary), _textTab == DetailTextTab.Summary
+                        ? null
+                        : () => ClientLocale.Text("tooltip.showSummary"));
             }
             if (hasRelevantItems)
             {
-                AddTab(section, "RelevantItemsTab", "RELEVANT ITEMS", TabStart(tabIndex++, tabCount), TabStart(tabIndex, tabCount), _textTab == DetailTextTab.RelevantItems,
-                    () => SelectTextTab(DetailTextTab.RelevantItems));
+                AddTab(section, "RelevantItemsTab", ClientLocale.Text("label.relevantItems"), TabStart(tabIndex++, tabCount), TabStart(tabIndex, tabCount), _textTab == DetailTextTab.RelevantItems,
+                    () => SelectTextTab(DetailTextTab.RelevantItems), _textTab == DetailTextTab.RelevantItems
+                        ? null
+                        : () => ClientLocale.Text("tooltip.showRelevantItems"));
             }
         }
         if (_textTab == DetailTextTab.RelevantItems && hasRelevantItems)
@@ -481,7 +497,7 @@ internal sealed class QuestDetailsPane : IDisposable
         {
             var row = ContentRow(content, $"RelevantItem-{item.TemplateId}", y, rowHeight);
             row.gameObject.AddComponent<Image>().color = new Color(0.10f, 0.11f, 0.11f, 0.86f);
-            var itemName = item.FleaEligible ? item.Name : $"{item.Name}  (FLEA INELIGIBLE)";
+            var itemName = item.FleaEligible ? item.Name : ClientLocale.Format("label.fleaIneligible", ClientLocale.Arg("item", item.Name));
             var label = UnityUiFactory.AddText(row.gameObject, itemName, 13,
                 TextAlignmentOptions.MidlineLeft,
                 item.FleaEligible ? new Color(0.88f, 0.88f, 0.82f, 1f) : QuestGraphPalette.MutedText);
@@ -491,7 +507,8 @@ internal sealed class QuestDetailsPane : IDisposable
             haveRect.anchorMin = haveRect.anchorMax = haveRect.pivot = new Vector2(1, 0.5f);
             haveRect.anchoredPosition = new Vector2(item.FleaEligible ? -82 : -6, 0);
             haveRect.sizeDelta = new Vector2(100, 26);
-            var haveLabel = UnityUiFactory.AddText(haveRect.gameObject, $"(Have: {OwnedItemCount(item.TemplateId)})", 11,
+            var haveLabel = UnityUiFactory.AddText(haveRect.gameObject, ClientLocale.Format("common.haveCount",
+                    ClientLocale.Arg("count", OwnedItemCount(item.TemplateId))), 11,
                 TextAlignmentOptions.MidlineRight, QuestGraphPalette.MutedText);
             haveLabel.fontStyle = FontStyles.Bold;
             if (item.FleaEligible)
@@ -502,12 +519,15 @@ internal sealed class QuestDetailsPane : IDisposable
                 buttonRect.sizeDelta = new Vector2(70, 26);
                 var button = UnityUiFactory.AddButton(buttonRect.gameObject, QuestGraphPalette.Control);
                 button.interactable = !inRaid;
-                var buttonLabel = UnityUiFactory.AddText(buttonRect.gameObject, "FLEA", 11,
+                var buttonLabel = UnityUiFactory.AddText(buttonRect.gameObject, ClientLocale.Text("label.flea"), 11,
                     TextAlignmentOptions.Center,
                     inRaid ? QuestGraphPalette.MutedText : Color.white);
                 buttonLabel.fontStyle = FontStyles.Bold;
                 var templateId = item.TemplateId;
                 button.onClick.AddListener(() => OpenFlea(templateId));
+                QuestMapNativeTooltips.Bind(buttonRect.gameObject, () => ClientLocale.Format(
+                    inRaid ? "tooltip.searchFleaInRaid" : "tooltip.searchFlea",
+                    ClientLocale.Arg("item", item.Name)));
             }
             y += rowHeight + gap;
         }
@@ -598,7 +618,9 @@ internal sealed class QuestDetailsPane : IDisposable
         var displayState = QuestGraphRules.ClassifyProfileDisplayState(_topology!, node, _overlay!);
         if (displayState is QuestMapDisplayStateKind.ReadyToFinish or QuestMapDisplayStateKind.Completed) progress = 100d;
         var title = UnityUiFactory.AddText(section.gameObject,
-            progress.HasValue ? $"TASKS  ·  OVERALL {progress.Value:0.#}%" : "TASKS",
+            progress.HasValue
+                ? ClientLocale.Format("label.overallTasks", ClientLocale.Arg("percent", progress.Value))
+                : ClientLocale.Text("label.tasks"),
             14, TextAlignmentOptions.TopLeft, Color.white);
         title.margin = new Vector4(10, 5, 10, 0);
         title.fontStyle = FontStyles.Bold;
@@ -652,9 +674,12 @@ internal sealed class QuestDetailsPane : IDisposable
                 handoverObject = buttonRect.gameObject;
                 var button = UnityUiFactory.AddButton(buttonRect.gameObject, QuestGraphPalette.ControlActive);
                 button.interactable = false;
-                var buttonText = UnityUiFactory.AddText(buttonRect.gameObject, "…", 9,
+            var buttonText = UnityUiFactory.AddText(buttonRect.gameObject, "…", 9,
                     TextAlignmentOptions.Center, Color.white);
-                buttonText.fontStyle = FontStyles.Bold;
+            buttonText.fontStyle = FontStyles.Bold;
+            QuestMapNativeTooltips.Bind(buttonRect.gameObject, () => ClientLocale.Format(
+                button.interactable ? "tooltip.handover" : "tooltip.handoverPending",
+                ClientLocale.Arg("objective", objective.Text)));
                 var capturedCondition = condition;
                 NativeQuestTableActions.ResolveHandoverDeferred(
                     row,
@@ -674,7 +699,7 @@ internal sealed class QuestDetailsPane : IDisposable
                         }
 
                         _objectiveHosts.Add(objectiveHost);
-                        buttonText.text = "HAND OVER";
+                        buttonText.text = ClientLocale.Text("label.handOver");
                         button.interactable = true;
                         button.onClick.AddListener(() => RunNativeAction(
                             objectiveHost.Execute, QuestDetailsActionKind.Handover, button));
@@ -698,10 +723,12 @@ internal sealed class QuestDetailsPane : IDisposable
                 skipRect.anchoredPosition = new Vector2(5, 0);
                 skipRect.sizeDelta = new Vector2(actionWidth - 10, 0);
                 var skipButton = UnityUiFactory.AddButton(skipRect.gameObject, QuestGraphPalette.Failed);
-                var skipText = UnityUiFactory.AddText(skipRect.gameObject, "SKIP", 9,
+                var skipText = UnityUiFactory.AddText(skipRect.gameObject, ClientLocale.Text("label.skip"), 9,
                     TextAlignmentOptions.Center, Color.white);
                 skipText.fontStyle = FontStyles.Bold;
                 skipButton.onClick.AddListener(() => RequestObjectiveSkip(node, objective, liveQuest));
+                QuestMapNativeTooltips.Bind(skipRect.gameObject, () => ClientLocale.Format("tooltip.skip",
+                    ClientLocale.Arg("objective", objective.Text)));
                 skipSlot = _skipVisibility.Register(skipRect.gameObject, handoverObject);
             }
 
@@ -714,7 +741,9 @@ internal sealed class QuestDetailsPane : IDisposable
             var valueText = objectiveProgress?.Complete == true
                 ? "✓"
                 : numeric
-                    ? $"{Math.Min(objectiveProgress!.Current ?? 0, objectiveProgress.Required ?? objective.RequiredValue ?? 0):0.#} / {objectiveProgress.Required ?? objective.RequiredValue:0.#}"
+                    ? ClientLocale.Format("common.progress",
+                        ClientLocale.Arg("current", Math.Min(objectiveProgress!.Current ?? 0, objectiveProgress.Required ?? objective.RequiredValue ?? 0)),
+                        ClientLocale.Arg("required", objectiveProgress.Required ?? objective.RequiredValue ?? 0))
                     : string.Empty;
             var value = UnityUiFactory.AddText(valueRect.gameObject, valueText, 12,
                 TextAlignmentOptions.Center, future ? new Color(0.45f, 0.46f, 0.46f, 1f) : QuestGraphPalette.MutedText);
@@ -743,7 +772,7 @@ internal sealed class QuestDetailsPane : IDisposable
         if (node.Objectives.Count == 0)
         {
             var empty = ContentRow(content, "NoObjectives", 0, 42);
-            UnityUiFactory.AddText(empty.gameObject, "No objectives are recorded.", 13,
+            UnityUiFactory.AddText(empty.gameObject, ClientLocale.Text("label.noObjectives"), 13,
                 TextAlignmentOptions.Center, QuestGraphPalette.MutedText);
             y = 42;
         }
@@ -754,7 +783,7 @@ internal sealed class QuestDetailsPane : IDisposable
         var rewards = node.Rewards.Where(reward => _showHiddenRewards() || !reward.Hidden).ToArray();
         var fallbackContentHeight = rewards.Length == 0 ? 42f : rewards.Length * 47f;
         var section = StackRect("RewardsSection", parent, 32f + fallbackContentHeight);
-        var title = UnityUiFactory.AddText(section.gameObject, "REWARDS", 14,
+        var title = UnityUiFactory.AddText(section.gameObject, ClientLocale.Text("label.rewards"), 14,
             TextAlignmentOptions.TopLeft, Color.white);
         title.margin = new Vector4(10, 5, 10, 0);
         title.fontStyle = FontStyles.Bold;
@@ -781,7 +810,7 @@ internal sealed class QuestDetailsPane : IDisposable
         if (rewards.Length == 0)
         {
             var empty = ContentRow(content, "NoRewards", 0, 42);
-            UnityUiFactory.AddText(empty.gameObject, "No rewards are recorded.", 13,
+            UnityUiFactory.AddText(empty.gameObject, ClientLocale.Text("label.noRewards"), 13,
                 TextAlignmentOptions.Center, QuestGraphPalette.MutedText);
             y = 42;
         }
@@ -885,7 +914,7 @@ internal sealed class QuestDetailsPane : IDisposable
         title.margin = new Vector4(18, 18, 18, 0);
         title.fontStyle = FontStyles.Bold;
         var message = UnityUiFactory.AddText(Root.gameObject,
-            "Quest details could not be rendered. The quest map remains available; see LogOutput.log for the failing component.",
+            ClientLocale.Text("label.detailsFailed"),
             14, TextAlignmentOptions.Center, QuestGraphPalette.MutedText);
         message.margin = new Vector4(28, 80, 28, 28);
     }
@@ -1139,7 +1168,7 @@ internal sealed class QuestDetailsPane : IDisposable
         float minimumHeight)
     {
         var content = CreateExpandedRegion(parent, name, top, Mathf.Max(1f, parent.rect.height - top - bottom));
-        var value = string.IsNullOrWhiteSpace(text) ? "No description is available." : text;
+        var value = string.IsNullOrWhiteSpace(text) ? ClientLocale.Text("common.noDescription") : text;
         var label = UnityUiFactory.AddText(content.gameObject,
             value,
             fontSize,
@@ -1163,7 +1192,8 @@ internal sealed class QuestDetailsPane : IDisposable
         float minimum,
         float maximum,
         bool active,
-        Action action)
+        Action action,
+        Func<string>? tooltip)
     {
         var rect = UnityUiFactory.CreateRect(name, parent);
         rect.anchorMin = new Vector2(minimum, 1);
@@ -1174,6 +1204,7 @@ internal sealed class QuestDetailsPane : IDisposable
         var text = UnityUiFactory.AddText(rect.gameObject, label, 11, TextAlignmentOptions.Center, Color.white);
         text.fontStyle = FontStyles.Bold;
         button.onClick.AddListener(() => action());
+        if (tooltip is not null) QuestMapNativeTooltips.Bind(rect.gameObject, tooltip);
     }
 
     private static void AddProgressBar(RectTransform parent, double ratio, float horizontalInset, float bottom, Color color)
@@ -1194,13 +1225,17 @@ internal sealed class QuestDetailsPane : IDisposable
 
     private static string RewardText(QuestReward reward)
     {
-        var hidden = reward.Hidden ? "[HIDDEN]  " : string.Empty;
+        var hidden = reward.Hidden ? ClientLocale.Text("common.hiddenPrefix") : string.Empty;
         if (reward.Items.Count > 0)
-            return hidden + string.Join(", ", reward.Items.Select(item => $"{item.Count:0.##}× {item.Name}"));
+            return hidden + string.Join(ClientLocale.Text("common.listSeparator"), reward.Items.Select(item =>
+                ClientLocale.Format("reward.item", ClientLocale.Arg("count", item.Count), ClientLocale.Arg("item", item.Name))));
         var subject = reward.TargetName ?? reward.TraderName ?? reward.TargetId;
-        var value = reward.Value.HasValue ? $" {reward.Value.Value:+0.##;-0.##;0}" : string.Empty;
-        var loyalty = reward.LoyaltyLevel.HasValue ? $" LL{reward.LoyaltyLevel.Value}" : string.Empty;
-        return $"{hidden}{reward.Type}{(string.IsNullOrWhiteSpace(subject) ? string.Empty : $" · {subject}")}{value}{loyalty}";
+        return ClientLocale.Format("reward.line",
+            ClientLocale.Arg("hidden", hidden),
+            ClientLocale.Arg("type", reward.Type),
+            ClientLocale.Arg("subject", string.IsNullOrWhiteSpace(subject) ? string.Empty : ClientLocale.Format("reward.subject", ClientLocale.Arg("subject", subject))),
+            ClientLocale.Arg("value", reward.Value.HasValue ? ClientLocale.Format("reward.value", ClientLocale.Arg("value", reward.Value.Value)) : string.Empty),
+            ClientLocale.Arg("loyalty", reward.LoyaltyLevel.HasValue ? ClientLocale.Format("reward.loyalty", ClientLocale.Arg("level", reward.LoyaltyLevel.Value)) : string.Empty));
     }
 
     private static void AddTextShadow(TMP_Text text)
@@ -1223,13 +1258,18 @@ internal sealed class QuestDetailsPane : IDisposable
 
     private static bool QuestMutationsAllowed() => !InRaidQuestContext.TryCapture(out _);
 
+    private string SelectedQuestName() =>
+        _selectedQuestId is not null && _topology?.NodesById.TryGetValue(_selectedQuestId, out var node) == true
+            ? node.Name
+            : ClientLocale.Text("label.questDescription");
+
     private static void AddRouteBar(RectTransform parent, bool collector, bool lightkeeper)
     {
         if (!collector && !lightkeeper) return;
         const float height = 12f;
-        if (collector) AddRouteBarPart(parent, "CollectorRoute", "COLLECTOR", QuestGraphPalette.Collector,
+        if (collector) AddRouteBarPart(parent, "CollectorRoute", ClientLocale.Text("legend.collector"), QuestGraphPalette.Collector,
             0f, lightkeeper ? 0.5f : 1f, height);
-        if (lightkeeper) AddRouteBarPart(parent, "LightkeeperRoute", "LIGHTKEEPER", QuestGraphPalette.Lightkeeper,
+        if (lightkeeper) AddRouteBarPart(parent, "LightkeeperRoute", ClientLocale.Text("legend.lightkeeper"), QuestGraphPalette.Lightkeeper,
             collector ? 0.5f : 0f, 1f, height);
     }
 
@@ -1240,10 +1280,12 @@ internal sealed class QuestDetailsPane : IDisposable
         rect.anchoredPosition = new Vector2(-10, -10);
         rect.sizeDelta = new Vector2(74, 28);
         var button = UnityUiFactory.AddButton(rect.gameObject, new Color(0.20f, 0.22f, 0.19f, 0.96f));
-        var label = UnityUiFactory.AddText(rect.gameObject, "WIKI", 11, TextAlignmentOptions.Center,
+        var label = UnityUiFactory.AddText(rect.gameObject, ClientLocale.Text("label.wiki"), 11, TextAlignmentOptions.Center,
             new Color(0.95f, 0.90f, 0.72f, 1f));
         label.fontStyle = FontStyles.Bold;
         button.onClick.AddListener(() => OpenWiki(wikiUrl));
+        QuestMapNativeTooltips.Bind(rect.gameObject, () => ClientLocale.Format("tooltip.openWiki",
+            ClientLocale.Arg("quest", SelectedQuestName())));
     }
 
     private static void AddScavBadge(RectTransform parent, float top)
@@ -1253,7 +1295,7 @@ internal sealed class QuestDetailsPane : IDisposable
         badge.anchoredPosition = new Vector2(-10, -top);
         badge.sizeDelta = new Vector2(58, 22);
         badge.gameObject.AddComponent<Image>().color = new Color(0.40f, 0.34f, 0.16f, 0.96f);
-        var label = UnityUiFactory.AddText(badge.gameObject, "SCAV", 10,
+        var label = UnityUiFactory.AddText(badge.gameObject, ClientLocale.Text("common.scav"), 10,
             TextAlignmentOptions.Center, new Color(1f, 0.96f, 0.78f, 1f));
         label.fontStyle = FontStyles.Bold;
     }

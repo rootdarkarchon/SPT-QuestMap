@@ -17,7 +17,8 @@ internal static class QuestWorkspaceChrome
         bool active,
         Action action,
         float height = 32,
-        bool enabled = true)
+        bool enabled = true,
+        Func<string>? tooltip = null)
     {
         var rect = UnityUiFactory.CreateRect(name, parent);
         rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0, 1);
@@ -28,6 +29,7 @@ internal static class QuestWorkspaceChrome
         UnityUiFactory.AddText(rect.gameObject, label, height <= 24 ? 10 : 12, TextAlignmentOptions.Center,
             enabled ? Color.white : new Color(0.48f, 0.50f, 0.50f, 1f));
         button.onClick.AddListener(() => action());
+        if (tooltip is not null) QuestMapNativeTooltips.Bind(rect.gameObject, tooltip);
         return rect.GetComponent<Image>();
     }
 
@@ -39,7 +41,8 @@ internal static class QuestWorkspaceChrome
         float width,
         bool active,
         Action action,
-        bool enabled = true)
+        bool enabled = true,
+        Func<string>? tooltip = null)
     {
         var rect = UnityUiFactory.CreateRect(name, parent);
         rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1, 1);
@@ -50,6 +53,7 @@ internal static class QuestWorkspaceChrome
         UnityUiFactory.AddText(rect.gameObject, label, 12, TextAlignmentOptions.Center,
             enabled ? Color.white : new Color(0.48f, 0.50f, 0.50f, 1f));
         button.onClick.AddListener(() => action());
+        if (tooltip is not null) QuestMapNativeTooltips.Bind(rect.gameObject, tooltip);
         return rect.GetComponent<Image>();
     }
 

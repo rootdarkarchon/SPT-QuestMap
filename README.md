@@ -32,6 +32,7 @@ SPT-QuestMap is an independent community project. It is not affiliated with or e
 - Uses a Canvas renderer so the full graph remains practical to pan and zoom.
 - Refreshes only when you ask it to. It does not poll or modify the profile.
 - Optionally lets the exact-version in-game client mark one active objective complete after a confirmation, without handing in items or completing the whole quest; this action defaults off.
+- Keeps QuestMap-owned runtime UI text in an embedded fallback catalog—while preserving invariant BepInEx configuration keys—and gives every custom pointer control a brief delayed EFT-native tooltip, including state-aware toggle guidance.
 
 ## Compatibility
 

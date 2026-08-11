@@ -12,6 +12,8 @@ internal static class QuestGraphPalette
     public static readonly Color Border = Hex(0x3A3F38);
     public static readonly Color Text = Hex(0xE7E2D6);
     public static readonly Color MutedText = Hex(0xB7BAB0);
+    public static readonly Color ButtonHoverTint = new(1.42f, 1.38f, 1.30f, 1f);
+    public static readonly Color ButtonPressedTint = new(1.18f, 1.16f, 1.10f, 1f);
 
     private static QuestMapClientConfiguration? _configuration;
 

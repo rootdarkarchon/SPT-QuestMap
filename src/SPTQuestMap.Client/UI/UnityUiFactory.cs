@@ -70,8 +70,8 @@ internal static class UnityUiFactory
         button.targetGraphic = image;
         var colors = button.colors;
         colors.normalColor = Color.white;
-        colors.highlightedColor = new Color(0.90f, 0.90f, 0.90f, 1f);
-        colors.pressedColor = new Color(0.76f, 0.76f, 0.76f, 1f);
+        colors.highlightedColor = QuestGraphPalette.ButtonHoverTint;
+        colors.pressedColor = QuestGraphPalette.ButtonPressedTint;
         button.colors = colors;
         gameObject.AddComponent<QuestMapButtonFeedback>();
         return button;

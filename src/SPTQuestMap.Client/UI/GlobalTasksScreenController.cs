@@ -11,6 +11,7 @@ using EFT.Quests;
 using EFT.UI;
 using HarmonyLib;
 using SPTQuestMap.Client.Data;
+using SPTQuestMap.Client.Localization;
 using SPTQuestMap.Core.Layout;
 using SPTQuestMap.Core.Models;
 using SPTQuestMap.Core.Rules;
@@ -724,15 +725,24 @@ internal sealed class GlobalTasksScreenController : IDisposable
     {
         return
         [
-            new QuestGraphHeaderAction("Focus", _focusQuestId is null ? "FOCUS CHAIN" : "UNFOCUS", 92, _focusQuestId is not null, ToggleFocus),
-            new QuestGraphHeaderAction("Clear", "CLEAR SELECTION", 106, _selectedQuestId is not null, ClearSelection),
+            new QuestGraphHeaderAction("Focus", _focusQuestId is null ? ClientLocale.Text("label.focusChain") : ClientLocale.Text("label.unfocus"), 92, _focusQuestId is not null, ToggleFocus,
+                () => _selectedQuestId is null
+                    ? ClientLocale.Text("tooltip.noQuestSelected")
+                    : _focusQuestId is null
+                        ? ClientLocale.Format("tooltip.focus", ClientLocale.Arg("quest", SelectedQuestName()))
+                        : ClientLocale.Text("tooltip.unfocus"),
+                enabled: _selectedQuestId is not null, selectionDependent: true),
+            new QuestGraphHeaderAction("Clear", ClientLocale.Text("label.clearSelection"), 106, _selectedQuestId is not null, ClearSelection,
+                () => ClientLocale.Text(_selectedQuestId is null ? "tooltip.noQuestSelected" : "tooltip.clearSelection"),
+                enabled: _selectedQuestId is not null, selectionDependent: true),
         ];
     }
 
     private string BuildTitle()
     {
-        var title = _mode == GlobalQuestGraphMode.InProgress ? "TASKS" : "QUEST MAP";
-        if (!string.IsNullOrWhiteSpace(_search)) title += $"  ·  SEARCH: {_search}";
+        var title = _mode == GlobalQuestGraphMode.InProgress ? ClientLocale.Text("label.tasks") : ClientLocale.Text("label.questMap");
+        if (!string.IsNullOrWhiteSpace(_search))
+            title = ClientLocale.Format("common.searchTitle", ClientLocale.Arg("title", title), ClientLocale.Arg("search", _search));
         return title;
     }
 
@@ -844,14 +854,18 @@ internal sealed class GlobalTasksScreenController : IDisposable
         var header = _graphView.Root.Find("Header") as RectTransform
             ?? throw new InvalidOperationException("QuestMap global header was not created.");
 
-        AddHeaderButton(header, "InProgressTab", "TASKS", 12, -4, 112,
-            _mode == GlobalQuestGraphMode.InProgress, () => ShowMode(GlobalQuestGraphMode.InProgress));
-        AddHeaderButton(header, "QuestMapTab", "QUEST MAP", 130, -4, 100,
-            _mode == GlobalQuestGraphMode.Full, () => ShowMode(GlobalQuestGraphMode.Full), enabled: !_raidInProgressOnly);
-        _notesButtonImage = AddRightHeaderButton(header, "Notes", "NOTES", 116, 72,
-            _overlayMode == GlobalOverlayMode.Notes, () => ToggleNativeOverlay(true));
-        _questItemsButtonImage = AddRightHeaderButton(header, "QuestItems", "QUEST ITEMS", 6, 104,
-            _overlayMode == GlobalOverlayMode.QuestItems, () => ToggleNativeOverlay(false));
+        AddHeaderButton(header, "InProgressTab", ClientLocale.Text("label.tasks"), 12, -4, 112,
+            _mode == GlobalQuestGraphMode.InProgress, () => ShowMode(GlobalQuestGraphMode.InProgress),
+            tooltip: _mode == GlobalQuestGraphMode.InProgress ? null : () => ClientLocale.Text("tooltip.openTasks"));
+        AddHeaderButton(header, "QuestMapTab", ClientLocale.Text("label.questMap"), 130, -4, 100,
+            _mode == GlobalQuestGraphMode.Full, () => ShowMode(GlobalQuestGraphMode.Full), enabled: !_raidInProgressOnly,
+            tooltip: _mode == GlobalQuestGraphMode.Full ? null : () => ClientLocale.Text("tooltip.openQuestMap"));
+        _notesButtonImage = AddRightHeaderButton(header, "Notes", ClientLocale.Text("label.notes"), 116, 72,
+            _overlayMode == GlobalOverlayMode.Notes, () => ToggleNativeOverlay(true),
+            () => ClientLocale.Text(_overlayMode == GlobalOverlayMode.Notes ? "tooltip.closeNotes" : "tooltip.openNotes"));
+        _questItemsButtonImage = AddRightHeaderButton(header, "QuestItems", ClientLocale.Text("label.questItems"), 6, 104,
+            _overlayMode == GlobalOverlayMode.QuestItems, () => ToggleNativeOverlay(false),
+            () => QuestItemsTooltip());
         BuildQuestItemsWarningBadge();
         if (_customDetailsEnabled)
         {
@@ -863,28 +877,34 @@ internal sealed class GlobalTasksScreenController : IDisposable
             _questDescriptionButtonImage = AddRightHeaderButton(
                 header,
                 "QuestDescription",
-                "QUEST DESCRIPTION",
+                ClientLocale.Text("label.questDescription"),
                 208,
                 144,
                 _overlayMode == GlobalOverlayMode.QuestDescription,
-                ToggleQuestDetails);
+                ToggleQuestDetails,
+                () => QuestDescriptionTooltip());
             _questDescriptionButton = _questDescriptionButtonImage.GetComponent<Button>();
         }
 
         BuildSearchControl(header);
         if (_mode == GlobalQuestGraphMode.Full)
         {
-            AddHeaderButton(header, "Future", "FUTURE", 12, -70, 68, _showAllFuture, ToggleFuture, 23);
-            AddHeaderButton(header, "Finished", "✓", 86, -70, 42, !_hideFinished, ToggleFinished, 23);
-            AddHeaderButton(header, "Level", $"≤ {_overlay?.Level ?? 0}", 134, -70, 66, _levelEligibleOnly, ToggleLevel, 23);
+            AddHeaderButton(header, "Future", ClientLocale.Text("label.future"), 12, -70, 68, _showAllFuture, ToggleFuture, 23,
+                tooltip: () => ClientLocale.Text(_showAllFuture ? "tooltip.showNextFuture" : "tooltip.showAllFuture"));
+            AddHeaderButton(header, "Finished", ClientLocale.Text("label.finished"), 86, -70, 42, !_hideFinished, ToggleFinished, 23,
+                tooltip: () => ClientLocale.Text(_hideFinished ? "tooltip.showFinished" : "tooltip.hideFinished"));
+            AddHeaderButton(header, "Level", ClientLocale.Format("common.levelFilter", ClientLocale.Arg("level", _overlay?.Level ?? 0)), 134, -70, 66, _levelEligibleOnly, ToggleLevel, 23,
+                tooltip: () => ClientLocale.Format(_levelEligibleOnly ? "tooltip.showAllLevels" : "tooltip.limitLevel", ClientLocale.Arg("level", _overlay?.Level ?? 0)));
         }
         else
         {
-            AddHeaderButton(header, "Repeatables", _includeAvailableRepeatables ? "↻ ALL" : "↻ ACTIVE", 12, -70, 86,
-                _includeAvailableRepeatables, ToggleRepeatables, 23);
+            AddHeaderButton(header, "Repeatables", ClientLocale.Text(_includeAvailableRepeatables ? "label.repeatablesAll" : "label.repeatablesActive"), 12, -70, 86,
+                _includeAvailableRepeatables, ToggleRepeatables, 23,
+                tooltip: () => ClientLocale.Text(_includeAvailableRepeatables ? "tooltip.showActiveRepeatables" : "tooltip.showAllRepeatables"));
             AddHeaderButton(header, "HideCompletedTasks",
-                _hideCompletedInProgressTasks ? "✓: HIDDEN" : "✓: SHOWN", 104, -70, 100,
-                _hideCompletedInProgressTasks, ToggleCompletedTasks, 23);
+                ClientLocale.Text(_hideCompletedInProgressTasks ? "label.completedHidden" : "label.completedShown"), 104, -70, 100,
+                _hideCompletedInProgressTasks, ToggleCompletedTasks, 23,
+                tooltip: () => ClientLocale.Text(_hideCompletedInProgressTasks ? "tooltip.showCompletedTasks" : "tooltip.hideCompletedTasks"));
         }
 
         var separator = UnityUiFactory.CreateRect("FilterSeparator", header);
@@ -919,7 +939,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         var nextIndex = 0;
         if (hasAny)
         {
-            AddMapChoice("Any", "any", FallbackLocationBannerUrl, nextIndex, _inProgressLocationIds.Contains("any"));
+            AddMapChoice(ClientLocale.Text("common.any"), "any", FallbackLocationBannerUrl, nextIndex, _inProgressLocationIds.Contains("any"));
             nextIndex++;
         }
         for (var index = 0; index < locations.Length; index++)
@@ -977,6 +997,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
             if (id is not null)
                 _inProgressMapVisuals[id] = new MapFilterVisual(background, banner, shadeImage, outline);
             button.onClick.AddListener(() => ToggleInProgressLocation(id));
+            QuestMapNativeTooltips.Bind(root.gameObject, () => ClientLocale.Format(
+                selected ? "tooltip.clearLocation" : "tooltip.selectLocation",
+                ClientLocale.Arg("location", label)));
 
             var pointerClicks = root.gameObject.AddComponent<EventTrigger>();
             var pointerClick = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
@@ -1175,7 +1198,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         UnityUiFactory.Stretch(viewport, 8, 8, 2, 2);
         viewport.gameObject.AddComponent<RectMask2D>();
         var text = UnityUiFactory.AddText(viewport.gameObject, _search, 12, TextAlignmentOptions.MidlineLeft, Color.white);
-        var placeholder = UnityUiFactory.AddText(viewport.gameObject, "QUEST, TRADER, OR ID", 12,
+        var placeholder = UnityUiFactory.AddText(viewport.gameObject, ClientLocale.Text("label.searchQuestTraderOrId"), 12,
             TextAlignmentOptions.MidlineLeft, new Color(0.55f, 0.57f, 0.58f, 1));
         var input = root.gameObject.AddComponent<TMP_InputField>();
         input.textViewport = viewport;
@@ -1190,13 +1213,14 @@ internal sealed class GlobalTasksScreenController : IDisposable
             _search = next;
             if (!UpdateInProgressPresentation(true, true)) RebuildGraph(true);
         });
+        QuestMapNativeTooltips.Bind(root.gameObject, () => ClientLocale.Text("tooltip.search"));
 
         AddHeaderButton(header, "ClearSearch", "×", 240, -42, 30, !string.IsNullOrEmpty(_search), () =>
         {
             if (string.IsNullOrEmpty(_search)) return;
             _search = string.Empty;
             if (!UpdateInProgressPresentation(true, true)) RebuildGraph(true);
-        }, 24);
+        }, 24, tooltip: () => ClientLocale.Text("tooltip.clearSearch"));
     }
 
     private void BuildTraderStrip(RectTransform header)
@@ -1210,7 +1234,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             .OrderBy(trader => TraderRank(trader.Id))
             .ThenBy(trader => trader.Name, StringComparer.Ordinal)
             .ToArray();
-        AddTraderChoice("/files/trader/avatar/unknown.png", "All", null, 0);
+        AddTraderChoice("/files/trader/avatar/unknown.png", ClientLocale.Text("common.all"), null, 0);
         for (var index = 0; index < traders.Length; index++)
             AddTraderChoice(traders[index].ImageUrl, traders[index].Name, traders[index].Id, index + 1);
 
@@ -1254,20 +1278,24 @@ internal sealed class GlobalTasksScreenController : IDisposable
                 selected ? QuestGraphPalette.Selected : QuestGraphPalette.MutedText);
             traderLabel.enableWordWrapping = false;
             button.onClick.AddListener(() => SetTrader(id));
+            QuestMapNativeTooltips.Bind(root.gameObject, () => id is null
+                ? ClientLocale.Text("tooltip.clearTrader")
+                : ClientLocale.Format("tooltip.selectTrader", ClientLocale.Arg("trader", label)));
         }
     }
 
     private static Image AddHeaderButton(
         RectTransform parent, string name, string label, float x, float y, float width, bool active, Action action,
-        float height = 32, bool enabled = true)
+        float height = 32, bool enabled = true, Func<string>? tooltip = null)
     {
-        return QuestWorkspaceChrome.AddButton(parent, name, label, x, y, width, active, action, height, enabled);
+        return QuestWorkspaceChrome.AddButton(parent, name, label, x, y, width, active, action, height, enabled, tooltip);
     }
 
     private static Image AddRightHeaderButton(
-        RectTransform parent, string name, string label, float right, float width, bool active, Action action)
+        RectTransform parent, string name, string label, float right, float width, bool active, Action action,
+        Func<string>? tooltip = null)
     {
-        return QuestWorkspaceChrome.AddRightButton(parent, name, label, right, width, active, action);
+        return QuestWorkspaceChrome.AddRightButton(parent, name, label, right, width, active, action, tooltip: tooltip);
     }
 
     private static int TraderRank(string traderId)
@@ -1867,18 +1895,28 @@ internal sealed class GlobalTasksScreenController : IDisposable
         var progressPercent = displayState == QuestMapDisplayStateKind.InProgress && liveState is not null
             ? QuestGraphRules.CalculateObjectiveProgressPercent(liveState.Objectives)
             : null;
-        if (progressPercent.HasValue) status += $" · ~{progressPercent.Value:0.#}%";
+        if (progressPercent.HasValue)
+            status += ClientLocale.Format("common.inlineDetail", ClientLocale.Arg("detail",
+                ClientLocale.Format("common.approximatePercent", ClientLocale.Arg("percent", progressPercent.Value))));
         var completed = liveState?.Objectives.Count(objective => objective.Complete) ?? 0;
         var objectiveSummary = node.Objectives.Count == 0
-            ? "No objectives"
-            : $"Objectives {completed}/{node.Objectives.Count}";
+            ? ClientLocale.Text("common.noObjectivesShort")
+            : ClientLocale.Format("common.objectivesCount", ClientLocale.Arg("complete", completed),
+                ClientLocale.Arg("total", node.Objectives.Count));
         var routes = new List<string>();
-        if (_topology.CollectorPathQuestIds.Contains(node.Id)) routes.Add("Collector");
-        if (_topology.LightkeeperPathQuestIds.Contains(node.Id)) routes.Add("Lightkeeper");
-        var routeText = routes.Count == 0 ? string.Empty : $"  ·  {string.Join(" / ", routes)} route";
-        _selectionSummaryText.text =
-            $"{node.Name.ToUpperInvariant()}  ·  {node.TraderName}  ·  {status}{routeText}\n" +
-            $"{objectiveSummary}  ·  Select Focus to isolate prerequisites and direct successors. Native transactions remain EFT-owned.";
+        if (_topology.CollectorPathQuestIds.Contains(node.Id)) routes.Add(ClientLocale.Text("common.collector"));
+        if (_topology.LightkeeperPathQuestIds.Contains(node.Id)) routes.Add(ClientLocale.Text("common.lightkeeper"));
+        var routeText = routes.Count == 0
+            ? string.Empty
+            : ClientLocale.Format("common.inlineDetailWide", ClientLocale.Arg("detail",
+                ClientLocale.Format("common.route", ClientLocale.Arg("routes",
+                    string.Join(ClientLocale.Text("common.routeSeparator"), routes)))));
+        _selectionSummaryText.text = ClientLocale.Format("selection.summary",
+            ClientLocale.Arg("quest", node.Name.ToUpperInvariant()),
+            ClientLocale.Arg("trader", node.TraderName),
+            ClientLocale.Arg("status", status),
+            ClientLocale.Arg("route", routeText),
+            ClientLocale.Arg("objectives", objectiveSummary));
         _selectionSummary.gameObject.SetActive(true);
         _selectionSummary.SetAsLastSibling();
     }
@@ -1890,6 +1928,31 @@ internal sealed class GlobalTasksScreenController : IDisposable
         ?? throw new MissingFieldException(typeof(TasksPanel).FullName, name);
 
     private static string FormatSize(Vector2 value) => $"{value.x:0.##}x{value.y:0.##}";
+
+    private string SelectedQuestName() =>
+        _selectedQuestId is not null && _topology?.NodesById.TryGetValue(_selectedQuestId, out var node) == true
+            ? node.Name
+            : ClientLocale.Text("label.questDescription");
+
+    private string QuestDescriptionTooltip()
+    {
+        if (_selectedQuestId is null) return ClientLocale.Text("tooltip.noQuestSelected");
+        return _overlayMode == GlobalOverlayMode.QuestDescription
+            ? ClientLocale.Text("tooltip.closeDetails")
+            : ClientLocale.Format("tooltip.openDetails", ClientLocale.Arg("quest", SelectedQuestName()));
+    }
+
+    private string QuestItemsTooltip()
+    {
+        var count = GetCarriedQuestItemCount();
+        if (count > 0)
+            return ClientLocale.Format(
+                _overlayMode == GlobalOverlayMode.QuestItems ? "tooltip.closeQuestItemsCount" : "tooltip.openQuestItemsCount",
+                ClientLocale.Arg("count", count));
+        return ClientLocale.Text(_overlayMode == GlobalOverlayMode.QuestItems
+            ? "tooltip.closeQuestItems"
+            : "tooltip.openQuestItems");
+    }
 
     private static string GetPath(Transform transform)
     {

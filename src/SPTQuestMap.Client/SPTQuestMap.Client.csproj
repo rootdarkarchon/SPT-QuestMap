@@ -53,6 +53,7 @@
   </Target>
 
   <ItemGroup>
+    <EmbeddedResource Include="Localization\Locales\*.json" />
     <ProjectReference Include="..\SPTQuestMap.Core\SPTQuestMap.Core.csproj" />
     <Reference Include="0Harmony">
       <HintPath>$(BepInExCoreRoot)\0Harmony.dll</HintPath>

@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using SPTQuestMap.Core.Adapters;
 using SPTQuestMap.Core.Layout;
+using SPTQuestMap.Core.Localization;
 using SPTQuestMap.Core.Models;
 using SPTQuestMap.Core.Rules;
 using SPTQuestMap.Core.Transport;
@@ -10,6 +11,22 @@ namespace SPTQuestMap.Core.Tests;
 [TestFixture]
 public sealed class QuestGraphCoreTests
 {
+    [Test]
+    public void NamedTemplateFormatterSupportsNamedValuesAndFormats()
+    {
+        var result = NamedTemplateFormatter.Format(
+            "{quest}: {current:0.#}/{required:0.#} ({missing})",
+            new Dictionary<string, object?>
+            {
+                ["quest"] = "Search Mission",
+                ["current"] = 0d,
+                ["required"] = 1d,
+            },
+            System.Globalization.CultureInfo.InvariantCulture);
+
+        Assert.That(result, Is.EqualTo("Search Mission: 0/1 ({missing})"));
+    }
+
     [Test]
     public void RepeatableBadgesMatchQuestActionButtonHeight()
     {

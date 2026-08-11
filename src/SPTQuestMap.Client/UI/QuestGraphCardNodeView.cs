@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using SPTQuestMap.Client.Localization;
 using SPTQuestMap.Core.Models;
 using SPTQuestMap.Core.Rules;
 using TMPro;
@@ -133,8 +134,8 @@ internal sealed class QuestGraphCardNodeView
         routes.offsetMax = new Vector2(-10, 10);
         var collector = AddImage("Collector", routes, Vector2.zero, Vector2.one, QuestGraphPalette.Collector, true);
         var lightkeeper = AddImage("Lightkeeper", routes, Vector2.zero, Vector2.one, QuestGraphPalette.Lightkeeper, true);
-        UnityUiFactory.AddText(collector.gameObject, "COLLECTOR", 8, TextAlignmentOptions.Center, Color.white);
-        UnityUiFactory.AddText(lightkeeper.gameObject, "LIGHTKEEPER", 8, TextAlignmentOptions.Center, Color.white);
+        UnityUiFactory.AddText(collector.gameObject, ClientLocale.Text("legend.collector"), 8, TextAlignmentOptions.Center, Color.white);
+        UnityUiFactory.AddText(lightkeeper.gameObject, ClientLocale.Text("legend.lightkeeper"), 8, TextAlignmentOptions.Center, Color.white);
 
         var terminal = AddImage("Terminal", root, new Vector2(1, 0), Vector2.one, QuestGraphPalette.Terminal, false);
         terminal.rectTransform.pivot = new Vector2(1, 0.5f);
@@ -152,7 +153,7 @@ internal sealed class QuestGraphCardNodeView
         scavBadge.anchoredPosition = new Vector2(-45, -7);
         scavBadge.sizeDelta = new Vector2(48, 18);
         scavBadge.gameObject.AddComponent<Image>().color = new Color(0.40f, 0.34f, 0.16f, 0.98f);
-        var scavText = UnityUiFactory.AddText(scavBadge.gameObject, "SCAV", 9,
+        var scavText = UnityUiFactory.AddText(scavBadge.gameObject, ClientLocale.Text("common.scav"), 9,
             TextAlignmentOptions.Center, new Color(1f, 0.96f, 0.78f, 1f));
         scavText.fontStyle = FontStyles.Bold;
         scavBadge.gameObject.SetActive(false);
@@ -187,6 +188,9 @@ internal sealed class QuestGraphCardNodeView
         BindImage(node.Id, node.TraderImageUrl, _portrait, 1, true);
         _button.onClick.RemoveAllListeners();
         _clickHandler.Bind(node.Id, selected, focusRequested);
+        QuestMapNativeTooltips.Bind(Root.gameObject, () => focusRequested is null
+            ? string.Empty
+            : ClientLocale.Format("tooltip.doubleClickFocus", ClientLocale.Arg("quest", node.Name)));
         Root.gameObject.SetActive(true);
     }
 
@@ -211,13 +215,19 @@ internal sealed class QuestGraphCardNodeView
         var progressPercent = kind == QuestMapDisplayStateKind.InProgress
             ? QuestGraphRules.ResolveProfileProgressPercent(node.Id, overlay)
             : null;
-        var progress = progressPercent.HasValue ? $" · ~{progressPercent.Value:0.#}%" : string.Empty;
-        var handover = state?.HandoverReady == true ? " · HANDOVER READY" : string.Empty;
+        var progress = progressPercent.HasValue
+            ? ClientLocale.Format("common.inlineDetail", ClientLocale.Arg("detail",
+                ClientLocale.Format("common.approximatePercent", ClientLocale.Arg("percent", progressPercent.Value))))
+            : string.Empty;
+        var handover = state?.HandoverReady == true
+            ? ClientLocale.Format("common.inlineDetail", ClientLocale.Arg("detail", ClientLocale.Text("label.handoverReady")))
+            : string.Empty;
         var expirationTime = overlay.RepeatableEndTimes.TryGetValue(node.Id, out var serverEnd)
             ? serverEnd
             : state?.ExpirationTime;
         var expiry = expirationTime is long end
-            ? $" · expires {FormatRemaining(end)}"
+            ? ClientLocale.Format("common.inlineDetail", ClientLocale.Arg("detail",
+                ClientLocale.Format("common.expires", ClientLocale.Arg("remaining", FormatRemaining(end)))))
             : string.Empty;
         _state.text = status + progress + handover + expiry;
     }
@@ -331,29 +341,30 @@ internal sealed class QuestGraphCardNodeView
     {
         return kind switch
         {
-            QuestMapDisplayStateKind.PrerequisiteGated => "Prerequisite gated",
-            QuestMapDisplayStateKind.PrestigeGated => "Prestige gated",
-            QuestMapDisplayStateKind.LevelGated => "Level gated",
-            QuestMapDisplayStateKind.TraderGated => "Trader gated",
-            QuestMapDisplayStateKind.TraderUnavailable => "Trader unavailable",
-            QuestMapDisplayStateKind.Available => "Available",
-            QuestMapDisplayStateKind.InProgress => "In Progress",
-            QuestMapDisplayStateKind.ReadyToFinish => "Ready to Finish",
-            QuestMapDisplayStateKind.Completed => "Completed",
-            QuestMapDisplayStateKind.Failed => "Failed",
-            QuestMapDisplayStateKind.Excluded => "Excluded",
-            QuestMapDisplayStateKind.RestartableFailure => "Restartable Failure",
-            QuestMapDisplayStateKind.Expired => "Expired",
-            QuestMapDisplayStateKind.Pending => "Pending",
-            QuestMapDisplayStateKind.Unknown => "Unknown",
-            _ => "Locked",
+            QuestMapDisplayStateKind.PrerequisiteGated => ClientLocale.Text("state.prerequisiteGated"),
+            QuestMapDisplayStateKind.PrestigeGated => ClientLocale.Text("state.prestigeGated"),
+            QuestMapDisplayStateKind.LevelGated => ClientLocale.Text("state.levelGated"),
+            QuestMapDisplayStateKind.TraderGated => ClientLocale.Text("state.traderGated"),
+            QuestMapDisplayStateKind.TraderUnavailable => ClientLocale.Text("state.traderUnavailable"),
+            QuestMapDisplayStateKind.Available => ClientLocale.Text("state.available"),
+            QuestMapDisplayStateKind.InProgress => ClientLocale.Text("state.inProgress"),
+            QuestMapDisplayStateKind.ReadyToFinish => ClientLocale.Text("state.readyToFinish"),
+            QuestMapDisplayStateKind.Completed => ClientLocale.Text("state.completed"),
+            QuestMapDisplayStateKind.Failed => ClientLocale.Text("state.failed"),
+            QuestMapDisplayStateKind.Excluded => ClientLocale.Text("state.excluded"),
+            QuestMapDisplayStateKind.RestartableFailure => ClientLocale.Text("state.restartableFailure"),
+            QuestMapDisplayStateKind.Expired => ClientLocale.Text("state.expired"),
+            QuestMapDisplayStateKind.Pending => ClientLocale.Text("state.pending"),
+            QuestMapDisplayStateKind.Unknown => ClientLocale.Text("state.unknown"),
+            _ => ClientLocale.Text("state.locked"),
         };
     }
 
     private static string FormatRemaining(long expirationTime)
     {
         var seconds = Math.Max(0, expirationTime - DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-        return $"{seconds / 3600:00}:{seconds % 3600 / 60:00}";
+        return ClientLocale.Format("common.remainingHours", ClientLocale.Arg("hours", seconds / 3600),
+            ClientLocale.Arg("minutes", seconds % 3600 / 60));
     }
 
 }

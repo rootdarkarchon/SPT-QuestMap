@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using BepInEx.Configuration;
 using BepInEx.Logging;
+using SPTQuestMap.Client.Localization;
 using EFT;
 using EFT.Quests;
 using EFT.UI;
@@ -49,9 +50,8 @@ internal static class NativeQuestObjectiveSkip
         }
 
         context.ShowMessageWindow(
-            description:
-                "Skip this task without completing its requirements?\n\n" +
-                $"{questName}\n{objectiveText}",
+            description: ClientLocale.Format("skip.confirmation",
+                ClientLocale.Arg("quest", questName), ClientLocale.Arg("objective", objectiveText)),
             acceptAction: () =>
             {
                 if (!stillAllowed())
@@ -65,7 +65,7 @@ internal static class NativeQuestObjectiveSkip
                 completed();
             },
             cancelAction: () => { },
-            caption: "SKIP TASK?");
+            caption: ClientLocale.Text("skip.caption"));
     }
 
     private static bool TrySkip(

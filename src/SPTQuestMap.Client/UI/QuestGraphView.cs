@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using BepInEx.Logging;
+using SPTQuestMap.Client.Localization;
 using SPTQuestMap.Core.Layout;
 using SPTQuestMap.Core.Models;
 using SPTQuestMap.Core.Rules;
@@ -32,6 +33,7 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
     private readonly ManualLogSource _log;
     private readonly bool _debugLogging;
     private readonly Dictionary<string, QuestGraphCardNodeView> _activeNodes = new(StringComparer.Ordinal);
+    private readonly List<Button> _selectionDependentButtons = [];
     private QuestProfileOverlay _overlay;
     private QuestGraphSelection _selection = QuestGraphSelection.Empty;
     private int _maximumActiveNodes;
@@ -95,13 +97,18 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
             var maximumX = (float)positions.Max(position => position.X + position.Width);
             var ends = group.Select(node => overlay.RepeatableEndTimes.TryGetValue(node.Id, out var end) ? end : 0)
                 .Where(end => end > 0).ToArray();
-            var remaining = ends.Length == 0 ? string.Empty : $"  ·  {FormatRemaining(ends.Min())}";
+            var remaining = ends.Length == 0
+                ? string.Empty
+                : ClientLocale.Format("common.inlineDetailWide", ClientLocale.Arg("detail", FormatRemaining(ends.Min())));
+            var kindLabel = ClientLocale.Text($"repeatable.{kind.ToLowerInvariant()}");
 
             var header = UnityUiFactory.CreateRect($"{kind}Header", content);
             header.anchorMin = header.anchorMax = header.pivot = new Vector2(0, 1);
             header.anchoredPosition = new Vector2(minimumX, -2);
             header.sizeDelta = new Vector2(Mathf.Max(180, maximumX - minimumX), 28);
-            var label = UnityUiFactory.AddText(header.gameObject, $"{kind.ToUpperInvariant()} {group.Length}{remaining}", 15,
+            var label = UnityUiFactory.AddText(header.gameObject, ClientLocale.Format("common.groupCount",
+                    ClientLocale.Arg("kind", kindLabel.ToUpperInvariant()), ClientLocale.Arg("count", group.Length),
+                    ClientLocale.Arg("remaining", remaining)), 15,
                 TextAlignmentOptions.MidlineLeft, new Color(0.88f, 0.84f, 0.72f, 1));
             label.fontStyle = FontStyles.Bold;
 
@@ -124,8 +131,10 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         var seconds = Math.Max(0, endTime - DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         var days = seconds / 86400;
         return days > 0
-            ? $"{days}d {(seconds % 86400) / 3600:00}:{seconds % 3600 / 60:00}"
-            : $"{seconds / 3600:00}:{seconds % 3600 / 60:00}";
+            ? ClientLocale.Format("common.remainingDays", ClientLocale.Arg("days", days),
+                ClientLocale.Arg("hours", (seconds % 86400) / 3600), ClientLocale.Arg("minutes", seconds % 3600 / 60))
+            : ClientLocale.Format("common.remainingHours", ClientLocale.Arg("hours", seconds / 3600),
+                ClientLocale.Arg("minutes", seconds % 3600 / 60));
     }
 
     private static void BuildInProgressHeaders(RectTransform content, IQuestGraphProjection projection)
@@ -302,6 +311,7 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
     {
         if (string.Equals(_selection.SelectedQuestId, questId, StringComparison.Ordinal)) return;
         _selection = QuestGraphRules.BuildSelection(_topology, questId);
+        UpdateSelectionDependentButtons();
         _edgeLayer.SetSelection(_selection);
         foreach (var pair in _activeNodes) pair.Value.ApplySelection(_selection.GetNodeHighlight(pair.Key), _selection.SelectedQuestId is not null);
     }
@@ -430,7 +440,7 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
             legend.offsetMin = new Vector2(12, 10);
             legend.offsetMax = new Vector2(-12, 34);
             var text = UnityUiFactory.AddText(legend.gameObject,
-                "STATUS: green available/success · blue active · gold hand-in · red failed   |   RELATIONS: green prerequisite · blue successor",
+                ClientLocale.Text("legend.compact"),
                 11, TextAlignmentOptions.MidlineLeft, new Color(0.72f, 0.74f, 0.72f, 0.9f));
             text.enableWordWrapping = false;
             return;
@@ -443,13 +453,13 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         var outline = legend.gameObject.AddComponent<Outline>();
         outline.effectColor = QuestGraphPalette.Border;
         outline.effectDistance = Vector2.one;
-        AddLegendKey(legend, "AVAILABLE", QuestGraphPalette.Status(QuestMapDisplayStateKind.Available), 10, 34);
-        AddLegendKey(legend, "IN PROGRESS", QuestGraphPalette.Status(QuestMapDisplayStateKind.InProgress), 125, 34);
-        AddLegendKey(legend, "READY", QuestGraphPalette.Status(QuestMapDisplayStateKind.ReadyToFinish), 260, 34);
-        AddLegendKey(legend, "COMPLETED", QuestGraphPalette.Status(QuestMapDisplayStateKind.Completed), 360, 34);
-        AddLegendKey(legend, "COLLECTOR", QuestGraphPalette.Collector, 10, 10);
-        AddLegendKey(legend, "LIGHTKEEPER", QuestGraphPalette.Lightkeeper, 125, 10);
-        AddLegendKey(legend, "END OF LINE", QuestGraphPalette.Terminal, 260, 10);
+        AddLegendKey(legend, ClientLocale.Text("legend.available"), QuestGraphPalette.Status(QuestMapDisplayStateKind.Available), 10, 34);
+        AddLegendKey(legend, ClientLocale.Text("legend.inProgress"), QuestGraphPalette.Status(QuestMapDisplayStateKind.InProgress), 125, 34);
+        AddLegendKey(legend, ClientLocale.Text("legend.ready"), QuestGraphPalette.Status(QuestMapDisplayStateKind.ReadyToFinish), 260, 34);
+        AddLegendKey(legend, ClientLocale.Text("legend.completed"), QuestGraphPalette.Status(QuestMapDisplayStateKind.Completed), 360, 34);
+        AddLegendKey(legend, ClientLocale.Text("legend.collector"), QuestGraphPalette.Collector, 10, 10);
+        AddLegendKey(legend, ClientLocale.Text("legend.lightkeeper"), QuestGraphPalette.Lightkeeper, 125, 10);
+        AddLegendKey(legend, ClientLocale.Text("legend.endOfLine"), QuestGraphPalette.Terminal, 260, 10);
     }
 
     private void ApplyNodeState(string questId, QuestGraphCardNodeView view)
@@ -464,27 +474,32 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
     {
         var empty = UnityUiFactory.CreateRect("EmptyState", _viewport);
         UnityUiFactory.Stretch(empty, 24, 24, 24, 24);
-        UnityUiFactory.AddText(empty.gameObject, "No quests were found for this view.", 18, TextAlignmentOptions.Center, new Color(0.65f, 0.68f, 0.69f, 1));
+        UnityUiFactory.AddText(empty.gameObject, ClientLocale.Text("label.noQuests"), 18, TextAlignmentOptions.Center, new Color(0.65f, 0.68f, 0.69f, 1));
     }
 
     private void BuildControls(RectTransform header, IReadOnlyList<QuestGraphHeaderAction> extraActions)
     {
-        AddControl(header, "Fit", "FIT", 0, FitToVisible);
-        AddControl(header, "ZoomIn", "+", 78, () => _input.ZoomFromViewportCenter(1.2f));
-        AddControl(header, "ZoomOut", "−", 116, () => _input.ZoomFromViewportCenter(0.83f));
-        AddControl(header, "CenterSelected", "CENTER", 154, CenterSelected, 72);
+        AddControl(header, "Fit", ClientLocale.Text("label.fit"), 0, FitToVisible, tooltip: () => ClientLocale.Text("tooltip.fit"));
+        AddControl(header, "ZoomIn", "+", 78, () => _input.ZoomFromViewportCenter(1.2f), tooltip: () => ClientLocale.Text("tooltip.zoomIn"));
+        AddControl(header, "ZoomOut", "−", 116, () => _input.ZoomFromViewportCenter(0.83f), tooltip: () => ClientLocale.Text("tooltip.zoomOut"));
+        _selectionDependentButtons.Add(AddControl(header, "CenterSelected", ClientLocale.Text("label.center"), 154, CenterSelected, 72,
+            tooltip: () => ClientLocale.Text(_selection.SelectedQuestId is null ? "tooltip.noQuestSelected" : "tooltip.centerSelected"),
+            enabled: _selection.SelectedQuestId is not null));
 
         var rightOffset = 234f;
         foreach (var action in extraActions)
         {
-            AddControl(
+            var button = AddControl(
                 header,
                 action.Name,
                 action.Label,
                 rightOffset,
                 action.Action,
                 action.Width,
-                action.Active ? new Color(0.35f, 0.29f, 0.12f, 1) : new Color(0.22f, 0.24f, 0.25f, 1));
+                action.Active ? new Color(0.35f, 0.29f, 0.12f, 1) : new Color(0.22f, 0.24f, 0.25f, 1),
+                action.Tooltip,
+                action.Enabled);
+            if (action.SelectionDependent) _selectionDependentButtons.Add(button);
             rightOffset += action.Width + 8;
         }
     }
@@ -500,28 +515,35 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         var outline = panel.gameObject.AddComponent<Outline>();
         outline.effectColor = QuestGraphPalette.Border;
         outline.effectDistance = Vector2.one;
-        AddCanvasControl(panel, "CenterSelected", "CENTER", 4, 78, CenterSelected);
-        AddCanvasControl(panel, "ZoomOut", "−", 86, 38, ZoomOut);
-        AddCanvasControl(panel, "ZoomIn", "+", 128, 38, ZoomIn);
-        AddCanvasControl(panel, "Fit", "FIT", 170, 54, FitToVisible);
+        _selectionDependentButtons.Add(AddCanvasControl(panel, "CenterSelected", ClientLocale.Text("label.center"), 4, 78, CenterSelected,
+            tooltip: () => ClientLocale.Text(_selection.SelectedQuestId is null ? "tooltip.noQuestSelected" : "tooltip.centerSelected"),
+            enabled: _selection.SelectedQuestId is not null));
+        AddCanvasControl(panel, "ZoomOut", "−", 86, 38, ZoomOut, tooltip: () => ClientLocale.Text("tooltip.zoomOut"));
+        AddCanvasControl(panel, "ZoomIn", "+", 128, 38, ZoomIn, tooltip: () => ClientLocale.Text("tooltip.zoomIn"));
+        AddCanvasControl(panel, "Fit", ClientLocale.Text("label.fit"), 170, 54, FitToVisible, tooltip: () => ClientLocale.Text("tooltip.fit"));
         var x = 228f;
         foreach (var action in extraActions)
         {
-            AddCanvasControl(panel, action.Name, action.Label, x, action.Width, action.Action, action.Active);
+            var button = AddCanvasControl(panel, action.Name, action.Label, x, action.Width, action.Action, action.Active, action.Tooltip, action.Enabled);
+            if (action.SelectionDependent) _selectionDependentButtons.Add(button);
             x += action.Width + 4;
         }
         panel.SetAsLastSibling();
     }
 
-    private static void AddCanvasControl(RectTransform parent, string name, string label, float x, float width, Action action, bool active = false)
+    private static Button AddCanvasControl(RectTransform parent, string name, string label, float x, float width, Action action,
+        bool active = false, Func<string>? tooltip = null, bool enabled = true)
     {
         var rect = UnityUiFactory.CreateRect(name, parent);
         rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0, 0.5f);
         rect.anchoredPosition = new Vector2(x, 0);
         rect.sizeDelta = new Vector2(width, 30);
         var button = UnityUiFactory.AddButton(rect.gameObject, active ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control);
+        button.interactable = enabled;
         UnityUiFactory.AddText(rect.gameObject, label, 12, TextAlignmentOptions.Center, Color.white);
         button.onClick.AddListener(() => action());
+        if (tooltip is not null) QuestMapNativeTooltips.Bind(rect.gameObject, tooltip);
+        return button;
     }
 
     private static void AddLegendKey(RectTransform parent, string label, Color color, float x, float y)
@@ -539,14 +561,16 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         text.enableWordWrapping = false;
     }
 
-    private static void AddControl(
+    private static Button AddControl(
         RectTransform header,
         string name,
         string label,
         float rightOffset,
         Action action,
         float width = 34,
-        Color? color = null)
+        Color? color = null,
+        Func<string>? tooltip = null,
+        bool enabled = true)
     {
         var rect = UnityUiFactory.CreateRect(name, header);
         rect.anchorMin = new Vector2(1, 0.5f);
@@ -555,8 +579,18 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         rect.anchoredPosition = new Vector2(-rightOffset, 0);
         rect.sizeDelta = new Vector2(width, 30);
         var button = UnityUiFactory.AddButton(rect.gameObject, color ?? new Color(0.22f, 0.24f, 0.25f, 1));
+        button.interactable = enabled;
         UnityUiFactory.AddText(rect.gameObject, label, 13, TextAlignmentOptions.Center, Color.white);
         button.onClick.AddListener(() => action());
+        if (tooltip is not null) QuestMapNativeTooltips.Bind(rect.gameObject, tooltip);
+        return button;
+    }
+
+    private void UpdateSelectionDependentButtons()
+    {
+        var enabled = _selection.SelectedQuestId is not null;
+        foreach (var button in _selectionDependentButtons)
+            if (button is not null) button.interactable = enabled;
     }
 
     private void ViewportSettled()
@@ -577,13 +611,24 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
 
 internal sealed class QuestGraphHeaderAction
 {
-    public QuestGraphHeaderAction(string name, string label, float width, bool active, Action action)
+    public QuestGraphHeaderAction(
+        string name,
+        string label,
+        float width,
+        bool active,
+        Action action,
+        Func<string>? tooltip = null,
+        bool enabled = true,
+        bool selectionDependent = false)
     {
         Name = name;
         Label = label;
         Width = width;
         Active = active;
         Action = action;
+        Tooltip = tooltip;
+        Enabled = enabled;
+        SelectionDependent = selectionDependent;
     }
 
     public string Name { get; }
@@ -591,4 +636,7 @@ internal sealed class QuestGraphHeaderAction
     public float Width { get; }
     public bool Active { get; }
     public Action Action { get; }
+    public Func<string>? Tooltip { get; }
+    public bool Enabled { get; }
+    public bool SelectionDependent { get; }
 }

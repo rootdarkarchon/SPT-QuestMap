@@ -5,6 +5,7 @@ using BepInEx.Logging;
 using SPTQuestMap.Client.Data;
 using SPTQuestMap.Core.Layout;
 using SPTQuestMap.Core.Models;
+using SPTQuestMap.Client.Localization;
 using SPTQuestMap.Core.Rules;
 using TMPro;
 using UnityEngine;
@@ -180,7 +181,7 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
             var y = 0f;
             if (projection.Groups.Count == 0)
             {
-                AddTextRow("NoTrackedQuests", "NO TRACKED QUESTS FOR THIS RAID", ref y, 30, 11,
+                AddTextRow("NoTrackedQuests", ClientLocale.Text("label.noTrackedQuests"), ref y, 30, 11,
                     TextAlignmentOptions.Center, new Color(0.72f, 0.74f, 0.72f, 1));
             }
             foreach (var group in projection.Groups)
@@ -204,7 +205,7 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
             _log?.LogError($"QUESTMAP_M06_RAID_TRACKED_LIST_ERROR {exception}");
             foreach (Transform child in _content) Destroy(child.gameObject);
             var y = 0f;
-            AddTextRow("TrackedQuestListError", "TRACKED QUEST LIST FAILED", ref y, 30, 11,
+            AddTextRow("TrackedQuestListError", ClientLocale.Text("label.trackedQuestListFailed"), ref y, 30, 11,
                 TextAlignmentOptions.Center, new Color(0.86f, 0.45f, 0.38f, 1));
             ApplyContentGeometry(y);
         }
@@ -259,7 +260,7 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
             TextAlignmentOptions.MidlineLeft, Color.white, 8, rowLeft);
         if (entry.Objectives.Count == 0)
         {
-            AddTextRow("Ready", "Ready to turn in", ref y, 17, 10,
+            AddTextRow("Ready", ClientLocale.Text("state.readyToTurnIn"), ref y, 17, 10,
                 TextAlignmentOptions.MidlineLeft, QuestGraphPalette.Selected, 18, rowLeft);
             return;
         }
@@ -288,7 +289,8 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
         progressColor.a = 0.88f;
         fill.gameObject.AddComponent<Image>().color = progressColor;
         var label = UnityUiFactory.AddText(track.gameObject,
-            $"[{CappedCurrent(objective.Progress):0.##}/{objective.Progress.Required.Value:0.##}] {objective.Definition.Text}",
+            ClientLocale.Format("common.progressCompact", ClientLocale.Arg("current", CappedCurrent(objective.Progress)),
+                ClientLocale.Arg("required", objective.Progress.Required.Value), ClientLocale.Arg("text", objective.Definition.Text)),
             9, TextAlignmentOptions.Center, Color.white);
         label.enableWordWrapping = false;
         label.overflowMode = TextOverflowModes.Ellipsis;

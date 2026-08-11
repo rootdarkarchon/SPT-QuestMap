@@ -8,6 +8,7 @@ using BepInEx.Logging;
 using EFT;
 using EFT.Quests;
 using SPTQuestMap.Client.Data;
+using SPTQuestMap.Client.Localization;
 using SPTQuestMap.Core.Layout;
 using SPTQuestMap.Core.Models;
 using SPTQuestMap.Core.Rules;
@@ -42,6 +43,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private bool _hideCompletedTasks;
     private readonly IReadOnlyCollection<string> _expandedQuestIds;
     private readonly Action<string> _onSelected;
+    private readonly Action _onBackgroundClick;
     private readonly Action<QuestTableSortColumn> _onSortChanged;
     private readonly Action<string> _onExpansionChanged;
     private GClass3794? _favoriteQuestService;
@@ -118,6 +120,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         _hideCompletedTasks = hideCompletedTasks;
         _expandedQuestIds = expandedQuestIds;
         _onSelected = onSelected;
+        _onBackgroundClick = onBackgroundClick;
         _onSortChanged = onSortChanged;
         _onExpansionChanged = onExpansionChanged;
         _log = log;
@@ -491,12 +494,12 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             pinText.fontStyle = FontStyles.Bold;
             AddRightBorder(pinHeader);
         }
-        AddSortHeader(header, "Trader", "TRADER", firstColumn, 0.09f, QuestTableSortColumn.Trader, false);
-        AddSortHeader(header, "Quest", "QUEST", 0.09f, 0.27f, QuestTableSortColumn.Quest);
-        AddSortHeader(header, "Location", "LOCATION", 0.27f, 0.39f, QuestTableSortColumn.Location);
-        AddSortHeader(header, "Status", "STATUS", 0.39f, 0.49f, QuestTableSortColumn.Status);
-        AddSortHeader(header, "Progress", "PROGRESS", 0.49f, 0.58f, QuestTableSortColumn.Progress);
-        AddPlainHeader(header, "Tasks", "TASKS", 0.58f, 1f);
+        AddSortHeader(header, "Trader", ClientLocale.Text("label.tableTrader"), firstColumn, 0.09f, QuestTableSortColumn.Trader, false);
+        AddSortHeader(header, "Quest", ClientLocale.Text("label.tableQuest"), 0.09f, 0.27f, QuestTableSortColumn.Quest);
+        AddSortHeader(header, "Location", ClientLocale.Text("label.tableLocation"), 0.27f, 0.39f, QuestTableSortColumn.Location);
+        AddSortHeader(header, "Status", ClientLocale.Text("label.tableStatus"), 0.39f, 0.49f, QuestTableSortColumn.Status);
+        AddSortHeader(header, "Progress", ClientLocale.Text("label.tableProgress"), 0.49f, 0.58f, QuestTableSortColumn.Progress);
+        AddPlainHeader(header, "Tasks", ClientLocale.Text("label.tableTasks"), 0.58f, 1f);
     }
 
     private void AddSortHeader(
@@ -521,13 +524,16 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var criterion = active ? _sortCriteria[criterionIndex] : null;
         var suffix = criterion is null
             ? string.Empty
-            : $"  {(criterion.Direction == QuestTableSortDirection.Ascending ? "↑" : "↓")} {criterionIndex + 1}";
+            : ClientLocale.Format("common.sortOrder",
+                ClientLocale.Arg("direction", criterion.Direction == QuestTableSortDirection.Ascending ? "↑" : "↓"),
+                ClientLocale.Arg("order", criterionIndex + 1));
         var rect = CreateAnchoredCell(name, parent, minimum, maximum, 1, 1);
         var button = UnityUiFactory.AddButton(rect.gameObject, active ? QuestGraphPalette.ControlActive : Color.clear);
         var text = UnityUiFactory.AddText(rect.gameObject, label + suffix, 12, TextAlignmentOptions.MidlineLeft, Color.white);
         text.margin = new Vector4(12, 0, 4, 0);
         text.fontStyle = FontStyles.Bold;
         button.onClick.AddListener(() => _onSortChanged(column));
+        QuestMapNativeTooltips.Bind(rect.gameObject, () => SortTooltip(column, label));
         _sortHeaders[column] = new SortHeader(label, text, rect.GetComponent<Image>());
         if (showRightBorder) AddRightBorder(rect);
     }
@@ -538,6 +544,17 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var text = UnityUiFactory.AddText(rect.gameObject, label, 12, TextAlignmentOptions.MidlineLeft, Color.white);
         text.margin = new Vector4(12, 0, 4, 0);
         text.fontStyle = FontStyles.Bold;
+    }
+
+    private string SortTooltip(QuestTableSortColumn column, string label)
+    {
+        var criterion = _sortCriteria.FirstOrDefault(value => value.Column == column);
+        var key = criterion is null
+            ? "tooltip.sortInactive"
+            : criterion.Direction == QuestTableSortDirection.Ascending
+                ? "tooltip.sortAscending"
+                : "tooltip.sortDescending";
+        return ClientLocale.Format(key, ClientLocale.Arg("column", label.ToLowerInvariant()));
     }
 
     private void RebuildAllRows(IEnumerable<QuestGraphNode> cacheNodes)
@@ -663,10 +680,10 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             _projection.Nodes.Where(node => pinnedIds.Contains(node.Id)), _topology, _overlay, _sortCriteria);
         var ordered = InProgressQuestTableSorter.Sort(
             _projection.Nodes.Where(node => !pinnedIds.Contains(node.Id)), _topology, _overlay, _sortCriteria);
-        LayoutSection("PINNED", pinned, ref y);
-        LayoutSection("DAILY", ordered.Where(IsDaily).ToArray(), ref y);
-        LayoutSection("WEEKLY", ordered.Where(IsWeekly).ToArray(), ref y);
-        LayoutSection("QUESTS", ordered.Where(node => !IsDaily(node) && !IsWeekly(node)).ToArray(), ref y);
+        LayoutSection(ClientLocale.Text("label.sectionPinned"), pinned, ref y);
+        LayoutSection(ClientLocale.Text("label.sectionDaily"), ordered.Where(IsDaily).ToArray(), ref y, showExpiration: true);
+        LayoutSection(ClientLocale.Text("label.sectionWeekly"), ordered.Where(IsWeekly).ToArray(), ref y, showExpiration: true);
+        LayoutSection(ClientLocale.Text("label.sectionQuests"), ordered.Where(node => !IsDaily(node) && !IsWeekly(node)).ToArray(), ref y);
         _content.sizeDelta = new Vector2(0, Mathf.Max(y, _scrollViewport.rect.height));
         SetSelected(_selectedQuestId);
     }
@@ -703,25 +720,26 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
 
     private static string TraderSectionLabel(int rank) => rank switch
     {
-        0 => "AVAILABLE TO FINISH",
-        1 => "AVAILABLE TO START",
-        2 => "IN PROGRESS",
-        _ => "UNAVAILABLE",
+        0 => ClientLocale.Text("label.availableToFinish"),
+        1 => ClientLocale.Text("label.availableToStart"),
+        2 => ClientLocale.Text("label.inProgress"),
+        _ => ClientLocale.Text("label.unavailable"),
     };
 
-    private void LayoutSection(string label, IReadOnlyList<QuestGraphNode> nodes, ref float y)
+    private void LayoutSection(string label, IReadOnlyList<QuestGraphNode> nodes, ref float y, bool showExpiration = false)
     {
         if (nodes.Count == 0) return;
         if (y > 0) y += 10;
-        var header = UnityUiFactory.CreateRect($"Section-{label}", _content);
+        var header = UnityUiFactory.CreateRect($"Section-{_sectionHeaders.Count}", _content);
         header.anchorMin = new Vector2(0, 1);
         header.anchorMax = new Vector2(1, 1);
         header.pivot = new Vector2(0.5f, 1);
         header.anchoredPosition = new Vector2(0, -y);
         header.sizeDelta = new Vector2(0, 28);
         header.gameObject.AddComponent<Image>().color = new Color(0.09f, 0.10f, 0.10f, 0.98f);
-        var remaining = label is "DAILY" or "WEEKLY" ? SectionRemaining(nodes) : string.Empty;
-        var title = UnityUiFactory.AddText(header.gameObject, $"{label}  ·  {nodes.Count}{remaining}", 12,
+        var remaining = showExpiration ? SectionRemaining(nodes) : string.Empty;
+        var title = UnityUiFactory.AddText(header.gameObject, ClientLocale.Format("common.sectionCount",
+                ClientLocale.Arg("label", label), ClientLocale.Arg("count", nodes.Count), ClientLocale.Arg("remaining", remaining)), 12,
             TextAlignmentOptions.MidlineLeft, new Color(0.88f, 0.84f, 0.72f, 1));
         title.margin = new Vector4(12, 0, 8, 0);
         title.fontStyle = FontStyles.Bold;
@@ -760,7 +778,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         row.sizeDelta = new Vector2(0, height);
         var background = row.gameObject.AddComponent<Image>();
         background.color = RowUnderlay;
-        row.gameObject.AddComponent<QuestTableRowClickBlocker>();
+        row.gameObject.AddComponent<QuestTableBackgroundClickHandler>().Bind(_onBackgroundClick);
         var backgroundVisual = row.gameObject.AddComponent<QuestTableRowBackgroundVisual>();
         backgroundVisual.Bind(background, RowUnderlay);
         var nativeActions = new List<NativeQuestHandoverAction>();
@@ -835,7 +853,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             }
             var active = criterionIndex >= 0;
             var suffix = active
-                ? $"  {(_sortCriteria[criterionIndex].Direction == QuestTableSortDirection.Ascending ? "↑" : "↓")} {criterionIndex + 1}"
+                ? ClientLocale.Format("common.sortOrder",
+                    ClientLocale.Arg("direction", _sortCriteria[criterionIndex].Direction == QuestTableSortDirection.Ascending ? "↑" : "↓"),
+                    ClientLocale.Arg("order", criterionIndex + 1))
                 : string.Empty;
             pair.Value.Text.text = pair.Value.Label + suffix;
             pair.Value.Background.color = active ? QuestGraphPalette.ControlActive : Color.clear;
@@ -893,9 +913,10 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var canReplace = node.RepeatableKind is "Daily" or "Weekly" && _mutationsAllowed() && _canReplace(node.Id);
         if (node.RepeatableKind is "Daily" or "Weekly")
         {
+            var repeatableKind = ClientLocale.Text($"repeatable.{node.RepeatableKind!.ToLowerInvariant()}");
             var repeatableLabel = node.ScavRepeatable
-                ? $"SCAV {node.RepeatableKind}".ToUpperInvariant()
-                : node.RepeatableKind!.ToUpperInvariant();
+                ? ClientLocale.Format("common.scavRepeatable", ClientLocale.Arg("kind", repeatableKind)).ToUpperInvariant()
+                : repeatableKind.ToUpperInvariant();
             var badgeWidth = node.ScavRepeatable ? 92f : 66f;
             var actionCount = (canAccept || canComplete ? 1 : 0) + (canReplace ? 1 : 0);
             var badge = UnityUiFactory.CreateRect("RepeatableBadge", content);
@@ -910,13 +931,17 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         }
         if (canReplace)
         {
-            AddQuestAction(content, "Replace", "↻", actionOffset, button => RunReplace(node.Id, button));
+            AddQuestAction(content, "Replace", "↻", actionOffset, button => RunReplace(node.Id, button),
+                () => ClientLocale.Format("tooltip.replace", ClientLocale.Arg("quest", node.Name)));
             actionOffset += 34;
         }
         if (canAccept)
-            AddQuestAction(content, "Accept", "✓", actionOffset, button => RunAccept(node.Id, button));
+            AddQuestAction(content, "Accept", "✓", actionOffset, button => RunAccept(node.Id, button),
+                () => ClientLocale.Format(state == QuestMapDisplayStateKind.RestartableFailure ? "tooltip.restart" : "tooltip.accept",
+                    ClientLocale.Arg("quest", node.Name)));
         else if (canComplete)
-            AddQuestAction(content, "Complete", "→", actionOffset, button => RunComplete(node.Id, button));
+            AddQuestAction(content, "Complete", "→", actionOffset, button => RunComplete(node.Id, button),
+                () => ClientLocale.Format("tooltip.turnIn", ClientLocale.Arg("quest", node.Name)));
 
         AddClickableHoverOutline(content, "QuestHover", bottomOnly: false);
         AddTopRightBorder(cell);
@@ -970,6 +995,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         button.interactable = favoriteQuestService is not null;
         if (favoriteQuestService is not null)
             button.onClick.AddListener(() => favoriteQuestService.ToggleFavorite(node.Id));
+        QuestMapNativeTooltips.Bind(cell.gameObject, () => ClientLocale.Format(
+            IsFavorite(node.Id) ? "tooltip.unpinQuest" : "tooltip.pinQuest",
+            ClientLocale.Arg("quest", node.Name)));
         AddTopRightBorder(cell);
         var visual = new PinVisual(image, text);
         RefreshPinVisual(node.Id, visual);
@@ -1020,7 +1048,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var labelLayer = UnityUiFactory.CreateRect("LocationLabel", content);
         UnityUiFactory.Stretch(labelLayer);
         labelLayer.SetAsLastSibling();
-        var label = UnityUiFactory.AddText(labelLayer.gameObject, node.Location.Any ? "Any" : node.Location.Name ?? node.Location.Id,
+        var label = UnityUiFactory.AddText(labelLayer.gameObject, node.Location.Any ? ClientLocale.Text("common.any") : node.Location.Name ?? node.Location.Id,
             14, TextAlignmentOptions.Center, Color.white);
         label.fontStyle = FontStyles.Bold;
         label.alpha = 1f;
@@ -1034,6 +1062,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var cell = CreateAnchoredCell("Status", row, 0.39f, 0.49f, 2, 2);
         var button = UnityUiFactory.AddButton(cell.gameObject, Color.clear);
         button.onClick.AddListener(() => _tracking.ToggleManual(_overlay.ProfileId, node.Id));
+        QuestMapNativeTooltips.Bind(cell.gameObject, () => TrackingTooltip(node));
         var content = CreateTopContentFrame(cell, "StatusContent", false);
         content.gameObject.AddComponent<Image>().color = CellSurface;
         var state = QuestGraphRules.ClassifyProfileDisplayState(_topology, node, _overlay);
@@ -1053,9 +1082,30 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var tracking = _tracking.Resolve(_overlay.ProfileId, node);
         visual.Text.text = !tracking.Tracked
             ? visual.Status
-            : tracking.Implicit
-                ? $"{visual.Status}\n<i>(Tracked)</i>"
-                : $"{visual.Status}\n(Tracked)";
+            : ClientLocale.Format(tracking.Implicit ? "common.trackedStatusItalic" : "common.trackedStatus",
+                ClientLocale.Arg("status", visual.Status), ClientLocale.Arg("tracked", ClientLocale.Text("label.tracked")));
+    }
+
+    private string TrackingTooltip(QuestGraphNode node)
+    {
+        var tracking = _tracking.Resolve(_overlay.ProfileId, node);
+        if (!tracking.Tracked)
+            return ClientLocale.Format("tooltip.trackQuest", ClientLocale.Arg("quest", node.Name));
+
+        var reason = ImplicitTrackingReason(tracking);
+        if (string.IsNullOrEmpty(reason))
+            return ClientLocale.Format("tooltip.untrackQuest", ClientLocale.Arg("quest", node.Name));
+
+        return ClientLocale.Format(tracking.Manual ? "tooltip.untrackWithImplicit" : "tooltip.implicitTracking",
+            ClientLocale.Arg("quest", node.Name), ClientLocale.Arg("reason", reason));
+    }
+
+    private static string ImplicitTrackingReason(QuestTrackingState tracking)
+    {
+        if (tracking.FavoritePolicy && tracking.MapPolicy)
+            return ClientLocale.Text("tracking.reasonFavoriteAndMap");
+        if (tracking.FavoritePolicy) return ClientLocale.Text("tracking.reasonFavorite");
+        return tracking.MapPolicy ? ClientLocale.Text("tracking.reasonMap") : string.Empty;
     }
 
     private void BuildProgressCell(RectTransform row, QuestGraphNode node, QuestLiveState? live)
@@ -1066,7 +1116,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var progress = OverallProgress(node, live);
         var labelRect = UnityUiFactory.CreateRect("Value", content);
         UnityUiFactory.Stretch(labelRect, 8, 8, 10, 34);
-        var label = UnityUiFactory.AddText(labelRect.gameObject, progress.HasValue ? $"{progress.Value:0.#}%" : "—",
+        var label = UnityUiFactory.AddText(labelRect.gameObject, progress.HasValue
+                ? ClientLocale.Format("common.percent", ClientLocale.Arg("percent", progress.Value))
+                : "—",
             16, TextAlignmentOptions.Center, Color.white);
         label.fontStyle = FontStyles.Bold;
         if (progress.HasValue) AddProgressBar(content, progress.Value / 100d, 10, 12, QuestGraphPalette.Status(
@@ -1087,14 +1139,14 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         cell.gameObject.AddComponent<RectMask2D>();
         if (node.Objectives.Count == 0)
         {
-            UnityUiFactory.AddText(cell.gameObject, "No task details available", 12, TextAlignmentOptions.Center,
+            UnityUiFactory.AddText(cell.gameObject, ClientLocale.Text("label.noTaskDetails"), 12, TextAlignmentOptions.Center,
                 QuestGraphPalette.MutedText);
             return;
         }
 
         if (visibleObjectives.Count == 0)
         {
-            UnityUiFactory.AddText(cell.gameObject, "All tasks completed", 12, TextAlignmentOptions.Center,
+            UnityUiFactory.AddText(cell.gameObject, ClientLocale.Text("label.allTasksCompleted"), 12, TextAlignmentOptions.Center,
                 QuestGraphPalette.Completed);
             return;
         }
@@ -1154,6 +1206,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
                 actionText = UnityUiFactory.AddText(actionRect.gameObject, "…", 8,
                     TextAlignmentOptions.Center, Color.white);
                 actionText.fontStyle = FontStyles.Bold;
+                QuestMapNativeTooltips.Bind(actionRect.gameObject, () => ClientLocale.Format(
+                    actionButton?.interactable == true ? "tooltip.handover" : "tooltip.handoverPending",
+                    ClientLocale.Arg("objective", definition.Text)));
             }
 
             QuestObjectiveSkipSlot? skipSlot = null;
@@ -1166,10 +1221,12 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
                 skipRect.anchoredPosition = new Vector2(5, 0);
                 skipRect.sizeDelta = new Vector2(62, 0);
                 var skipButton = UnityUiFactory.AddButton(skipRect.gameObject, QuestGraphPalette.Failed);
-                var skipText = UnityUiFactory.AddText(skipRect.gameObject, "SKIP", 8,
+                var skipText = UnityUiFactory.AddText(skipRect.gameObject, ClientLocale.Text("label.skip"), 8,
                     TextAlignmentOptions.Center, Color.white);
                 skipText.fontStyle = FontStyles.Bold;
                 skipButton.onClick.AddListener(() => RequestObjectiveSkip(node, definition));
+                QuestMapNativeTooltips.Bind(skipRect.gameObject, () => ClientLocale.Format("tooltip.skip",
+                    ClientLocale.Arg("objective", definition.Text)));
                 skipSlot = _skipVisibility.Register(
                     skipRect.gameObject,
                     actionRect?.gameObject,
@@ -1205,7 +1262,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
                         }
 
                         nativeActions.Add(action);
-                        actionText.text = "HAND IN";
+                        actionText.text = ClientLocale.Text("label.handIn");
                         actionButton.interactable = true;
                         actionButton.onClick.AddListener(() => RunHandover(node.Id, action, actionButton));
                     },
@@ -1226,10 +1283,15 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             expander.sizeDelta = new Vector2(0, 23);
             var button = UnityUiFactory.AddButton(expander.gameObject, QuestGraphPalette.Control);
             var remaining = visibleObjectives.Count - displayedObjectives.Count;
-            var label = expanded ? "COLLAPSE TASKS" : $"SHOW {remaining} MORE TASKS";
+            var label = expanded
+                ? ClientLocale.Text("label.collapseTasks")
+                : ClientLocale.Format("label.showMoreTasks", ClientLocale.Arg("count", remaining));
             var text = UnityUiFactory.AddText(expander.gameObject, label, 10, TextAlignmentOptions.Center, Color.white);
             text.fontStyle = FontStyles.Bold;
             button.onClick.AddListener(() => _onExpansionChanged(node.Id));
+            QuestMapNativeTooltips.Bind(expander.gameObject, () => expanded
+                ? ClientLocale.Format("tooltip.collapseTasks", ClientLocale.Arg("quest", node.Name))
+                : ClientLocale.Format("tooltip.expandTasks", ClientLocale.Arg("count", remaining), ClientLocale.Arg("quest", node.Name)));
         }
     }
 
@@ -1244,7 +1306,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     {
         if (progress is null || progress.Complete || progress.Required == 1) return string.Empty;
         if (progress.Current.HasValue && progress.Required.HasValue)
-            return $"{CappedCurrent(progress):0.##} / {progress.Required.Value:0.##}  ";
+            return ClientLocale.Format("common.progressPrefix", ClientLocale.Arg("progress",
+                ClientLocale.Format("common.progress", ClientLocale.Arg("current", CappedCurrent(progress)),
+                    ClientLocale.Arg("required", progress.Required.Value))));
         return string.Empty;
     }
 
@@ -1408,7 +1472,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         string name,
         string text,
         float rightOffset,
-        Action<Button> onClick)
+        Action<Button> onClick,
+        Func<string> tooltip)
     {
         var root = UnityUiFactory.CreateRect(name, parent);
         root.anchorMin = root.anchorMax = root.pivot = new Vector2(1, 1);
@@ -1418,6 +1483,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var label = UnityUiFactory.AddText(root.gameObject, text, 16, TextAlignmentOptions.Center, Color.white);
         label.fontStyle = FontStyles.Bold;
         button.onClick.AddListener(() => onClick(button));
+        QuestMapNativeTooltips.Bind(root.gameObject, tooltip);
     }
 
     private void AddWidthFittedImage(
@@ -1570,9 +1636,11 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var seconds = Math.Max(0, ends.Min() - DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         var days = seconds / 86400;
         var remaining = days > 0
-            ? $"{days}d {(seconds % 86400) / 3600:00}:{seconds % 3600 / 60:00}"
-            : $"{seconds / 3600:00}:{seconds % 3600 / 60:00}";
-        return $"  ·  {remaining}";
+            ? ClientLocale.Format("common.remainingDays", ClientLocale.Arg("days", days),
+                ClientLocale.Arg("hours", (seconds % 86400) / 3600), ClientLocale.Arg("minutes", seconds % 3600 / 60))
+            : ClientLocale.Format("common.remainingHours", ClientLocale.Arg("hours", seconds / 3600),
+                ClientLocale.Arg("minutes", seconds % 3600 / 60));
+        return ClientLocale.Format("common.inlineDetailWide", ClientLocale.Arg("detail", remaining));
     }
 
     private static bool IsDaily(QuestGraphNode node) =>
@@ -1588,9 +1656,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     {
         var status = state switch
         {
-            QuestMapDisplayStateKind.InProgress => "In Progress",
-            QuestMapDisplayStateKind.ReadyToFinish => "Ready to Turn In",
-            QuestMapDisplayStateKind.RestartableFailure => "Restartable Failure",
+            QuestMapDisplayStateKind.InProgress => ClientLocale.Text("state.inProgress"),
+            QuestMapDisplayStateKind.ReadyToFinish => ClientLocale.Text("state.readyToTurnIn"),
+            QuestMapDisplayStateKind.RestartableFailure => ClientLocale.Text("state.restartableFailure"),
             _ => QuestGraphCardNodeView.StateLabel(state),
         };
         var requirement = state switch
@@ -1600,7 +1668,10 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             QuestMapDisplayStateKind.TraderGated => TraderGateLabel(node),
             _ => null,
         };
-        return string.IsNullOrWhiteSpace(requirement) ? status : $"{status}\n<size=10>{requirement}</size>";
+        return string.IsNullOrWhiteSpace(requirement)
+            ? status
+            : ClientLocale.Format("common.statusRequirement", ClientLocale.Arg("status", status),
+                ClientLocale.Arg("requirement", requirement));
     }
 
     private static string? PrestigeGateLabel(QuestGraphNode node)
@@ -1608,14 +1679,16 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var requirement = node.EffectiveRequirements.FirstOrDefault(value => value.Kind == "PrestigeLevel");
         return requirement is null
             ? null
-            : $"Requires prestige {RequirementSymbol(requirement.Compare)} {FormatRequirementValue(requirement.Value)}";
+            : ClientLocale.Format("requirement.prestige", ClientLocale.Arg("operator", RequirementSymbol(requirement.Compare)),
+                ClientLocale.Arg("value", FormatRequirementValue(requirement.Value)));
     }
 
     private string? LevelGateLabel(QuestGraphNode node)
     {
         var requirement = node.EffectiveRequirements.FirstOrDefault(value => value.Kind == "Level"
             && !RequirementSatisfied(_overlay.Level, value));
-        return requirement is null ? null : $"Requires level {FormatRequirementValue(requirement.Value)}";
+        return requirement is null ? null : ClientLocale.Format("requirement.level",
+            ClientLocale.Arg("level", FormatRequirementValue(requirement.Value)));
     }
 
     private string? TraderGateLabel(QuestGraphNode node)
@@ -1632,8 +1705,11 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             ? trader.Name
             : requirement.TraderId;
         return requirement.Kind == "TraderLoyalty"
-            ? $"Requires {traderName} LL{FormatRequirementValue(requirement.Value)}"
-            : $"Requires {traderName} rep {RequirementSymbol(requirement.Compare)} {FormatRequirementValue(requirement.Value)}";
+            ? ClientLocale.Format("requirement.traderLoyalty", ClientLocale.Arg("trader", traderName),
+                ClientLocale.Arg("level", FormatRequirementValue(requirement.Value)))
+            : ClientLocale.Format("requirement.traderStanding", ClientLocale.Arg("trader", traderName),
+                ClientLocale.Arg("operator", RequirementSymbol(requirement.Compare)),
+                ClientLocale.Arg("value", FormatRequirementValue(requirement.Value)));
     }
 
     private static bool RequirementSatisfied(double actual, QuestRequirement requirement) => requirement.Compare switch
@@ -1747,13 +1823,6 @@ internal sealed class QuestTableBackgroundClickHandler : MonoBehaviour, IPointer
     public void OnPointerClick(PointerEventData eventData)
     {
         if (eventData.button == PointerEventData.InputButton.Left && !eventData.dragging) _onClick?.Invoke();
-    }
-}
-
-internal sealed class QuestTableRowClickBlocker : MonoBehaviour, IPointerClickHandler
-{
-    public void OnPointerClick(PointerEventData eventData)
-    {
     }
 }
 

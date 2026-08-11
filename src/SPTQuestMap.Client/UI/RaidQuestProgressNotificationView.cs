@@ -2,6 +2,7 @@ using System;
 using BepInEx.Logging;
 using SPTQuestMap.Client.Data;
 using SPTQuestMap.Core.Models;
+using SPTQuestMap.Client.Localization;
 using SPTQuestMap.Core.Rules;
 using TMPro;
 using UnityEngine;
@@ -79,10 +80,11 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         _questName!.text = node.Name;
         var statusColor = QuestGraphPalette.Status(DisplayState(change.ExactStatus));
         if (_statusRail is not null) _statusRail.color = statusColor;
-        var objectiveText = change.Objective?.Text ?? "Quest status changed";
+        var objectiveText = change.Objective?.Text ?? ClientLocale.Text("label.questStatusChanged");
         _task!.text = minimal && progress?.ProgressKnown == true
             && progress.Current.HasValue && progress.Required.HasValue
-                ? $"[{CappedCurrent(progress):0.##}/{progress.Required.Value:0.##}] {objectiveText}"
+                ? ClientLocale.Format("common.progressCompact", ClientLocale.Arg("current", CappedCurrent(progress)),
+                    ClientLocale.Arg("required", progress.Required.Value), ClientLocale.Arg("text", objectiveText))
                 : objectiveText;
         _task.color = minimal ? Color.white : progress?.Complete == true
             ? QuestGraphPalette.Completed : Color.white;
@@ -91,7 +93,8 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
             && progress.Current.HasValue
             && progress.Required.HasValue;
         _count!.text = hasCount
-            ? $"{CappedCurrent(progress!):0.##} / {progress!.Required!.Value:0.##}"
+            ? ClientLocale.Format("common.progress", ClientLocale.Arg("current", CappedCurrent(progress!)),
+                ClientLocale.Arg("required", progress!.Required!.Value))
             : string.Empty;
 
         var percent = progress?.Required is > 1d ? ObjectivePercent(progress) : null;
