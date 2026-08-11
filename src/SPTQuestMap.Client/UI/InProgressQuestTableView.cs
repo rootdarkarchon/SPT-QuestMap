@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Threading.Tasks;
-using BepInEx.Configuration;
 using BepInEx.Logging;
 using EFT;
 using EFT.Quests;
@@ -48,17 +46,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private readonly Action<string> _onExpansionChanged;
     private GClass3794? _favoriteQuestService;
     private readonly QuestTrackingService _tracking;
-    private readonly Func<bool> _mutationsAllowed;
-    private readonly Func<RectTransform, string, string, NativeQuestHandoverAction?> _createHandoverAction;
-    private readonly Func<bool> _taskSkippingEnabled;
+    private readonly NativeQuestWorkspaceContext _workspace;
     private readonly QuestObjectiveSkipVisibility _skipVisibility;
-    private readonly AbstractQuestControllerClass _questController;
-    private readonly Func<string, bool> _canAccept;
-    private readonly Func<RectTransform, string, Task> _acceptQuest;
-    private readonly Func<string, bool> _canComplete;
-    private readonly Func<RectTransform, string, Task> _completeQuest;
-    private readonly Func<string, bool> _canReplace;
-    private readonly Func<RectTransform, string, Task> _replaceQuest;
     private readonly Action<string, QuestDetailsActionKind> _onQuestMutated;
     private readonly QuestTableSectionMode _sectionMode;
     private readonly string? _contextTraderId;
@@ -92,17 +81,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         QuestAssetSpriteCache assetCache,
         GClass3794? favoriteQuestService,
         QuestTrackingService tracking,
-        Func<bool> mutationsAllowed,
-        Func<RectTransform, string, string, NativeQuestHandoverAction?> createHandoverAction,
-        Func<bool> taskSkippingEnabled,
-        Func<KeyboardShortcut> taskSkipModifier,
-        AbstractQuestControllerClass questController,
-        Func<string, bool> canAccept,
-        Func<RectTransform, string, Task> acceptQuest,
-        Func<string, bool> canComplete,
-        Func<RectTransform, string, Task> completeQuest,
-        Func<string, bool> canReplace,
-        Func<RectTransform, string, Task> replaceQuest,
+        NativeQuestWorkspaceContext workspace,
         Action<string, QuestDetailsActionKind> onQuestMutated,
         QuestTableSectionMode sectionMode,
         string? contextTraderId)
@@ -127,18 +106,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         AssetCache = assetCache;
         _favoriteQuestService = favoriteQuestService;
         _tracking = tracking;
-        _mutationsAllowed = mutationsAllowed;
-        _createHandoverAction = createHandoverAction;
-        _taskSkippingEnabled = taskSkippingEnabled;
-        _questController = questController;
+        _workspace = workspace;
         _skipVisibility = root.gameObject.AddComponent<QuestObjectiveSkipVisibility>();
-        _skipVisibility.Bind(taskSkippingEnabled, taskSkipModifier);
-        _canAccept = canAccept;
-        _acceptQuest = acceptQuest;
-        _canComplete = canComplete;
-        _completeQuest = completeQuest;
-        _canReplace = canReplace;
-        _replaceQuest = replaceQuest;
+        _skipVisibility.Bind(workspace.TaskSkippingEnabled, workspace.TaskSkipModifier);
         _onQuestMutated = onQuestMutated;
         _sectionMode = sectionMode;
         _contextTraderId = contextTraderId;
@@ -174,17 +144,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         QuestAssetSpriteCache assetCache,
         GClass3794? favoriteQuestService,
         QuestTrackingService tracking,
-        Func<bool> mutationsAllowed,
-        Func<RectTransform, string, string, NativeQuestHandoverAction?> createHandoverAction,
-        Func<bool> taskSkippingEnabled,
-        Func<KeyboardShortcut> taskSkipModifier,
-        AbstractQuestControllerClass questController,
-        Func<string, bool> canAccept,
-        Func<RectTransform, string, Task> acceptQuest,
-        Func<string, bool> canComplete,
-        Func<RectTransform, string, Task> completeQuest,
-        Func<string, bool> canReplace,
-        Func<RectTransform, string, Task> replaceQuest,
+        NativeQuestWorkspaceContext workspace,
         Action<string, QuestDetailsActionKind> onQuestMutated,
         GraphViewportState? initialViewport = null,
         float headerHeight = GlobalHeaderHeight,
@@ -249,9 +209,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
 
         var view = new InProgressQuestTableView(root, viewport, scrollViewport, content, nativeHostRoot, scrollRect, topology,
             projection, overlay, sortCriteria, hideCompletedTasks, expandedQuestIds, onSelected, onBackgroundClick, onSortChanged,
-            onExpansionChanged, log, assetCache, favoriteQuestService, tracking, mutationsAllowed, createHandoverAction,
-            taskSkippingEnabled, taskSkipModifier, questController, canAccept, acceptQuest, canComplete, completeQuest,
-            canReplace, replaceQuest, onQuestMutated, sectionMode,
+            onExpansionChanged, log, assetCache, favoriteQuestService, tracking, workspace,
+            onQuestMutated, sectionMode,
             contextTraderId);
         view.BuildHeader(tableHeader);
         view.RebuildAllRows(cacheNodes);
@@ -908,9 +867,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         AddQuestRouteStrips(content, collectorRoute, lightkeeperRoute);
         var actionOffset = QuestTableLayoutRules.QuestBannerActionRightOffset(collectorRoute, lightkeeperRoute);
 
-        var canAccept = _mutationsAllowed() && _canAccept(node.Id);
-        var canComplete = _mutationsAllowed() && _canComplete(node.Id);
-        var canReplace = node.RepeatableKind is "Daily" or "Weekly" && _mutationsAllowed() && _canReplace(node.Id);
+        var canAccept = _workspace.CanAccept(_topology, node.Id);
+        var canComplete = _workspace.CanComplete(_topology, node.Id);
+        var canReplace = node.RepeatableKind is "Daily" or "Weekly" && _workspace.CanReplace(_topology, node.Id);
         if (node.RepeatableKind is "Daily" or "Weekly")
         {
             var repeatableKind = ClientLocale.Text($"repeatable.{node.RepeatableKind!.ToLowerInvariant()}");
@@ -1172,11 +1131,11 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             // Native EFT constructs objective views for the selected quest, not
             // for every task-list row. Resolve exact row eligibility gradually
             // and show no action until the native result is known.
-            var handoverCandidate = _mutationsAllowed()
+            var handoverCandidate = _workspace.MutationsAllowed()
                 && progress?.Complete != true
                 && definition.ConditionType is "HandoverItem" or "WeaponAssembly";
             _overlay.QuestsById.TryGetValue(node.Id, out var liveQuest);
-            var skipCandidate = _mutationsAllowed()
+            var skipCandidate = _workspace.MutationsAllowed()
                 && liveQuest?.ExactStatus == nameof(EQuestStatus.Started)
                 && progress?.Complete != true;
             var actionWidth = handoverCandidate ? 70f : 0f;
@@ -1245,7 +1204,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
                     task,
                     false,
                     () => !_disposed && task != null,
-                    () => _createHandoverAction(_nativeHostRoot, node.Id, definition.Id),
+                    () => _workspace.TryCreateHandover(_nativeHostRoot, node.Id, definition.Id),
                     action =>
                     {
                         if (action is null)
@@ -1372,18 +1331,17 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
 
     private void RequestObjectiveSkip(QuestGraphNode node, QuestObjectiveDefinition objective)
     {
-        if (_disposed || !_taskSkippingEnabled() || !_mutationsAllowed()) return;
-        var quest = _questController.Quests.LastOrDefault(value =>
-            string.Equals(value.Id, node.Id, StringComparison.Ordinal));
+        if (_disposed || !_workspace.TaskSkippingEnabled() || !_workspace.MutationsAllowed()) return;
+        var quest = _workspace.FindLiveQuest(node.Id);
         if (quest is null) return;
 
         NativeQuestObjectiveSkip.ShowConfirmation(
-            _questController,
+            _workspace.QuestController,
             quest,
             objective.Id,
             node.Name,
             objective.Text,
-            () => !_disposed && _taskSkippingEnabled() && _mutationsAllowed(),
+            () => !_disposed && _workspace.TaskSkippingEnabled() && _workspace.MutationsAllowed(),
             () =>
             {
                 if (!_disposed) _onQuestMutated(node.Id, QuestDetailsActionKind.SkipObjective);
@@ -1393,7 +1351,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
 
     private async void RunHandover(string questId, NativeQuestHandoverAction action, Button button)
     {
-        if (_disposed || !_mutationsAllowed() || !button.interactable) return;
+        if (_disposed || !_workspace.MutationsAllowed() || !button.interactable) return;
         button.interactable = false;
         try
         {
@@ -1412,11 +1370,11 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
 
     private async void RunReplace(string questId, Button button)
     {
-        if (_disposed || !_mutationsAllowed() || !_canReplace(questId) || !button.interactable) return;
+        if (_disposed || !_workspace.CanReplace(_topology, questId) || !button.interactable) return;
         button.interactable = false;
         try
         {
-            await _replaceQuest(_nativeHostRoot, questId);
+            await _workspace.ReplaceAsync(_nativeHostRoot, _topology, questId);
             if (!_disposed) _onQuestMutated(questId, QuestDetailsActionKind.Replace);
         }
         catch (Exception exception)
@@ -1431,11 +1389,11 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
 
     private async void RunAccept(string questId, Button button)
     {
-        if (_disposed || !_mutationsAllowed() || !_canAccept(questId) || !button.interactable) return;
+        if (_disposed || !_workspace.CanAccept(_topology, questId) || !button.interactable) return;
         button.interactable = false;
         try
         {
-            await _acceptQuest(_nativeHostRoot, questId);
+            await _workspace.AcceptAsync(_nativeHostRoot, _topology, questId);
             if (!_disposed) _onQuestMutated(questId, QuestDetailsActionKind.Accept);
         }
         catch (Exception exception)
@@ -1450,11 +1408,11 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
 
     private async void RunComplete(string questId, Button button)
     {
-        if (_disposed || !_mutationsAllowed() || !_canComplete(questId) || !button.interactable) return;
+        if (_disposed || !_workspace.CanComplete(_topology, questId) || !button.interactable) return;
         button.interactable = false;
         try
         {
-            await _completeQuest(_nativeHostRoot, questId);
+            await _workspace.CompleteAsync(_nativeHostRoot, _topology, questId);
             if (!_disposed) _onQuestMutated(questId, QuestDetailsActionKind.Complete);
         }
         catch (Exception exception)

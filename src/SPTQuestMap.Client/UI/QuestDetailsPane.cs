@@ -4,8 +4,6 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
-using BepInEx.Configuration;
-using BepInEx.Logging;
 using EFT;
 using EFT.InventoryLogic;
 using EFT.Quests;
@@ -29,23 +27,13 @@ internal sealed class QuestDetailsPane : IDisposable
     private const float ActionsHeight = 48f;
     private const float SectionGap = 2f;
     private const string FallbackLocationBannerUrl = "/files/banners/norvinskzone.png";
-    private const string LightkeeperTraderId = "638f541a29ffd1183d187f57";
-    private const string BtrDriverTraderId = "656f0f98d80a697f855d34b1";
-
-    private static readonly FieldInfo RewardListPrefabField = AccessTools.Field(typeof(QuestView), "_rewardListPrefab")
-        ?? throw new MissingFieldException(typeof(QuestView).FullName, "_rewardListPrefab");
     private static readonly FieldInfo RewardContainerField = AccessTools.Field(typeof(QuestRewardList), "_container")
         ?? throw new MissingFieldException(typeof(QuestRewardList).FullName, "_container");
 
-    private readonly ISession _session;
+    private readonly NativeQuestWorkspaceContext _workspace;
     private readonly InventoryController _inventoryController;
     private readonly AbstractQuestControllerClass _questController;
     private readonly QuestAssetSpriteCache _assetCache;
-    private readonly ManualLogSource _log;
-    private readonly Func<bool> _showHiddenRewards;
-    private readonly Func<bool> _defaultToSummary;
-    private readonly Func<bool> _taskSkippingEnabled;
-    private readonly Func<KeyboardShortcut> _taskSkipModifier;
     private readonly Action<string, QuestDetailsActionKind> _requestQuestRefresh;
     private readonly string? _contextTraderId;
     private readonly float _headerHeight;
@@ -63,39 +51,32 @@ internal sealed class QuestDetailsPane : IDisposable
     private QuestDetailsPane(
         RectTransform root,
         RectTransform shadow,
-        ISession session,
-        InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
+        NativeQuestWorkspaceContext workspace,
         QuestAssetSpriteCache assetCache,
-        ManualLogSource log,
-        Func<bool> showHiddenRewards,
-        Func<bool> defaultToSummary,
-        Func<bool> taskSkippingEnabled,
-        Func<KeyboardShortcut> taskSkipModifier,
         Action<string, QuestDetailsActionKind> requestQuestRefresh,
         string? contextTraderId,
         float headerHeightScale)
     {
         Root = root;
         _shadow = shadow;
-        _session = session;
-        _inventoryController = inventoryController;
-        _questController = questController;
+        _workspace = workspace;
+        _inventoryController = workspace.InventoryController;
+        _questController = workspace.QuestController;
         _assetCache = assetCache;
-        _log = log;
-        _showHiddenRewards = showHiddenRewards;
-        _defaultToSummary = defaultToSummary;
-        _taskSkippingEnabled = taskSkippingEnabled;
-        _taskSkipModifier = taskSkipModifier;
         _requestQuestRefresh = requestQuestRefresh;
         _contextTraderId = contextTraderId;
         _headerHeight = HeaderHeight * Mathf.Clamp(headerHeightScale, 0.5f, 1f);
         _nativeHostRoot = UnityUiFactory.CreateRect("NativeActionHosts", root);
         UnityUiFactory.Stretch(_nativeHostRoot);
         _nativeHostRoot.gameObject.SetActive(false);
-        _actionHost = NativeQuestViewHost.TryCreate(_nativeHostRoot, session, inventoryController, questController, log);
+        _actionHost = NativeQuestViewHost.TryCreate(
+            _nativeHostRoot,
+            workspace.Session,
+            _inventoryController,
+            _questController,
+            workspace.Log);
         _skipVisibility = root.gameObject.AddComponent<QuestObjectiveSkipVisibility>();
-        _skipVisibility.Bind(taskSkippingEnabled, taskSkipModifier);
+        _skipVisibility.Bind(workspace.TaskSkippingEnabled, workspace.TaskSkipModifier);
     }
 
     public RectTransform Root { get; }
@@ -103,15 +84,8 @@ internal sealed class QuestDetailsPane : IDisposable
     public static QuestDetailsPane Create(
         RectTransform overlayParent,
         RectTransform viewport,
-        ISession session,
-        InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
+        NativeQuestWorkspaceContext workspace,
         QuestAssetSpriteCache assetCache,
-        ManualLogSource log,
-        Func<bool> showHiddenRewards,
-        Func<bool> defaultToSummary,
-        Func<bool> taskSkippingEnabled,
-        Func<KeyboardShortcut> taskSkipModifier,
         Action<string, QuestDetailsActionKind> requestQuestRefresh,
         string? contextTraderId = null,
         float headerHeightScale = 1f)
@@ -138,8 +112,7 @@ internal sealed class QuestDetailsPane : IDisposable
         outline.effectColor = new Color(0.22f, 0.25f, 0.25f, 0.95f);
         outline.effectDistance = new Vector2(-1, 0);
         var pane = new QuestDetailsPane(
-            root, shadow, session, inventoryController, questController, assetCache, log,
-            showHiddenRewards, defaultToSummary, taskSkippingEnabled, taskSkipModifier,
+            root, shadow, workspace, assetCache,
             requestQuestRefresh, contextTraderId, headerHeightScale);
         shadow.gameObject.SetActive(false);
         root.gameObject.SetActive(false);
@@ -155,7 +128,7 @@ internal sealed class QuestDetailsPane : IDisposable
         _overlay = overlay;
         if (changedSelection)
         {
-            _textTab = _defaultToSummary() && !string.IsNullOrWhiteSpace(node.Summary)
+            _textTab = _workspace.DefaultDetailsToSummary() && !string.IsNullOrWhiteSpace(node.Summary)
                 ? DetailTextTab.Summary
                 : DetailTextTab.Description;
         }
@@ -165,7 +138,7 @@ internal sealed class QuestDetailsPane : IDisposable
         }
         catch (Exception exception)
         {
-            _log.LogError($"QUESTMAP_M07_DETAILS_ERROR quest={questId}; {exception}");
+            _workspace.Log.LogError($"QUESTMAP_M07_DETAILS_ERROR quest={questId}; {exception}");
             BuildFailure(node);
         }
     }
@@ -216,7 +189,7 @@ internal sealed class QuestDetailsPane : IDisposable
             : null;
         var future = liveQuest is null;
         var raidOnlyTrader = IsRaidOnlyTrader(node.TraderId);
-        var actionBound = QuestMutationsAllowed() && liveQuest is not null && !raidOnlyTrader
+        var actionBound = _workspace.MutationsAllowed() && liveQuest is not null && !raidOnlyTrader
             && _actionHost?.Bind(liveQuest, node.TraderId) == true;
         var descriptionHeight = DesiredDescriptionHeight(node);
         var objectivesHeight = DesiredObjectivesHeight(node, liveState);
@@ -239,10 +212,10 @@ internal sealed class QuestDetailsPane : IDisposable
         LayoutRebuilder.ForceRebuildLayoutImmediate(body);
         bodyViewport.GetComponent<ScrollRect>().verticalNormalizedPosition = 1f;
         _nativeHostRoot.SetAsLastSibling();
-        QuestMapDebugLog.Info(_log,
+        QuestMapDebugLog.Info(_workspace.Log,
             "QUESTMAP_M07_DETAILS " +
             $"quest={node.Id}; live={!future}; actionBound={actionBound}; raidOnlyTrader={raidOnlyTrader}; objectives={node.Objectives.Count}; " +
-            $"rewards={node.Rewards.Count}; summary={!string.IsNullOrWhiteSpace(node.Summary)}; hiddenRewards={_showHiddenRewards()}; " +
+            $"rewards={node.Rewards.Count}; summary={!string.IsNullOrWhiteSpace(node.Summary)}; hiddenRewards={_workspace.ShowHiddenRewards()}; " +
             $"descriptionHeight={descriptionHeight:0.#}; objectivesHeight={objectivesHeight:0.#}; rewardsHeight={rewardsHeight:0.#}; fixedHeaderAndActions=True; nestedScroll=False");
     }
 
@@ -368,7 +341,7 @@ internal sealed class QuestDetailsPane : IDisposable
         float height)
     {
         var area = TopRect("Actions", parent, top, height);
-        if (!QuestMutationsAllowed())
+        if (!_workspace.MutationsAllowed())
         {
             var disabled = UnityUiFactory.AddText(area.gameObject, ClientLocale.Text("label.actionsDisabledInRaid"), 12,
                 TextAlignmentOptions.Center, QuestGraphPalette.MutedText);
@@ -543,7 +516,7 @@ internal sealed class QuestDetailsPane : IDisposable
         }
         catch (Exception exception)
         {
-            _log.LogWarning($"QUESTMAP_RELEVANT_ITEM_COUNT_ERROR template={templateId}; {exception.Message}");
+            _workspace.Log.LogWarning($"QUESTMAP_RELEVANT_ITEM_COUNT_ERROR template={templateId}; {exception.Message}");
             return 0;
         }
     }
@@ -567,7 +540,7 @@ internal sealed class QuestDetailsPane : IDisposable
             var itemUiContext = ItemUiContext.Instance;
             if (itemUiContext is null)
             {
-                _log.LogWarning($"QUESTMAP_RELEVANT_ITEM_FLEA_UNAVAILABLE item={templateId}; reason=ItemUiContext unavailable");
+                _workspace.Log.LogWarning($"QUESTMAP_RELEVANT_ITEM_FLEA_UNAVAILABLE item={templateId}; reason=ItemUiContext unavailable");
                 return;
             }
 
@@ -577,7 +550,7 @@ internal sealed class QuestDetailsPane : IDisposable
         }
         catch (Exception exception)
         {
-            _log.LogError($"QUESTMAP_RELEVANT_ITEM_FLEA_ERROR item={templateId}; {exception}");
+            _workspace.Log.LogError($"QUESTMAP_RELEVANT_ITEM_FLEA_ERROR item={templateId}; {exception}");
         }
     }
 
@@ -594,7 +567,7 @@ internal sealed class QuestDetailsPane : IDisposable
         }
         catch (Exception exception)
         {
-            _log.LogError($"QUESTMAP_WIKI_ERROR quest={_selectedQuestId}; {exception}");
+            _workspace.Log.LogError($"QUESTMAP_WIKI_ERROR quest={_selectedQuestId}; {exception}");
         }
     }
 
@@ -659,7 +632,7 @@ internal sealed class QuestDetailsPane : IDisposable
             QuestObjectiveSkipSlot? skipSlot = null;
             GameObject? handoverObject = null;
             var canHandover = !future
-                && QuestMutationsAllowed()
+                && _workspace.MutationsAllowed()
                 && liveQuest?.QuestStatus == EQuestStatus.Started
                 && objectiveProgress?.Complete != true
                 && condition is ConditionHandoverItem or ConditionWeaponAssembly;
@@ -704,13 +677,13 @@ internal sealed class QuestDetailsPane : IDisposable
                         button.onClick.AddListener(() => RunNativeAction(
                             objectiveHost.Execute, QuestDetailsActionKind.Handover, button));
                     },
-                    _log,
+                    _workspace.Log,
                     node.Id,
                     objective.Id);
             }
 
             var canSkip = !future
-                && QuestMutationsAllowed()
+                && _workspace.MutationsAllowed()
                 && liveQuest?.QuestStatus == EQuestStatus.Started
                 && objectiveProgress?.Complete != true
                 && condition is not null;
@@ -780,7 +753,7 @@ internal sealed class QuestDetailsPane : IDisposable
 
     private float BuildRewards(RectTransform parent, QuestGraphNode node, QuestClass? liveQuest, bool future)
     {
-        var rewards = node.Rewards.Where(reward => _showHiddenRewards() || !reward.Hidden).ToArray();
+        var rewards = node.Rewards.Where(reward => _workspace.ShowHiddenRewards() || !reward.Hidden).ToArray();
         var fallbackContentHeight = rewards.Length == 0 ? 42f : rewards.Length * 47f;
         var section = StackRect("RewardsSection", parent, 32f + fallbackContentHeight);
         var title = UnityUiFactory.AddText(section.gameObject, ClientLocale.Text("label.rewards"), 14,
@@ -828,11 +801,11 @@ internal sealed class QuestDetailsPane : IDisposable
         out float height)
     {
         height = 0;
-        var source = FindQuestViewSource();
-        var prefab = source is null ? null : RewardListPrefabField.GetValue(source) as GameObject;
+        var source = NativeQuestViewSource.FindForDetails();
+        var prefab = source is null ? null : NativeQuestViewSource.GetRewardListPrefab(source);
         if (prefab is null || !quest.Template.Rewards.TryGetValue(EQuestStatus.Success, out var rawRewards)) return false;
         var rewards = rawRewards.Where((_, index) =>
-            _showHiddenRewards() || index >= node.Rewards.Count || !node.Rewards[index].Hidden).ToArray();
+            _workspace.ShowHiddenRewards() || index >= node.Rewards.Count || !node.Rewards[index].Hidden).ToArray();
         var instance = UnityEngine.Object.Instantiate(prefab, content, false);
         instance.name = "NativeRewardHost";
         instance.SetActive(true);
@@ -932,24 +905,24 @@ internal sealed class QuestDetailsPane : IDisposable
 
     private void RequestObjectiveSkip(QuestGraphNode node, QuestObjectiveDefinition objective, QuestClass quest)
     {
-        if (_disposed || !_taskSkippingEnabled() || !QuestMutationsAllowed()) return;
+        if (_disposed || !_workspace.TaskSkippingEnabled() || !_workspace.MutationsAllowed()) return;
         NativeQuestObjectiveSkip.ShowConfirmation(
             _questController,
             quest,
             objective.Id,
             node.Name,
             objective.Text,
-            () => !_disposed && _taskSkippingEnabled() && QuestMutationsAllowed(),
+            () => !_disposed && _workspace.TaskSkippingEnabled() && _workspace.MutationsAllowed(),
             () =>
             {
                 if (!_disposed) _requestQuestRefresh(node.Id, QuestDetailsActionKind.SkipObjective);
             },
-            _log);
+            _workspace.Log);
     }
 
     private async void RunNativeAction(Func<Task> action, QuestDetailsActionKind kind, Button button)
     {
-        if (_disposed || !button.interactable || !QuestMutationsAllowed()) return;
+        if (_disposed || !button.interactable || !_workspace.MutationsAllowed()) return;
         var questId = _selectedQuestId;
         button.interactable = false;
         try
@@ -963,7 +936,7 @@ internal sealed class QuestDetailsPane : IDisposable
         }
         catch (Exception exception)
         {
-            _log.LogError($"QUESTMAP_M07_ACTION_ERROR quest={_selectedQuestId}; {exception}");
+            _workspace.Log.LogError($"QUESTMAP_M07_ACTION_ERROR quest={_selectedQuestId}; {exception}");
         }
         finally
         {
@@ -1245,9 +1218,7 @@ internal sealed class QuestDetailsPane : IDisposable
         shadow.effectDistance = new Vector2(1, -1);
     }
 
-    private static bool IsRaidOnlyTrader(string traderId) =>
-        string.Equals(traderId, LightkeeperTraderId, StringComparison.Ordinal)
-        || string.Equals(traderId, BtrDriverTraderId, StringComparison.Ordinal);
+    private static bool IsRaidOnlyTrader(string traderId) => NativeQuestTableActions.IsRaidOnlyTrader(traderId);
 
     private static string LocationBannerUrl(QuestLocation location) =>
         location.Any
@@ -1255,8 +1226,6 @@ internal sealed class QuestDetailsPane : IDisposable
         || string.Equals(location.Name, "Transition", StringComparison.OrdinalIgnoreCase)
             ? FallbackLocationBannerUrl
             : location.BannerImageUrl ?? FallbackLocationBannerUrl;
-
-    private static bool QuestMutationsAllowed() => !InRaidQuestContext.TryCapture(out _);
 
     private string SelectedQuestName() =>
         _selectedQuestId is not null && _topology?.NodesById.TryGetValue(_selectedQuestId, out var node) == true
@@ -1320,12 +1289,6 @@ internal sealed class QuestDetailsPane : IDisposable
         text.fontStyle = FontStyles.Bold;
     }
 
-    private static QuestView? FindQuestViewSource() =>
-        Resources.FindObjectsOfTypeAll<QuestView>()
-            .FirstOrDefault(view => view != null
-                && !view.name.StartsWith("QuestMapNativeActionHost", StringComparison.Ordinal)
-                && RewardListPrefabField.GetValue(view) is GameObject);
-
     private static Rect BoundsInParent(RectTransform source, RectTransform parent)
     {
         var corners = new Vector3[4];
@@ -1359,82 +1322,6 @@ internal sealed class QuestDetailsPane : IDisposable
         RelevantItems,
     }
 
-    private sealed class NativeQuestViewHost : IDisposable
-    {
-        private readonly QuestView _view;
-        private readonly ISession _session;
-        private readonly InventoryController _inventoryController;
-        private readonly AbstractQuestControllerClass _questController;
-        private readonly ManualLogSource _log;
-        private bool _bound;
-
-        private NativeQuestViewHost(
-            QuestView view,
-            ISession session,
-            InventoryController inventoryController,
-            AbstractQuestControllerClass questController,
-            ManualLogSource log)
-        {
-            _view = view;
-            _session = session;
-            _inventoryController = inventoryController;
-            _questController = questController;
-            _log = log;
-        }
-
-        public static NativeQuestViewHost? TryCreate(
-            RectTransform parent,
-            ISession session,
-            InventoryController inventoryController,
-            AbstractQuestControllerClass questController,
-            ManualLogSource log)
-        {
-            var source = FindQuestViewSource();
-            if (source is null)
-            {
-                log.LogWarning("QUESTMAP_M07_NATIVE unavailable=QuestView; actions and native rewards remain read-only");
-                return null;
-            }
-            var clone = UnityEngine.Object.Instantiate(source.gameObject, parent, false);
-            clone.name = "QuestMapNativeActionHost";
-            clone.SetActive(false);
-            var view = clone.GetComponent<QuestView>();
-            if (view is null)
-            {
-                UnityEngine.Object.Destroy(clone);
-                return null;
-            }
-            return new NativeQuestViewHost(view, session, inventoryController, questController, log);
-        }
-
-        public bool Bind(QuestClass quest, string traderId)
-        {
-            var trader = _session.Traders.FirstOrDefault(value => string.Equals(value.Id, traderId, StringComparison.Ordinal));
-            if (trader is null)
-            {
-                _log.LogWarning($"QUESTMAP_M07_NATIVE quest={quest.Id}; unavailable=trader:{traderId}");
-                return false;
-            }
-            if (_bound) _view.Close();
-            _view.Show(_session, _inventoryController, _questController, quest, trader);
-            _view.gameObject.SetActive(false);
-            _bound = true;
-            return true;
-        }
-
-        public Task Accept(QuestClass quest) => _view.StartQuest(quest);
-
-        public Task Complete(QuestClass quest) => _view.FinishQuest(quest);
-
-        public Task Replace() => _view.ShowChangeQuestConfirmation();
-
-        public void Dispose()
-        {
-            if (_view == null) return;
-            if (_bound) _view.Close();
-            UnityEngine.Object.Destroy(_view.gameObject);
-        }
-    }
 }
 
 internal enum QuestDetailsActionKind

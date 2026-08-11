@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
-using BepInEx.Configuration;
 using BepInEx.Logging;
 using EFT;
 using EFT.InventoryLogic;
@@ -43,18 +42,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private static readonly FieldInfo FavoriteQuestServiceField = RequiredTasksPanelField("gclass3794_0");
 
     private readonly TasksScreen _screen;
-    private InventoryController _inventoryController;
-    private AbstractQuestControllerClass _questController;
-    private ISession _session;
-    private readonly ManualLogSource _log;
-    private readonly bool _debugLogging;
+    private readonly NativeQuestWorkspaceContext _workspace;
     private readonly QuestAssetSpriteCache _assetCache;
     private readonly QuestTrackingService _tracking;
-    private readonly bool _customDetailsEnabled;
-    private readonly Func<bool> _showHiddenRewards;
-    private readonly Func<bool> _defaultDetailsToSummary;
-    private readonly Func<bool> _taskSkippingEnabled;
-    private readonly Func<KeyboardShortcut> _taskSkipModifier;
     private readonly Action<string, QuestDetailsActionKind> _requestQuestRefresh;
     private readonly Dictionary<GameObject, bool> _nativeControlStates = new();
     private TasksPanel? _tasksPanel;
@@ -119,35 +109,23 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
     public GlobalTasksScreenController(
         TasksScreen screen,
-        InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
-        ISession session,
-        ManualLogSource log,
-        bool debugLogging,
+        NativeQuestWorkspaceContext workspace,
         QuestAssetSpriteCache assetCache,
         QuestTrackingService tracking,
-        bool customDetailsEnabled,
-        Func<bool> showHiddenRewards,
-        Func<bool> defaultDetailsToSummary,
-        Func<bool> taskSkippingEnabled,
-        Func<KeyboardShortcut> taskSkipModifier,
         Action<string, QuestDetailsActionKind> requestQuestRefresh)
     {
         _screen = screen;
-        _inventoryController = inventoryController;
-        _questController = questController;
-        _session = session;
-        _log = log;
-        _debugLogging = debugLogging;
+        _workspace = workspace;
         _assetCache = assetCache;
         _tracking = tracking;
-        _defaultDetailsToSummary = defaultDetailsToSummary;
-        _taskSkippingEnabled = taskSkippingEnabled;
-        _taskSkipModifier = taskSkipModifier;
         _requestQuestRefresh = requestQuestRefresh;
-        _customDetailsEnabled = customDetailsEnabled;
-        _showHiddenRewards = showHiddenRewards;
     }
+
+    private InventoryController InventoryController => _workspace.InventoryController;
+    private AbstractQuestControllerClass QuestController => _workspace.QuestController;
+    private ISession Session => _workspace.Session;
+    private ManualLogSource Log => _workspace.Log;
+    private const bool CustomDetailsEnabled = true;
 
     public void Mount(
         QuestGraphTopology topology,
@@ -201,7 +179,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         _mounted = true;
         _visible = true;
         SubscribeInventoryUpdates();
-        QuestMapDebugLog.Info(_log,
+        QuestMapDebugLog.Info(Log,
             "QUESTMAP_M06_MOUNT " +
             $"screen={_screen.GetInstanceID()}; mode={_mode}; nodes={_projection?.Nodes.Count ?? 0}; " +
             $"edges={_projection?.Edges.Count ?? 0}; nativeNotes=True; nativeQuestItems=True; fullSurface=True; nativeSelectorsUnmodified=True; " +
@@ -223,8 +201,6 @@ internal sealed class GlobalTasksScreenController : IDisposable
     {
         if (!CanResume) return "screen-cache-invalid";
         RebindInventoryController(inventoryController);
-        _questController = questController;
-        _session = session;
         _overlay = overlay;
 
         _favoriteQuestService = FavoriteQuestServiceField.GetValue(_tasksPanel) as GClass3794
@@ -259,13 +235,13 @@ internal sealed class GlobalTasksScreenController : IDisposable
             _graphView.Root.gameObject.SetActive(true);
             ConfigureNativeSidePanels();
             PlaceGraphBehindNativeSidePanels();
-            if (_customDetailsEnabled && _selectedQuestId is not null) ShowSelectedQuestDetails();
+            if (_selectedQuestId is not null) ShowSelectedQuestDetails();
         }
         _visible = true;
         SubscribeInventoryUpdates();
         UpdateQuestItemsButtonState();
         var cachedRows = (_graphView as InProgressQuestTableView)?.CachedRowCount ?? 0;
-        QuestMapDebugLog.Info(_log,
+        QuestMapDebugLog.Info(Log,
             "QUESTMAP_M06_RESUME " +
             $"screen={_screen.GetInstanceID()}; topologyChanged={topologyChanged}; modeChanged={modeChanged}; " +
             $"mode={_mode}; cachedRows={cachedRows}; rootReused={!topologyChanged && !modeChanged}");
@@ -282,7 +258,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         _visible = false;
         UnsubscribeInventoryUpdates();
         var cachedRows = (_graphView as InProgressQuestTableView)?.CachedRowCount ?? 0;
-        QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_SUSPEND screen={_screen.GetInstanceID()}; cached=True; rows={cachedRows}");
+        QuestMapDebugLog.Info(Log, $"QUESTMAP_M06_SUSPEND screen={_screen.GetInstanceID()}; cached=True; rows={cachedRows}");
     }
 
     public string RefreshOverlay(QuestProfileOverlay overlay, bool refreshAllNativeControls = true)
@@ -402,7 +378,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         if (_mode == GlobalQuestGraphMode.InProgress) RebuildInProgressChrome();
         UpdateSelectionDetails();
         stopwatch.Stop();
-        QuestMapDebugLog.Info(_log,
+        QuestMapDebugLog.Info(Log,
             "QUESTMAP_M06_TOPOLOGY_DELTA " +
             $"mode={_mode}; nodes={nextProjection.Nodes.Count}; elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}; fullRebuild=False");
         return "global-topology-delta-applied";
@@ -460,7 +436,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             _tasksPanel.gameObject.SetActive(_tasksPanelWasActive);
         }
         if (_tasksDescription is not null) _tasksDescription.SetActive(_tasksDescriptionWasActive);
-        QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_DISPOSE screen={(_screen == null ? 0 : _screen.GetInstanceID())}; vanillaRestored=True");
+        QuestMapDebugLog.Info(Log, $"QUESTMAP_M06_DISPOSE screen={(_screen == null ? 0 : _screen.GetInstanceID())}; vanillaRestored=True");
     }
 
     private void ShowMode(GlobalQuestGraphMode mode)
@@ -468,7 +444,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         if (_disposed || !_mounted || _tasksPanel is null) return;
         if (_raidInProgressOnly && mode == GlobalQuestGraphMode.Full)
         {
-            QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_VIEW screen={_screen.GetInstanceID()}; view=Full; blocked=True; reason=in-raid-in-progress-only");
+            QuestMapDebugLog.Info(Log, $"QUESTMAP_M06_VIEW screen={_screen.GetInstanceID()}; view=Full; blocked=True; reason=in-raid-in-progress-only");
             return;
         }
         if (_mode != mode)
@@ -483,9 +459,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
         if (_graphView is not null)
         {
             _graphView.Root.gameObject.SetActive(true);
-            if (_customDetailsEnabled && _selectedQuestId is not null) ShowSelectedQuestDetails();
+            if (CustomDetailsEnabled && _selectedQuestId is not null) ShowSelectedQuestDetails();
         }
-        QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_VIEW screen={_screen.GetInstanceID()}; view={mode}; native=False");
+        QuestMapDebugLog.Info(Log, $"QUESTMAP_M06_VIEW screen={_screen.GetInstanceID()}; view={mode}; native=False");
     }
 
     private void RebuildGraph(bool preserveViewport)
@@ -504,11 +480,11 @@ internal sealed class GlobalTasksScreenController : IDisposable
         }
         catch (Exception exception)
         {
-            _log.LogError($"QUESTMAP_M06_ERROR phase=post-mount-rebuild; {exception}");
+            Log.LogError($"QUESTMAP_M06_ERROR phase=post-mount-rebuild; {exception}");
             Dispose();
-            _tasksPanel?.Show(_inventoryController, _questController, _session, _questsAdditionalFilter);
+            _tasksPanel?.Show(InventoryController, QuestController, Session, _questsAdditionalFilter);
             if (_tasksPanel is not null) _tasksPanel.gameObject.SetActive(true);
-            _log.LogWarning($"QUESTMAP_M06_STATE screen={_screen.GetInstanceID()}; active=False; safelyDisabled=True; reason=post-mount rebuild failed; vanillaRestored=True");
+            Log.LogWarning($"QUESTMAP_M06_STATE screen={_screen.GetInstanceID()}; active=False; safelyDisabled=True; reason=post-mount rebuild failed; vanillaRestored=True");
         }
     }
 
@@ -560,21 +536,11 @@ internal sealed class GlobalTasksScreenController : IDisposable
                 ClearSelection,
                 ToggleInProgressSort,
                 ToggleInProgressQuestExpansion,
-                _log,
-                _assetCache,
+                 Log,
+                 _assetCache,
                  _favoriteQuestService ?? throw new InvalidOperationException("Native favorite-quest service is unavailable."),
                  _tracking,
-                 QuestMutationsAllowed,
-                 CreateTableHandoverAction,
-                 _taskSkippingEnabled,
-                 _taskSkipModifier,
-                 _questController,
-                  CanAcceptTableQuest,
-                  AcceptTableQuestAsync,
-                  CanCompleteTableQuest,
-                  CompleteTableQuestAsync,
-                  CanReplaceRepeatable,
-                 ReplaceTableQuestAsync,
+                 _workspace,
                  _requestQuestRefresh,
                  initialViewport)
             : QuestGraphView.Create(
@@ -585,8 +551,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
                 _overlay,
                 SelectQuest,
                 PersistCurrentState,
-                _log,
-                _debugLogging,
+                Log,
+                _workspace.DebugLogging,
                 _assetCache,
                 initialViewport,
                 BuildCanvasActions(),
@@ -597,7 +563,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         Canvas.ForceUpdateCanvases();
         var viewportSize = _graphView.ViewportSize;
         var rootSize = _graphView.Root.rect.size;
-        QuestMapDebugLog.Info(_log,
+        QuestMapDebugLog.Info(Log,
             "QUESTMAP_M06_GEOMETRY " +
             $"surface={FormatSize(mountRect.rect.size)}; parent={FormatSize((mountRect.parent as RectTransform)?.rect.size ?? Vector2.zero)}; " +
             $"topInset={_surfaceTopInset:0.##}; topSource={_surfaceTopSource}; root={FormatSize(rootSize)}; viewport={FormatSize(viewportSize)}; activeNodes={_graphView.ActiveNodeCount}");
@@ -612,7 +578,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         {
             _graphView.SetSelected(_selectedQuestId);
             UpdateSelectionDetails();
-            if (_customDetailsEnabled) ShowSelectedQuestDetails();
+            if (CustomDetailsEnabled) ShowSelectedQuestDetails();
         }
     }
 
@@ -693,7 +659,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         _inProgressLocationIds.Clear();
         _inProgressLocationIds.UnionWith(context.DefaultLocationIds());
         _inProgressLocationsInitialized = true;
-        QuestMapDebugLog.Info(_log,
+        QuestMapDebugLog.Info(Log,
             "QUESTMAP_M06_RAID_FILTERS " +
             $"location={context.LocationId}; trader=all; locations={string.Join(",", _inProgressLocationIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))}");
     }
@@ -756,7 +722,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
                 ClearSelection();
                 return;
             }
-            if (_customDetailsEnabled) ShowSelectedQuestDetails();
+            if (CustomDetailsEnabled) ShowSelectedQuestDetails();
             return;
         }
         _selectedQuestId = questId;
@@ -774,10 +740,10 @@ internal sealed class GlobalTasksScreenController : IDisposable
             _graphView.SetSelected(questId);
         }
         UpdateSelectionDetails();
-        if (_customDetailsEnabled) ShowSelectedQuestDetails();
+        if (CustomDetailsEnabled) ShowSelectedQuestDetails();
         PersistCurrentState();
         var live = _overlay?.QuestsById.TryGetValue(questId, out var state) == true && state.HasLiveQuest;
-        QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_SELECT view={_mode}; quest={questId}; live={live}; detail=graph-selection");
+        QuestMapDebugLog.Info(Log, $"QUESTMAP_M06_SELECT view={_mode}; quest={questId}; live={live}; detail=graph-selection");
     }
 
     private void FocusQuest(string questId)
@@ -867,7 +833,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             _overlayMode == GlobalOverlayMode.QuestItems, () => ToggleNativeOverlay(false),
             () => QuestItemsTooltip());
         BuildQuestItemsWarningBadge();
-        if (_customDetailsEnabled)
+        if (CustomDetailsEnabled)
         {
             var detailSeparator = UnityUiFactory.CreateRect("DetailOverlaySeparator", header);
             detailSeparator.anchorMin = detailSeparator.anchorMax = detailSeparator.pivot = new Vector2(1, 1);
@@ -1033,7 +999,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         UpdateSelectionDetails();
         PersistCurrentState();
         stopwatch.Stop();
-        QuestMapDebugLog.Info(_log,
+        QuestMapDebugLog.Info(Log,
             "QUESTMAP_M06_PRESENTATION_UPDATE " +
             $"projectionChanged={projectionChanged}; chromeChanged={rebuildChrome}; rows={_projection.Nodes.Count}; " +
             $"elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}");
@@ -1120,71 +1086,6 @@ internal sealed class GlobalTasksScreenController : IDisposable
             return;
         }
         RebuildGraph(true);
-    }
-
-    private bool QuestMutationsAllowed() => !InRaidQuestContext.TryCapture(out _);
-
-    private NativeQuestHandoverAction? CreateTableHandoverAction(
-        RectTransform parent,
-        string questId,
-        string objectiveId)
-    {
-        if (!QuestMutationsAllowed()) return null;
-        var quest = _questController.Quests.LastOrDefault(value => string.Equals(value.Id, questId, StringComparison.Ordinal));
-        if (quest?.QuestStatus != EQuestStatus.Started) return null;
-        return NativeQuestTableActions.TryCreateHandover(
-            parent, quest, objectiveId, _questController, _inventoryController);
-    }
-
-    private bool CanReplaceRepeatable(string questId)
-    {
-        if (!QuestMutationsAllowed() || _topology?.NodesById.TryGetValue(questId, out var node) != true
-            || node.RepeatableKind is not ("Daily" or "Weekly")) return false;
-        return _questController.Quests.LastOrDefault(value => string.Equals(value.Id, questId, StringComparison.Ordinal))
-            ?.IsChangeAllowed == true;
-    }
-
-    private bool CanAcceptTableQuest(string questId)
-    {
-        if (!QuestMutationsAllowed() || _topology?.NodesById.TryGetValue(questId, out var node) != true
-            || NativeQuestTableActions.IsRaidOnlyTrader(node.TraderId)) return false;
-        return _questController.Quests.LastOrDefault(value => string.Equals(value.Id, questId, StringComparison.Ordinal))
-            ?.QuestStatus == EQuestStatus.AvailableForStart;
-    }
-
-    private async System.Threading.Tasks.Task AcceptTableQuestAsync(RectTransform parent, string questId)
-    {
-        if (!CanAcceptTableQuest(questId) || _topology is null) return;
-        var quest = _questController.Quests.Last(value => string.Equals(value.Id, questId, StringComparison.Ordinal));
-        await NativeQuestTableActions.AcceptAsync(
-            parent, _session, _inventoryController, _questController, quest,
-            _topology.NodesById[questId].TraderId, _log);
-    }
-
-    private bool CanCompleteTableQuest(string questId)
-    {
-        if (!QuestMutationsAllowed() || _topology?.NodesById.TryGetValue(questId, out var node) != true
-            || NativeQuestTableActions.IsRaidOnlyTrader(node.TraderId)) return false;
-        return _questController.Quests.LastOrDefault(value => string.Equals(value.Id, questId, StringComparison.Ordinal))
-            ?.QuestStatus == EQuestStatus.AvailableForFinish;
-    }
-
-    private async System.Threading.Tasks.Task CompleteTableQuestAsync(RectTransform parent, string questId)
-    {
-        if (!CanCompleteTableQuest(questId) || _topology is null) return;
-        var quest = _questController.Quests.Last(value => string.Equals(value.Id, questId, StringComparison.Ordinal));
-        await NativeQuestTableActions.CompleteAsync(
-            parent, _session, _inventoryController, _questController, quest,
-            _topology.NodesById[questId].TraderId, _log);
-    }
-
-    private async System.Threading.Tasks.Task ReplaceTableQuestAsync(RectTransform parent, string questId)
-    {
-        if (!CanReplaceRepeatable(questId) || _topology is null) return;
-        var quest = _questController.Quests.Last(value => string.Equals(value.Id, questId, StringComparison.Ordinal));
-        await NativeQuestTableActions.ReplaceAsync(
-            parent, _session, _inventoryController, _questController, quest,
-            _topology.NodesById[questId].TraderId, _log);
     }
 
     private void BuildSearchControl(RectTransform header)
@@ -1378,7 +1279,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
     private void BuildSelectionSummary()
     {
-        if (_graphView is null || _customDetailsEnabled) return;
+        if (_graphView is null || CustomDetailsEnabled) return;
         _selectionSummary = UnityUiFactory.CreateRect("SelectionSummary", _graphView.Root);
         _selectionSummary.anchorMin = _selectionSummary.anchorMax = _selectionSummary.pivot = new Vector2(1, 0);
         _selectionSummary.anchoredPosition = new Vector2(-12, 12);
@@ -1400,14 +1301,14 @@ internal sealed class GlobalTasksScreenController : IDisposable
             || _notesToggle is null || _questItemsToggle is null) return;
         var requested = notes ? GlobalOverlayMode.Notes : GlobalOverlayMode.QuestItems;
         ApplyOverlayMode(_overlayMode == requested ? GlobalOverlayMode.None : requested, true);
-        QuestMapDebugLog.Info(_log,
+        QuestMapDebugLog.Info(Log,
             $"QUESTMAP_M06_OVERLAY requested={(notes ? "notes" : "quest-items")}; mode={_overlayMode}; " +
             $"notesVisible={_notesPart.gameObject.activeSelf}; questItemsVisible={_questItemsPart.gameObject.activeSelf}");
     }
 
     private void ToggleQuestDetails()
     {
-        if (!_customDetailsEnabled || _selectedQuestId is null) return;
+        if (!CustomDetailsEnabled || _selectedQuestId is null) return;
         ApplyOverlayMode(
             _overlayMode == GlobalOverlayMode.QuestDescription
                 ? GlobalOverlayMode.None
@@ -1417,7 +1318,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
     private void ShowSelectedQuestDetails()
     {
-        if (!_customDetailsEnabled || _selectedQuestId is null || _graphView is null || _topology is null || _overlay is null)
+        if (!CustomDetailsEnabled || _selectedQuestId is null || _graphView is null || _topology is null || _overlay is null)
             return;
         if (_detailPane is null)
         {
@@ -1426,15 +1327,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
                     ?? throw new InvalidOperationException("QuestMap global root has no overlay parent."),
                 _graphView.Root.Find("Viewport") as RectTransform
                     ?? throw new InvalidOperationException("QuestMap global viewport was not created."),
-                _session,
-                _inventoryController,
-                _questController,
+                _workspace,
                 _assetCache,
-                _log,
-                _showHiddenRewards,
-                _defaultDetailsToSummary,
-                _taskSkippingEnabled,
-                _taskSkipModifier,
                 _requestQuestRefresh);
         }
         _detailPane.Show(_topology, _overlay, _selectedQuestId);
@@ -1584,7 +1478,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
     private int GetCarriedQuestItemCount()
     {
-        return _questController.Profile.Inventory.QuestRaidItems?.Grid?.Items?.Count() ?? 0;
+        return QuestController.Profile.Inventory.QuestRaidItems?.Grid?.Items?.Count() ?? 0;
     }
 
     private void OnInventoryProfileUpdate()
@@ -1594,25 +1488,22 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
     private void RebindInventoryController(InventoryController inventoryController)
     {
-        if (!ReferenceEquals(_inventoryController, inventoryController))
-        {
-            UnsubscribeInventoryUpdates();
-            _inventoryController = inventoryController;
-        }
+        if (!ReferenceEquals(InventoryController, inventoryController)) UnsubscribeInventoryUpdates();
+        _workspace.RebindInventoryController(inventoryController);
         SubscribeInventoryUpdates();
     }
 
     private void SubscribeInventoryUpdates()
     {
         if (_inventoryUpdatesSubscribed) return;
-        _inventoryController.OnProfileUpdate += OnInventoryProfileUpdate;
+        InventoryController.OnProfileUpdate += OnInventoryProfileUpdate;
         _inventoryUpdatesSubscribed = true;
     }
 
     private void UnsubscribeInventoryUpdates()
     {
         if (!_inventoryUpdatesSubscribed) return;
-        _inventoryController.OnProfileUpdate -= OnInventoryProfileUpdate;
+        InventoryController.OnProfileUpdate -= OnInventoryProfileUpdate;
         _inventoryUpdatesSubscribed = false;
     }
 
@@ -1715,7 +1606,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         _questItemsBackdrop.gameObject.SetActive(_overlayMode == GlobalOverlayMode.QuestItems);
         ConstrainQuestItemsScrolls();
 
-        QuestMapDebugLog.Info(_log,
+        QuestMapDebugLog.Info(Log,
             "QUESTMAP_M06_NATIVE_BOUNDS " +
             $"canvas={FormatSize(viewport.rect.size)}; notes={FormatSize(_notesPart.rect.size)}; " +
             $"questItems={FormatSize(_questItemsPart.rect.size)}; search={FormatSize(_nativeSearch.rect.size)}; rightAligned=True; backdrop=True");
@@ -1871,7 +1762,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     {
         UpdateSelectionSummary();
         UpdateOverlayButtons();
-        if (!_customDetailsEnabled || _detailPane is null || _topology is null || _overlay is null || _selectedQuestId is null)
+        if (!CustomDetailsEnabled || _detailPane is null || _topology is null || _overlay is null || _selectedQuestId is null)
         {
             if (_selectedQuestId is null) CloseQuestDetails();
             return;

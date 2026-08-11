@@ -253,21 +253,18 @@ internal sealed class QuestScreenCoordinator : IDisposable
         if (topology is null || layout is null || overlay is null) return;
 
         _pendingTraderScreen = null;
-        var controller = new TraderTasksScreenController(
-            pending.Screen,
+        var workspace = new NativeQuestWorkspaceContext(
             pending.Session,
             pending.InventoryController,
             pending.QuestController,
-            pending.Trader,
             _log,
-            _configuration.EnableDebugLogging.Value,
+            _configuration);
+        var controller = new TraderTasksScreenController(
+            pending.Screen,
+            pending.Trader,
+            workspace,
             _assetCache,
             _tracking,
-            true,
-            () => _configuration.ShowHiddenQuestRewards.Value,
-            () => _configuration.DefaultQuestDetailsToSummary.Value,
-            () => _configuration.EnableTaskSkipping.Value,
-            () => _configuration.TaskSkipModifier.Value,
             _reconcileQuestAction);
         try
         {
@@ -308,20 +305,17 @@ internal sealed class QuestScreenCoordinator : IDisposable
         if (topology is null || layout is null || overlay is null) return;
 
         _pendingGlobalScreen = null;
-        var controller = new GlobalTasksScreenController(
-            pending.Screen,
+        var workspace = new NativeQuestWorkspaceContext(
+            pending.Session,
             pending.InventoryController,
             pending.QuestController,
-            pending.Session,
             _log,
-            _configuration.EnableDebugLogging.Value,
+            _configuration);
+        var controller = new GlobalTasksScreenController(
+            pending.Screen,
+            workspace,
             _assetCache,
             _tracking,
-            true,
-            () => _configuration.ShowHiddenQuestRewards.Value,
-            () => _configuration.DefaultQuestDetailsToSummary.Value,
-            () => _configuration.EnableTaskSkipping.Value,
-            () => _configuration.TaskSkipModifier.Value,
             _reconcileQuestAction);
         try
         {

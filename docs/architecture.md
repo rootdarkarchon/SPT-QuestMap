@@ -28,6 +28,8 @@ The server adapts SPT enums and DTOs at `Services/QuestGraphRules` and `Services
 
 The native client keeps `QuestMapDataRuntime` as its lifecycle-facing coordinator. `QuestRefreshCoordinator` owns observed-controller subscriptions, coalesced refresh ordering, topology/profile reconciliation, and targeted raid patches; `QuestScreenCoordinator` owns pending, mounted, suspended, and cached Tasks-screen controllers; `RaidQuestRuntime` owns raid entry/exit, progress monitoring, tracked-list projection, notifications, and raid telemetry; and `QuestActionReconciler` waits for native quest transactions to become observable before requesting a refresh. These components share the one `QuestMapDataAdapter` and `QuestTrackingService` created by the runtime, so the split does not duplicate topology, overlay, persistence, or event state.
 
+Within each mounted native Tasks workspace, `NativeQuestWorkspaceContext` owns the exact-version EFT session/controller binding, live quest lookup, raid mutation gate, action eligibility, and native quest transactions shared by the global and trader controllers. `NativeQuestViewHost` separately owns discovery, binding, and disposal of hidden EFT `QuestView` clones. The screen controllers retain their genuinely host-specific lifecycle, surface, filtering, selection, and persistence rules while composing the shared graph/table and detail views. `InProgressQuestTableView` and `QuestDetailsPane` remain responsible for their cohesive Unity rendering and local interaction state rather than fragmenting verbose UI construction into small indirection-only helpers.
+
 ## Server and Blazor responsibilities
 
 - expose the mod-owned Razor page at `/questmap` through SPT's existing Interactive Server host;

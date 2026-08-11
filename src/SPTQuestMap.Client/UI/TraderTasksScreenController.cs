@@ -2,9 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
-using BepInEx.Configuration;
-using BepInEx.Logging;
 using EFT.InventoryLogic;
 using EFT.Quests;
 using EFT.UI;
@@ -35,19 +32,10 @@ internal sealed class TraderTasksScreenController : IDisposable
         ?? throw new MissingFieldException(typeof(QuestsScreen).FullName, "_questView");
 
     private readonly QuestsScreen _screen;
-    private readonly ISession _session;
-    private readonly InventoryController _inventoryController;
-    private readonly AbstractQuestControllerClass _questController;
+    private readonly NativeQuestWorkspaceContext _workspace;
     private readonly TraderClass _trader;
-    private readonly ManualLogSource _log;
-    private readonly bool _debugLogging;
     private readonly QuestAssetSpriteCache _assetCache;
     private readonly QuestTrackingService _tracking;
-    private readonly bool _customDetailsEnabled;
-    private readonly Func<bool> _showHiddenRewards;
-    private readonly Func<bool> _defaultDetailsToSummary;
-    private readonly Func<bool> _taskSkippingEnabled;
-    private readonly Func<KeyboardShortcut> _taskSkipModifier;
     private readonly Action<string, QuestDetailsActionKind> _requestQuestRefresh;
     private readonly List<QuestTableSortCriterion> _sortCriteria = [];
     private readonly HashSet<string> _expandedQuestIds = new(StringComparer.Ordinal);
@@ -85,37 +73,21 @@ internal sealed class TraderTasksScreenController : IDisposable
 
     public TraderTasksScreenController(
         QuestsScreen screen,
-        ISession session,
-        InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
         TraderClass trader,
-        ManualLogSource log,
-        bool debugLogging,
+        NativeQuestWorkspaceContext workspace,
         QuestAssetSpriteCache assetCache,
         QuestTrackingService tracking,
-        bool customDetailsEnabled,
-        Func<bool> showHiddenRewards,
-        Func<bool> defaultDetailsToSummary,
-        Func<bool> taskSkippingEnabled,
-        Func<KeyboardShortcut> taskSkipModifier,
         Action<string, QuestDetailsActionKind> requestQuestRefresh)
     {
         _screen = screen;
-        _session = session;
-        _inventoryController = inventoryController;
-        _questController = questController;
         _trader = trader;
-        _log = log;
-        _debugLogging = debugLogging;
+        _workspace = workspace;
         _assetCache = assetCache;
         _tracking = tracking;
-        _customDetailsEnabled = customDetailsEnabled;
-        _showHiddenRewards = showHiddenRewards;
-        _defaultDetailsToSummary = defaultDetailsToSummary;
-        _taskSkippingEnabled = taskSkippingEnabled;
-        _taskSkipModifier = taskSkipModifier;
         _requestQuestRefresh = requestQuestRefresh;
     }
+
+    private const bool CustomDetailsEnabled = true;
 
     public void Mount(QuestGraphTopology topology, QuestGraphLayout layout, QuestProfileOverlay overlay)
     {
@@ -125,7 +97,7 @@ internal sealed class TraderTasksScreenController : IDisposable
             ?? throw new InvalidOperationException("QuestsScreen._questsListView was null.");
         _nativeQuestView = (QuestView?)QuestViewField.GetValue(_screen)
             ?? throw new InvalidOperationException("QuestsScreen._questView was null.");
-        _favoriteQuestService = ResolveFavoriteQuestService(_vanillaList, _nativeQuestView, _screen, _questController)
+        _favoriteQuestService = ResolveFavoriteQuestService(_vanillaList, _nativeQuestView, _screen, _workspace.QuestController)
             ?? ResolveFavoriteQuestService(_screen.GetComponentsInChildren<MonoBehaviour>(true).Cast<object>().ToArray());
         _vanillaListWasActive = _vanillaList.gameObject.activeSelf;
         _nativeQuestViewWasActive = _nativeQuestView.gameObject.activeSelf;
@@ -143,7 +115,7 @@ internal sealed class TraderTasksScreenController : IDisposable
         _vanillaList.gameObject.SetActive(false);
         _nativeQuestView.gameObject.SetActive(false);
         _mounted = true;
-        QuestMapDebugLog.Info(_log,
+        QuestMapDebugLog.Info(_workspace.Log,
             "QUESTMAP_TRADER_WORKSPACE_MOUNT " +
             $"screen={_screen.GetInstanceID()}; trader={_trader.Id}; mode=Tasks; nodes={_projection?.Nodes.Count ?? 0}; " +
             "sharedTable=True; sharedGraph=True; sharedDetails=True; nativeWorkspaceHidden=True");
@@ -172,7 +144,7 @@ internal sealed class TraderTasksScreenController : IDisposable
         }
         if (_vanillaList is not null) _vanillaList.gameObject.SetActive(_vanillaListWasActive);
         if (_nativeQuestView is not null) _nativeQuestView.gameObject.SetActive(_nativeQuestViewWasActive);
-        QuestMapDebugLog.Info(_log, $"QUESTMAP_TRADER_WORKSPACE_DISPOSE screen={_screen.GetInstanceID()}; trader={_trader.Id}; vanillaRestored=True");
+        QuestMapDebugLog.Info(_workspace.Log, $"QUESTMAP_TRADER_WORKSPACE_DISPOSE screen={_screen.GetInstanceID()}; trader={_trader.Id}; vanillaRestored=True");
     }
 
     public string RefreshOverlay(QuestProfileOverlay overlay)
@@ -254,14 +226,12 @@ internal sealed class TraderTasksScreenController : IDisposable
                 ? InProgressQuestTableView.Create(
                     mount, _projection, _topology, _overlay, _projection.Nodes, _sortCriteria,
                     _hideCompletedTasks, _expandedQuestIds, SelectQuest, ClearSelection, ToggleSort,
-                    ToggleExpansion, _log, _assetCache, _favoriteQuestService, _tracking,
-                    MutationsAllowed, CreateHandoverAction, _taskSkippingEnabled, _taskSkipModifier, _questController,
-                    CanAcceptQuest, AcceptQuestAsync,
-                    CanCompleteQuest, CompleteQuestAsync, CanReplaceQuest, ReplaceQuestAsync,
+                    ToggleExpansion, _workspace.Log, _assetCache, _favoriteQuestService, _tracking,
+                    _workspace,
                     HandleQuestMutation, viewport, HeaderHeight, QuestTableSectionMode.TraderStatus, _trader.Id)
                 : QuestGraphView.Create(
                     mount, ClientLocale.Text("label.questMap"), _projection, _topology, _overlay, SelectQuest,
-                    PersistViewport, _log, _debugLogging, _assetCache, viewport, BuildCanvasActions(),
+                    PersistViewport, _workspace.Log, _workspace.DebugLogging, _assetCache, viewport, BuildCanvasActions(),
                     true, HandleBackgroundClick, true, FocusQuest, HeaderHeight);
 
             BuildChrome();
@@ -376,7 +346,7 @@ internal sealed class TraderTasksScreenController : IDisposable
 
     private void ToggleDetails()
     {
-        if (!_customDetailsEnabled || _selectedQuestId is null) return;
+        if (!CustomDetailsEnabled || _selectedQuestId is null) return;
         _detailsVisible = !_detailsVisible;
         if (_detailsVisible) ShowSelectedDetails();
         else _detailPane?.Hide();
@@ -385,16 +355,14 @@ internal sealed class TraderTasksScreenController : IDisposable
 
     private void ShowSelectedDetails()
     {
-        if (!_customDetailsEnabled || _selectedQuestId is null || _contentView is null || _topology is null || _overlay is null)
+        if (!CustomDetailsEnabled || _selectedQuestId is null || _contentView is null || _topology is null || _overlay is null)
             return;
         _detailPane ??= QuestDetailsPane.Create(
             _contentView.Root.parent as RectTransform
                 ?? throw new InvalidOperationException("Trader workspace root has no overlay parent."),
             _contentView.Root.Find("Viewport") as RectTransform
                 ?? throw new InvalidOperationException("Trader workspace viewport was not created."),
-            _session, _inventoryController, _questController, _assetCache, _log,
-            _showHiddenRewards, _defaultDetailsToSummary, _taskSkippingEnabled, _taskSkipModifier,
-            HandleQuestMutation, _trader.Id, 2f / 3f);
+            _workspace, _assetCache, HandleQuestMutation, _trader.Id, 2f / 3f);
         _detailPane.Show(_topology, _overlay, _selectedQuestId);
         _detailsVisible = true;
         _detailPane.ShowRoot();
@@ -444,7 +412,7 @@ internal sealed class TraderTasksScreenController : IDisposable
                 tooltip: () => ClientLocale.Format(_levelEligibleOnly ? "tooltip.showAllLevels" : "tooltip.limitLevel", ClientLocale.Arg("level", _overlay.Level)));
         }
 
-        if (_customDetailsEnabled)
+        if (CustomDetailsEnabled)
         {
             _detailsButtonImage = QuestWorkspaceChrome.AddRightButton(
                 header, "QuestDescription", ClientLocale.Text("label.questDescription"), 8, 144, _detailsVisible, ToggleDetails,
@@ -601,61 +569,6 @@ internal sealed class TraderTasksScreenController : IDisposable
         if (!_expandedQuestIds.Add(questId)) _expandedQuestIds.Remove(questId);
         if (_contentView is InProgressQuestTableView table) table.RefreshExpansion(questId);
     }
-
-    private bool MutationsAllowed() => !InRaidQuestContext.TryCapture(out _);
-
-    private NativeQuestHandoverAction? CreateHandoverAction(RectTransform parent, string questId, string objectiveId)
-    {
-        if (!MutationsAllowed()) return null;
-        var quest = FindLiveQuest(questId);
-        if (quest?.QuestStatus != EQuestStatus.Started) return null;
-        return NativeQuestTableActions.TryCreateHandover(parent, quest, objectiveId, _questController, _inventoryController);
-    }
-
-    private bool CanAcceptQuest(string questId)
-    {
-        if (!MutationsAllowed() || _topology?.NodesById.TryGetValue(questId, out var node) != true
-            || NativeQuestTableActions.IsRaidOnlyTrader(node.TraderId)) return false;
-        return FindLiveQuest(questId)?.QuestStatus == EQuestStatus.AvailableForStart;
-    }
-
-    private async Task AcceptQuestAsync(RectTransform parent, string questId)
-    {
-        if (!CanAcceptQuest(questId) || _topology is null) return;
-        await NativeQuestTableActions.AcceptAsync(parent, _session, _inventoryController, _questController,
-            FindLiveQuest(questId)!, _topology.NodesById[questId].TraderId, _log);
-    }
-
-    private bool CanCompleteQuest(string questId)
-    {
-        if (!MutationsAllowed() || _topology?.NodesById.TryGetValue(questId, out var node) != true
-            || NativeQuestTableActions.IsRaidOnlyTrader(node.TraderId)) return false;
-        return FindLiveQuest(questId)?.QuestStatus == EQuestStatus.AvailableForFinish;
-    }
-
-    private async Task CompleteQuestAsync(RectTransform parent, string questId)
-    {
-        if (!CanCompleteQuest(questId) || _topology is null) return;
-        await NativeQuestTableActions.CompleteAsync(parent, _session, _inventoryController, _questController,
-            FindLiveQuest(questId)!, _topology.NodesById[questId].TraderId, _log);
-    }
-
-    private bool CanReplaceQuest(string questId)
-    {
-        if (!MutationsAllowed() || _topology?.NodesById.TryGetValue(questId, out var node) != true
-            || node.RepeatableKind is not ("Daily" or "Weekly")) return false;
-        return FindLiveQuest(questId)?.IsChangeAllowed == true;
-    }
-
-    private async Task ReplaceQuestAsync(RectTransform parent, string questId)
-    {
-        if (!CanReplaceQuest(questId) || _topology is null) return;
-        await NativeQuestTableActions.ReplaceAsync(parent, _session, _inventoryController, _questController,
-            FindLiveQuest(questId)!, _topology.NodesById[questId].TraderId, _log);
-    }
-
-    private QuestClass? FindLiveQuest(string questId) => _questController.Quests.LastOrDefault(
-        quest => string.Equals(quest.Id, questId, StringComparison.Ordinal));
 
     private void PersistViewport()
     {
