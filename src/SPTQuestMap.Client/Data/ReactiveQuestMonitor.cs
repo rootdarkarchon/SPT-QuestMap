@@ -11,9 +11,9 @@ internal sealed class ReactiveQuestMonitor : IDisposable
 {
     private readonly AbstractQuestControllerClass _controller;
     private readonly Action<string, string?> _invalidate;
-    private readonly HashSet<QuestClass> _quests = new(ReferenceComparer<QuestClass>.Instance);
-    private readonly HashSet<ConditionProgressChecker> _checkers = new(ReferenceComparer<ConditionProgressChecker>.Instance);
-    private readonly HashSet<Profile.TraderInfo> _traders = new(ReferenceComparer<Profile.TraderInfo>.Instance);
+    private readonly HashSet<QuestClass> _quests = new(ReferenceEqualityComparer<QuestClass>.Instance);
+    private readonly HashSet<ConditionProgressChecker> _checkers = new(ReferenceEqualityComparer<ConditionProgressChecker>.Instance);
+    private readonly HashSet<Profile.TraderInfo> _traders = new(ReferenceEqualityComparer<Profile.TraderInfo>.Instance);
     private InventoryController? _inventoryController;
     private bool _disposed;
 
@@ -60,19 +60,19 @@ internal sealed class ReactiveQuestMonitor : IDisposable
     {
         if (_disposed) return;
 
-        var currentQuests = new HashSet<QuestClass>(_controller.Quests, ReferenceComparer<QuestClass>.Instance);
+        var currentQuests = new HashSet<QuestClass>(_controller.Quests, ReferenceEqualityComparer<QuestClass>.Instance);
         foreach (var quest in _quests.Where(quest => !currentQuests.Contains(quest)).ToArray()) UnsubscribeQuest(quest);
         foreach (var quest in currentQuests) SubscribeQuest(quest);
 
         var currentCheckers = new HashSet<ConditionProgressChecker>(
             currentQuests.SelectMany(quest => quest.ProgressCheckers.Values),
-            ReferenceComparer<ConditionProgressChecker>.Instance);
+            ReferenceEqualityComparer<ConditionProgressChecker>.Instance);
         foreach (var checker in _checkers.Where(checker => !currentCheckers.Contains(checker)).ToArray()) UnsubscribeChecker(checker);
         foreach (var checker in currentCheckers) SubscribeChecker(checker);
 
         var currentTraders = new HashSet<Profile.TraderInfo>(
             _controller.Profile.TradersInfo.Values,
-            ReferenceComparer<Profile.TraderInfo>.Instance);
+            ReferenceEqualityComparer<Profile.TraderInfo>.Instance);
         foreach (var trader in _traders.Where(trader => !currentTraders.Contains(trader)).ToArray()) UnsubscribeTrader(trader);
         foreach (var trader in currentTraders) SubscribeTrader(trader);
     }
@@ -210,12 +210,4 @@ internal sealed class ReactiveQuestMonitor : IDisposable
 
     private void OnInventoryProfileUpdate() => _invalidate("inventory-profile", null);
 
-    private sealed class ReferenceComparer<T> : IEqualityComparer<T> where T : class
-    {
-        public static ReferenceComparer<T> Instance { get; } = new();
-
-        public bool Equals(T? x, T? y) => ReferenceEquals(x, y);
-
-        public int GetHashCode(T obj) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
-    }
 }

@@ -10,9 +10,9 @@ internal sealed class RaidQuestProgressMonitor : IDisposable
 {
     private readonly AbstractQuestControllerClass _controller;
     private readonly Action<string, string?, RaidQuestChangeKind> _changed;
-    private readonly HashSet<QuestClass> _quests = new(ReferenceComparer<QuestClass>.Instance);
+    private readonly HashSet<QuestClass> _quests = new(ReferenceEqualityComparer<QuestClass>.Instance);
     private readonly Dictionary<ConditionProgressChecker, CheckerBinding> _bindings =
-        new(ReferenceComparer<ConditionProgressChecker>.Instance);
+        new(ReferenceEqualityComparer<ConditionProgressChecker>.Instance);
     private readonly List<CheckerBinding> _pollBindings = new();
     private int _pollIndex;
     private bool _disposed;
@@ -68,13 +68,13 @@ internal sealed class RaidQuestProgressMonitor : IDisposable
     {
         if (_disposed) return;
 
-        var currentQuests = new HashSet<QuestClass>(_controller.Quests, ReferenceComparer<QuestClass>.Instance);
+        var currentQuests = new HashSet<QuestClass>(_controller.Quests, ReferenceEqualityComparer<QuestClass>.Instance);
         foreach (var quest in _quests.Where(quest => !currentQuests.Contains(quest)).ToArray())
             UnsubscribeQuest(quest);
         foreach (var quest in currentQuests) SubscribeQuest(quest);
 
         var currentCheckers = new Dictionary<ConditionProgressChecker, CheckerBinding>(
-            ReferenceComparer<ConditionProgressChecker>.Instance);
+            ReferenceEqualityComparer<ConditionProgressChecker>.Instance);
         foreach (var quest in currentQuests.Where(IsActive))
         {
             foreach (var pair in quest.ProgressCheckers)
@@ -229,14 +229,6 @@ internal sealed class RaidQuestProgressMonitor : IDisposable
         public double LastValue { get; set; }
     }
 
-    private sealed class ReferenceComparer<T> : IEqualityComparer<T> where T : class
-    {
-        public static ReferenceComparer<T> Instance { get; } = new();
-
-        public bool Equals(T? x, T? y) => ReferenceEquals(x, y);
-
-        public int GetHashCode(T obj) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
-    }
 }
 
 internal enum RaidQuestChangeKind

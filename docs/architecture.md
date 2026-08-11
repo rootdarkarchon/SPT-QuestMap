@@ -26,6 +26,8 @@ Do not recompute graph layout simply because quest statuses changed.
 
 The server adapts SPT enums and DTOs at `Services/QuestGraphRules` and `Services/QuestProfileRules`; the client adapts live EFT objects in `EftLiveSnapshotAdapter`. Runtime-owned action, persistence, rendering, localization, and transport code remain outside the core. The server release therefore deploys `SPTQuestMap.Core.dll` beside `SPTQuestMap.dll`; SPT 4.0.13 loads both top-level assemblies and still finds exactly one `AbstractModMetadata` implementation.
 
+The native client keeps `QuestMapDataRuntime` as its lifecycle-facing coordinator. `QuestRefreshCoordinator` owns observed-controller subscriptions, coalesced refresh ordering, topology/profile reconciliation, and targeted raid patches; `QuestScreenCoordinator` owns pending, mounted, suspended, and cached Tasks-screen controllers; `RaidQuestRuntime` owns raid entry/exit, progress monitoring, tracked-list projection, notifications, and raid telemetry; and `QuestActionReconciler` waits for native quest transactions to become observable before requesting a refresh. These components share the one `QuestMapDataAdapter` and `QuestTrackingService` created by the runtime, so the split does not duplicate topology, overlay, persistence, or event state.
+
 ## Server and Blazor responsibilities
 
 - expose the mod-owned Razor page at `/questmap` through SPT's existing Interactive Server host;
