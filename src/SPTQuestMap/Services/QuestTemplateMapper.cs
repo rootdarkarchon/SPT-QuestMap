@@ -110,7 +110,9 @@ internal static class QuestTemplateMapper
             item.Condition.Value,
             item.Condition.CompareMethod,
             item.Condition.VisibilityConditions?.Select(condition => condition.Target).Where(target => !string.IsNullOrEmpty(target)).Cast<string>().ToArray() ?? [],
-            GetObjectiveZoneIds(item.Condition)
+            GetObjectiveZoneIds(item.Condition),
+            item.Condition.OneSessionOnly == true,
+            item.Condition.DoNotResetIfCounterCompleted == true
         ));
     }
 

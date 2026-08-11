@@ -192,7 +192,10 @@ internal sealed class QuestMapDataAdapter
                 live.ExactStatus,
                 true,
                 live.Visible,
-                QuestOverlayBuilder.NormalizeObjectiveProgress(topology.NodesById[live.QuestId], live.Objectives),
+                QuestOverlayBuilder.NormalizeObjectiveProgress(
+                    topology.NodesById[live.QuestId],
+                    live.Objectives,
+                    live.ExactStatus),
                 live.ExpirationTime,
                 live.HandoverReady);
         }

@@ -8,10 +8,15 @@ public static class QuestProgressRules
         bool conditionRecorded,
         double? current,
         double? required,
-        string? compare) =>
-        conditionRecorded
-        || (current.HasValue && required.HasValue
-            && QuestGraphRules.Compare(current.Value, required.Value, compare ?? ">="));
+        string? compare,
+        bool counterStateAuthoritative = false)
+    {
+        var counterComplete = current.HasValue && required.HasValue
+            && QuestGraphRules.Compare(current.Value, required.Value, compare ?? ">=");
+        return counterStateAuthoritative && current.HasValue
+            ? counterComplete
+            : conditionRecorded || counterComplete;
+    }
 
     public static double? CapCurrent(double? current, double? required) =>
         current.HasValue && required.HasValue && current.Value > required.Value ? required : current;

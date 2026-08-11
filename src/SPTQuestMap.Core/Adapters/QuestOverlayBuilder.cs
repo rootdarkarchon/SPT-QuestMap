@@ -47,7 +47,7 @@ public static class QuestOverlayBuilder
                     live.ExactStatus,
                     true,
                     live.Visible,
-                    NormalizeObjectiveProgress(node, live.Objectives),
+                    NormalizeObjectiveProgress(node, live.Objectives, live.ExactStatus),
                     live.ExpirationTime,
                     live.HandoverReady);
                 continue;
@@ -75,20 +75,32 @@ public static class QuestOverlayBuilder
 
     public static IReadOnlyList<QuestObjectiveProgress> NormalizeObjectiveProgress(
         QuestGraphNode node,
-        IReadOnlyList<QuestObjectiveProgress> progress)
+        IReadOnlyList<QuestObjectiveProgress> progress,
+        string? exactStatus = null)
     {
         var definitions = node.Objectives
             .GroupBy(objective => objective.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         return progress.Select(objective =>
         {
+            definitions.TryGetValue(objective.ObjectiveId, out var definition);
+            var compare = definition?.Compare ?? ">=";
+            if (string.Equals(exactStatus, "Started", StringComparison.Ordinal)
+                && definition is { OneSessionOnly: true, DoNotResetIfCounterCompleted: false }
+                && objective.ProgressKnown
+                && objective.Current.HasValue
+                && objective.Required.HasValue)
+            {
+                return objective with
+                {
+                    Complete = QuestGraphRules.Compare(objective.Current.Value, objective.Required.Value, compare),
+                };
+            }
+
             if (objective.Complete || !objective.ProgressKnown
                 || !objective.Current.HasValue || !objective.Required.HasValue)
                 return objective;
 
-            var compare = definitions.TryGetValue(objective.ObjectiveId, out var definition)
-                ? definition.Compare ?? ">="
-                : ">=";
             return QuestGraphRules.Compare(objective.Current.Value, objective.Required.Value, compare)
                 ? objective with { Complete = true }
                 : objective;

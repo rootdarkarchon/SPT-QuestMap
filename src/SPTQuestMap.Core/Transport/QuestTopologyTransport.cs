@@ -133,6 +133,8 @@ public sealed class QuestObjectivePayload
     public string? Compare { get; set; }
     public string[] DependsOn { get; set; } = [];
     public string[] ZoneIds { get; set; } = [];
+    public bool OneSessionOnly { get; set; }
+    public bool DoNotResetIfCounterCompleted { get; set; }
 }
 
 public sealed class QuestUnknownConditionPayload

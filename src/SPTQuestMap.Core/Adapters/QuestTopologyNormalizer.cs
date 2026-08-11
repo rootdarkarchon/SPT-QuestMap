@@ -184,7 +184,9 @@ public static class QuestTopologyNormalizer
                 objective.RequiredValue,
                 objective.Compare,
                 objective.DependsOn ?? [],
-                objective.ZoneIds ?? [])).ToArray(),
+                objective.ZoneIds ?? [],
+                objective.OneSessionOnly,
+                objective.DoNotResetIfCounterCompleted)).ToArray(),
             (node.ExclusionRules ?? []).Select(rule => new QuestExclusionRule(
                 rule.CausedByQuestId,
                 rule.RequiredStatuses ?? [])).ToArray(),

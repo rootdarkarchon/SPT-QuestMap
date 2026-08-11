@@ -70,7 +70,9 @@ public sealed record QuestObjectiveDefinition(
     double? RequiredValue,
     string? Compare,
     IReadOnlyList<string> DependsOn,
-    IReadOnlyList<string> ZoneIds);
+    IReadOnlyList<string> ZoneIds,
+    bool OneSessionOnly = false,
+    bool DoNotResetIfCounterCompleted = false);
 
 public sealed record QuestUnknownCondition(string Stage, string ConditionType, string? ConditionId);
 

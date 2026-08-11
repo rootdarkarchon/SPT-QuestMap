@@ -11,6 +11,28 @@ namespace SPTQuestMap.Core.Tests;
 public sealed class QuestGraphCoreTests
 {
     [Test]
+    public void RepeatableBadgesMatchQuestActionButtonHeight()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(QuestTableLayoutRules.RepeatableBadgeHeight,
+                Is.EqualTo(QuestTableLayoutRules.QuestBannerActionHeight));
+            Assert.That(QuestTableLayoutRules.RepeatableBadgeHeight, Is.EqualTo(24f));
+        });
+    }
+
+    [TestCase(false, false)]
+    [TestCase(true, false)]
+    [TestCase(false, true)]
+    [TestCase(true, true)]
+    public void QuestBannerActionsUseOneAnchorRegardlessOfRouteState(bool collectorRoute, bool lightkeeperRoute)
+    {
+        Assert.That(
+            QuestTableLayoutRules.QuestBannerActionRightOffset(collectorRoute, lightkeeperRoute),
+            Is.EqualTo(26f));
+    }
+
+    [Test]
     public void ProgressIncrease_UsesRequiredValueAsNotificationCap()
     {
         var beforeCap = new QuestObjectiveProgress("objective", false, 49, 50, true);
@@ -415,6 +437,91 @@ public sealed class QuestGraphCoreTests
             ], null, false)));
 
         Assert.That(overlay.QuestsById["quest"].Objectives.Single().Complete, Is.True);
+    }
+
+    [Test]
+    public void Overlay_ResettableSessionCounterOverridesStaleCompletedConditionWhileQuestIsStarted()
+    {
+        var node = Node("quest", "Prapor", "Any");
+        node.Objectives =
+        [
+            new QuestObjectivePayload
+            {
+                Id = "reset",
+                Text = "Reset on death",
+                RequiredValue = 1,
+                Compare = ">=",
+                OneSessionOnly = true,
+            },
+            new QuestObjectivePayload
+            {
+                Id = "retain",
+                Text = "Retain when complete",
+                RequiredValue = 1,
+                Compare = ">=",
+                OneSessionOnly = true,
+                DoNotResetIfCounterCompleted = true,
+            },
+            new QuestObjectivePayload
+            {
+                Id = "ordinary",
+                Text = "Ordinary objective",
+                RequiredValue = 1,
+                Compare = ">=",
+            },
+        ];
+        var topology = QuestTopologyNormalizer.Normalize(Feed([node], []));
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            new LiveQuestSnapshot("quest", "Started", true,
+            [
+                new QuestObjectiveProgress("reset", true, 0, 1, true),
+                new QuestObjectiveProgress("retain", true, 0, 1, true),
+                new QuestObjectiveProgress("ordinary", true, 0, 1, true),
+            ], null, false)));
+        var progress = overlay.QuestsById["quest"].Objectives
+            .ToDictionary(objective => objective.ObjectiveId, StringComparer.Ordinal);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(topology.NodesById["quest"].Objectives[0].OneSessionOnly, Is.True);
+            Assert.That(progress["reset"].Complete, Is.False);
+            Assert.That(progress["retain"].Complete, Is.True);
+            Assert.That(progress["ordinary"].Complete, Is.True);
+        });
+    }
+
+    [Test]
+    public void Overlay_ResettableSessionCounterCanCompleteAgainAndDoesNotOverrideSettledQuestState()
+    {
+        var node = Node("quest", "Prapor", "Any");
+        node.Objectives =
+        [
+            new QuestObjectivePayload
+            {
+                Id = "reset",
+                Text = "Reset on death",
+                RequiredValue = 1,
+                Compare = ">=",
+                OneSessionOnly = true,
+            },
+        ];
+        var topology = QuestTopologyNormalizer.Normalize(Feed([node], []));
+        var started = QuestOverlayBuilder.Build(topology, Snapshot(
+            new LiveQuestSnapshot("quest", "Started", true,
+            [
+                new QuestObjectiveProgress("reset", false, 1, 1, true),
+            ], null, false)));
+        var ready = QuestOverlayBuilder.Build(topology, Snapshot(
+            new LiveQuestSnapshot("quest", "AvailableForFinish", true,
+            [
+                new QuestObjectiveProgress("reset", true, 0, 1, true),
+            ], null, true)));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(started.QuestsById["quest"].Objectives.Single().Complete, Is.True);
+            Assert.That(ready.QuestsById["quest"].Objectives.Single().Complete, Is.True);
+        });
     }
 
     [Test]

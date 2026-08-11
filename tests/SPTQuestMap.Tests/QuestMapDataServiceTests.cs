@@ -790,6 +790,85 @@ public sealed class QuestMapDataServiceTests
             Assert.That(CoreProgressRules.IsComplete(false, 3, 3, ">"), Is.False);
             Assert.That(CoreProgressRules.IsComplete(false, 2, 1, "=="), Is.False);
             Assert.That(CoreProgressRules.IsComplete(true, null, 3, null), Is.True);
+            Assert.That(CoreProgressRules.IsComplete(true, 0, 1, null, true), Is.False);
+            Assert.That(CoreProgressRules.IsComplete(true, 1, 1, null, true), Is.True);
+            Assert.That(CoreProgressRules.IsComplete(true, 0, 1, null, false), Is.True);
+        });
+    }
+
+    [Test]
+    public void ObjectiveMappingPreservesSessionResetMetadata()
+    {
+        var resettable = Condition("000000000000000000000024", 0) with
+        {
+            OneSessionOnly = true,
+            DoNotResetIfCounterCompleted = false,
+        };
+        var retained = Condition("000000000000000000000025", 1) with
+        {
+            OneSessionOnly = true,
+            DoNotResetIfCounterCompleted = true,
+        };
+
+        var result = QuestTemplateMapper.OrderObjectives([resettable, retained], []).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result[0].OneSessionOnly, Is.True);
+            Assert.That(result[0].DoNotResetIfCounterCompleted, Is.False);
+            Assert.That(result[1].OneSessionOnly, Is.True);
+            Assert.That(result[1].DoNotResetIfCounterCompleted, Is.True);
+        });
+    }
+
+    [Test]
+    public void StartedProfileUsesResettableCounterInsteadOfStaleCompletedCondition()
+    {
+        var resettable = new ObjectiveDefinitionDto(
+            "reset",
+            "Locate the temporary USEC camp on Woods",
+            "CounterCreator",
+            0,
+            null,
+            1,
+            ">=",
+            [],
+            [],
+            OneSessionOnly: true,
+            DoNotResetIfCounterCompleted: false);
+        var retained = resettable with { DoNotResetIfCounterCompleted = true };
+        var resetCounter = new TaskConditionCounter { Value = 0 };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                QuestProfileStateBuilder.IsObjectiveComplete(
+                    resettable,
+                    QuestStatusEnum.Started,
+                    conditionRecorded: true,
+                    counter: resetCounter),
+                Is.False);
+            Assert.That(
+                QuestProfileStateBuilder.IsObjectiveComplete(
+                    resettable,
+                    QuestStatusEnum.Started,
+                    conditionRecorded: true,
+                    counter: new TaskConditionCounter { Value = 1 }),
+                Is.True);
+            Assert.That(
+                QuestProfileStateBuilder.IsObjectiveComplete(
+                    retained,
+                    QuestStatusEnum.Started,
+                    conditionRecorded: true,
+                    counter: resetCounter),
+                Is.True);
+            Assert.That(
+                QuestProfileStateBuilder.IsObjectiveComplete(
+                    resettable,
+                    QuestStatusEnum.AvailableForFinish,
+                    conditionRecorded: true,
+                    counter: resetCounter),
+                Is.True);
         });
     }
 

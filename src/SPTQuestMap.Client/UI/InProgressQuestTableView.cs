@@ -883,7 +883,10 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         title.fontStyle = FontStyles.Bold;
         title.enableWordWrapping = true;
         AddTextBorder(title.gameObject);
-        var routeInset = AddQuestRouteStrips(content, node);
+        var collectorRoute = _topology.CollectorPathQuestIds.Contains(node.Id);
+        var lightkeeperRoute = _topology.LightkeeperPathQuestIds.Contains(node.Id);
+        AddQuestRouteStrips(content, collectorRoute, lightkeeperRoute);
+        var actionOffset = QuestTableLayoutRules.QuestBannerActionRightOffset(collectorRoute, lightkeeperRoute);
 
         var canAccept = _mutationsAllowed() && _canAccept(node.Id);
         var canComplete = _mutationsAllowed() && _canComplete(node.Id);
@@ -897,14 +900,14 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             var actionCount = (canAccept || canComplete ? 1 : 0) + (canReplace ? 1 : 0);
             var badge = UnityUiFactory.CreateRect("RepeatableBadge", content);
             badge.anchorMin = badge.anchorMax = badge.pivot = new Vector2(1, 1);
-            badge.anchoredPosition = new Vector2(-8 - routeInset - actionCount * 34, -8);
-            badge.sizeDelta = new Vector2(badgeWidth, 19);
+            badge.anchoredPosition = new Vector2(-actionOffset - actionCount * 34, -8);
+            badge.sizeDelta = new Vector2(badgeWidth, QuestTableLayoutRules.RepeatableBadgeHeight);
             badge.gameObject.AddComponent<Image>().color = QuestGraphPalette.ControlActive;
             var badgeText = UnityUiFactory.AddText(badge.gameObject, repeatableLabel, 9,
                 TextAlignmentOptions.Center, Color.white);
             badgeText.fontStyle = FontStyles.Bold;
+            badgeText.enableWordWrapping = false;
         }
-        var actionOffset = 8f + routeInset;
         if (canReplace)
         {
             AddQuestAction(content, "Replace", "↻", actionOffset, button => RunReplace(node.Id, button));
@@ -1278,26 +1281,18 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private static float TaskVisualHeight(QuestObjectiveProgress? progress) =>
         ObjectivePercent(progress).HasValue ? TaskRowHeight : CompactTaskRowHeight;
 
-    private float AddQuestRouteStrips(RectTransform parent, QuestGraphNode node)
+    private static void AddQuestRouteStrips(RectTransform parent, bool collectorRoute, bool lightkeeperRoute)
     {
         var offset = 5f;
-        var count = 0;
-        if (_topology.CollectorPathQuestIds.Contains(node.Id))
+        if (collectorRoute)
         {
             AddRouteStrip(parent, "CollectorRoute", QuestGraphPalette.Collector, offset);
             offset += 7f;
-            count++;
         }
-        if (_topology.LightkeeperPathQuestIds.Contains(node.Id))
+        if (lightkeeperRoute)
         {
             AddRouteStrip(parent, "LightkeeperRoute", QuestGraphPalette.Lightkeeper, offset);
-            count++;
         }
-
-        // Route strips own the right edge of the quest banner. Keep state
-        // actions and repeatable badges to their left instead of painting a
-        // button over the Collector/Lightkeeper identity markers.
-        return count == 0 ? 0f : count * 7f + 4f;
     }
 
     private static void AddRouteStrip(RectTransform parent, string name, Color color, float right)
@@ -1418,7 +1413,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var root = UnityUiFactory.CreateRect(name, parent);
         root.anchorMin = root.anchorMax = root.pivot = new Vector2(1, 1);
         root.anchoredPosition = new Vector2(-rightOffset, -8);
-        root.sizeDelta = new Vector2(28, 24);
+        root.sizeDelta = new Vector2(28, QuestTableLayoutRules.QuestBannerActionHeight);
         var button = UnityUiFactory.AddButton(root.gameObject, QuestGraphPalette.Control);
         var label = UnityUiFactory.AddText(root.gameObject, text, 16, TextAlignmentOptions.Center, Color.white);
         label.fontStyle = FontStyles.Bold;

@@ -96,7 +96,7 @@ internal sealed class QuestProfileStateBuilder(
                 var conditionRecorded = completed.Contains(objective.Id);
                 return new ObjectiveProgressDto(
                     objective.Id,
-                    QuestProgressRules.IsComplete(conditionRecorded, counter?.Value, objective.RequiredValue, objective.Compare),
+                    IsObjectiveComplete(objective, exactStatus, conditionRecorded, counter),
                     QuestProgressRules.CapCurrent(counter?.Value, objective.RequiredValue),
                     objective.RequiredValue,
                     counter is not null || conditionRecorded
@@ -345,7 +345,7 @@ internal sealed class QuestProfileStateBuilder(
             var conditionRecorded = completed.Contains(objective.Id);
             return new ObjectiveProgressDto(
                 objective.Id,
-                QuestProgressRules.IsComplete(conditionRecorded, counter?.Value, objective.RequiredValue, objective.Compare),
+                IsObjectiveComplete(objective, exactStatus, conditionRecorded, counter),
                 QuestProgressRules.CapCurrent(counter?.Value, objective.RequiredValue),
                 objective.RequiredValue,
                 counter is not null || conditionRecorded
@@ -432,6 +432,21 @@ internal sealed class QuestProfileStateBuilder(
 
         return null;
     }
+
+    internal static bool IsObjectiveComplete(
+        ObjectiveDefinitionDto objective,
+        QuestStatusEnum? exactStatus,
+        bool conditionRecorded,
+        TaskConditionCounter? counter) =>
+        QuestProgressRules.IsComplete(
+            conditionRecorded,
+            counter?.Value,
+            objective.RequiredValue,
+            objective.Compare,
+            exactStatus == QuestStatusEnum.Started
+            && objective.OneSessionOnly
+            && !objective.DoNotResetIfCounterCompleted
+            && counter is not null);
 
     private static TaskConditionCounter? FindCounter(
         Dictionary<MongoId, TaskConditionCounter>? counters,
