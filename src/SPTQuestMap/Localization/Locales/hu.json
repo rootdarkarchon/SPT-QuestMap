@@ -69,6 +69,7 @@
   "legend.requiresStarted": "Kezdés szükséges",
   "legend.requiresOutcome": "Bármely eredmény",
   "state.PrerequisiteGated": "Előfeltétel blokkolja",
+  "state.PrestigeGated": "Presztízs blokkolja",
   "state.LevelGated": "Szint blokkolja",
   "state.TraderGated": "Kereskedő blokkolja",
   "state.TraderUnavailable": "Kereskedő nem elérhető",

@@ -69,6 +69,7 @@
   "legend.requiresStarted": "Wymaga rozpoczęcia",
   "legend.requiresOutcome": "Dowolny wynik",
   "state.PrerequisiteGated": "Zablokowane przez poprzednie zadanie",
+  "state.PrestigeGated": "Zablokowane przez prestiż",
   "state.LevelGated": "Zablokowane przez poziom",
   "state.TraderGated": "Zablokowane przez handlarza",
   "state.TraderUnavailable": "Handlarz niedostępny",

@@ -69,6 +69,7 @@
   "legend.requiresStarted": "開始が必要",
   "legend.requiresOutcome": "いずれかの結果",
   "state.PrerequisiteGated": "前提クエストでロック",
+  "state.PrestigeGated": "プレステージでロック",
   "state.LevelGated": "レベルでロック",
   "state.TraderGated": "トレーダーでロック",
   "state.TraderUnavailable": "トレーダー利用不可",

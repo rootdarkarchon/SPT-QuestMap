@@ -194,6 +194,7 @@ internal sealed class QuestGraphCardNodeView
     {
         var kind = QuestGraphRules.ClassifyProfileDisplayState(topology, node, overlay);
         var deEmphasized = kind is QuestMapDisplayStateKind.Locked or QuestMapDisplayStateKind.PrerequisiteGated
+            or QuestMapDisplayStateKind.PrestigeGated
             or QuestMapDisplayStateKind.LevelGated or QuestMapDisplayStateKind.TraderGated
             or QuestMapDisplayStateKind.TraderUnavailable or QuestMapDisplayStateKind.Completed
             or QuestMapDisplayStateKind.Excluded;
@@ -331,6 +332,7 @@ internal sealed class QuestGraphCardNodeView
         return kind switch
         {
             QuestMapDisplayStateKind.PrerequisiteGated => "Prerequisite gated",
+            QuestMapDisplayStateKind.PrestigeGated => "Prestige gated",
             QuestMapDisplayStateKind.LevelGated => "Level gated",
             QuestMapDisplayStateKind.TraderGated => "Trader gated",
             QuestMapDisplayStateKind.TraderUnavailable => "Trader unavailable",

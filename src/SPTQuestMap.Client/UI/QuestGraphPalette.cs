@@ -44,6 +44,7 @@ internal static class QuestGraphPalette
     {
         QuestMapDisplayStateKind.Locked => Locked,
         QuestMapDisplayStateKind.PrerequisiteGated => Locked,
+        QuestMapDisplayStateKind.PrestigeGated => LevelGate,
         QuestMapDisplayStateKind.LevelGated => LevelGate,
         QuestMapDisplayStateKind.TraderGated => TraderGate,
         QuestMapDisplayStateKind.TraderUnavailable => TraderGate,

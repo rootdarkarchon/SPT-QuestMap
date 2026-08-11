@@ -69,6 +69,7 @@
   "legend.requiresStarted": "Vyžaduje zahájení",
   "legend.requiresOutcome": "Libovolný výsledek",
   "state.PrerequisiteGated": "Blokováno předchozím úkolem",
+  "state.PrestigeGated": "Blokováno prestiží",
   "state.LevelGated": "Blokováno úrovní",
   "state.TraderGated": "Blokováno obchodníkem",
   "state.TraderUnavailable": "Obchodník nedostupný",

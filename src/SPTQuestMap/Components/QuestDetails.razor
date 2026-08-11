@@ -215,6 +215,7 @@
 
     private string RequirementText(RequirementDto requirement)
     {
+        if (requirement.Kind == "PrestigeLevel") return Localizer.Format("gates.prestigeLevel", ("compare", requirement.Compare), ("value", Number(requirement.Value)));
         if (requirement.Kind == "Level") return Localizer.Format("gates.pmcLevel", ("compare", requirement.Compare), ("value", Number(requirement.Value)));
         var kind = Localizer[requirement.Kind == "TraderLoyalty" ? "gates.loyaltyShort" : "gates.reputationShort"];
         return Localizer.Format("gates.reputation", ("trader", TraderName(requirement.TraderId)), ("kind", kind), ("compare", requirement.Compare), ("value", Number(requirement.Value)));
@@ -224,6 +225,7 @@
     {
         if (blocker.Kind == "Prerequisite") return Localizer.Format("blocker.prerequisite", ("quest", QuestName(blocker.SubjectId)), ("statuses", string.Join(Localizer["common.or"], blocker.RequiredStatuses.Select(StateLabel))));
         if (blocker.Kind == "TraderUnavailable") return Localizer.Format("blocker.traderUnavailable", ("trader", TraderName(blocker.SubjectId)));
+        if (blocker.Kind == "PrestigeLevel") return Localizer.Format("gates.prestigeLevel", ("compare", blocker.Compare), ("value", Number(blocker.RequiredValue)));
         if (blocker.Kind == "Level") return Localizer.Format("gates.pmcLevel", ("compare", blocker.Compare), ("value", Number(blocker.RequiredValue)));
         var kind = Localizer[blocker.Kind == "TraderLoyalty" ? "gates.loyaltyShort" : "gates.reputationShort"];
         return Localizer.Format("gates.reputation", ("trader", TraderName(blocker.SubjectId)), ("kind", kind), ("compare", blocker.Compare), ("value", Number(blocker.RequiredValue)));

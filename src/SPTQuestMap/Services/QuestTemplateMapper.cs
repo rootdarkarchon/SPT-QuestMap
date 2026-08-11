@@ -180,7 +180,9 @@ internal static class QuestTemplateMapper
     internal static RequirementDto? ToRequirement(QuestCondition condition)
     {
         if (!condition.Value.HasValue) return null;
-        var traderId = condition.ConditionType == "Level" ? null : GetTargets(condition).FirstOrDefault();
+        var traderId = condition.ConditionType is "Level" or "PrestigeLevel"
+            ? null
+            : GetTargets(condition).FirstOrDefault();
         return new RequirementDto(condition.ConditionType, traderId, condition.CompareMethod ?? ">=", condition.Value.Value);
     }
 

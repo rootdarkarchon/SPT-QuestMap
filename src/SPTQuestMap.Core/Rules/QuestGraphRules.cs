@@ -74,6 +74,7 @@ public static class QuestGraphRules
         if (IsExcluded(node, overlay)) return QuestMapDisplayStateKind.Excluded;
         if (HasUnavailableTrader(node, overlay)) return QuestMapDisplayStateKind.TraderUnavailable;
         if (exact == QuestDisplayStateKind.AvailableAfter) return QuestMapDisplayStateKind.Pending;
+        if (HasUnmetPrestigeLevel(node, overlay.PrestigeLevel)) return QuestMapDisplayStateKind.PrestigeGated;
         if (HasUnmetLevel(node, overlay.Level)) return QuestMapDisplayStateKind.LevelGated;
         if (HasUnmetTraderRequirement(node, overlay)) return QuestMapDisplayStateKind.TraderGated;
         if (HasUnmetPrerequisiteGate(topology, node.Id, overlay)) return QuestMapDisplayStateKind.PrerequisiteGated;
@@ -167,6 +168,10 @@ public static class QuestGraphRules
     private static bool HasUnmetLevel(QuestGraphNode node, int level) =>
         node.EffectiveRequirements.Any(requirement => requirement.Kind == "Level"
             && !Compare(level, requirement.Value, requirement.Compare));
+
+    private static bool HasUnmetPrestigeLevel(QuestGraphNode node, int prestigeLevel) =>
+        node.EffectiveRequirements.Any(requirement => requirement.Kind == "PrestigeLevel"
+            && !Compare(prestigeLevel, requirement.Value, requirement.Compare));
 
     private static bool HasUnmetTraderRequirement(QuestGraphNode node, QuestProfileOverlay overlay) =>
         node.EffectiveRequirements.Any(requirement =>

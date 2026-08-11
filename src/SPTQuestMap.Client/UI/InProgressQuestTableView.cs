@@ -1600,11 +1600,20 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         };
         var requirement = state switch
         {
+            QuestMapDisplayStateKind.PrestigeGated => PrestigeGateLabel(node),
             QuestMapDisplayStateKind.LevelGated => LevelGateLabel(node),
             QuestMapDisplayStateKind.TraderGated => TraderGateLabel(node),
             _ => null,
         };
         return string.IsNullOrWhiteSpace(requirement) ? status : $"{status}\n<size=10>{requirement}</size>";
+    }
+
+    private static string? PrestigeGateLabel(QuestGraphNode node)
+    {
+        var requirement = node.EffectiveRequirements.FirstOrDefault(value => value.Kind == "PrestigeLevel");
+        return requirement is null
+            ? null
+            : $"Requires prestige {RequirementSymbol(requirement.Compare)} {FormatRequirementValue(requirement.Value)}";
     }
 
     private string? LevelGateLabel(QuestGraphNode node)

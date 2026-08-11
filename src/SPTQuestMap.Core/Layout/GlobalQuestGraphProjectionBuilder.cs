@@ -228,6 +228,7 @@ public static class GlobalQuestGraphProjectionBuilder
                 QuestMapDisplayStateKind.Available or
                 QuestMapDisplayStateKind.InProgress or
                 QuestMapDisplayStateKind.RestartableFailure or
+                QuestMapDisplayStateKind.PrestigeGated or
                 QuestMapDisplayStateKind.LevelGated or
                 QuestMapDisplayStateKind.TraderGated or
                 QuestMapDisplayStateKind.TraderUnavailable or

@@ -69,6 +69,7 @@
   "legend.requiresStarted": "Başlatma gerekli",
   "legend.requiresOutcome": "Herhangi bir sonuç",
   "state.PrerequisiteGated": "Önceki görev nedeniyle kilitli",
+  "state.PrestigeGated": "Prestij nedeniyle kilitli",
   "state.LevelGated": "Seviye nedeniyle kilitli",
   "state.TraderGated": "Tüccar nedeniyle kilitli",
   "state.TraderUnavailable": "Tüccar kullanılamıyor",

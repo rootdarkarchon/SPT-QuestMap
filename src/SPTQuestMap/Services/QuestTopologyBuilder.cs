@@ -56,13 +56,13 @@ internal sealed class QuestTopologyBuilder(
             var metaInfo = metaInfoCatalog.Get(questId, locale);
             var startConditions = quest.Conditions?.AvailableForStart ?? [];
             var requirements = startConditions
-                .Where(condition => condition.ConditionType is "Level" or "TraderLoyalty" or "TraderStanding")
+                .Where(condition => condition.ConditionType is "Level" or "PrestigeLevel" or "TraderLoyalty" or "TraderStanding")
                 .Select(QuestTemplateMapper.ToRequirement)
                 .Where(requirement => requirement is not null)
                 .Cast<RequirementDto>()
                 .ToArray();
             var unknownConditions = startConditions
-                .Where(condition => condition.ConditionType is not ("Quest" or "Level" or "TraderLoyalty" or "TraderStanding"))
+                .Where(condition => condition.ConditionType is not ("Quest" or "Level" or "PrestigeLevel" or "TraderLoyalty" or "TraderStanding"))
                 .Select(condition => new UnknownConditionDto(
                     "AvailableForStart",
                     condition.ConditionType,

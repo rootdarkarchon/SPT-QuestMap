@@ -67,7 +67,10 @@ public static class QuestOverlayBuilder
             snapshot.Level,
             new ReadOnlyDictionary<string, QuestLiveState>(states),
             new ReadOnlyDictionary<string, LiveTraderSnapshot>(traders),
-            missing.OrderBy(id => id, StringComparer.Ordinal).ToArray());
+            missing.OrderBy(id => id, StringComparer.Ordinal).ToArray())
+        {
+            PrestigeLevel = snapshot.PrestigeLevel,
+        };
     }
 
     public static IReadOnlyList<QuestObjectiveProgress> NormalizeObjectiveProgress(

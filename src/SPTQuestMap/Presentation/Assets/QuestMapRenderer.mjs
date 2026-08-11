@@ -5,7 +5,7 @@ const NODE_W = 244, NODE_H = 84, LAYER_GAP = 118, ROW_GAP = 18, LAYOUT_MARGIN = 
 const REPEATABLE_CARD_GAP = 22, REPEATABLE_GROUP_GAP = 72, REPEATABLE_HEADER_H = 38, REPEATABLE_DIVIDER_GAP = 38;
 const OVERVIEW_SCALE = .48, MIN_SCALE = .08, MAX_SCALE = 2.5;
 const STATE_THEME_PROPERTIES = {
-  Locked:'--qm-state-locked', PrerequisiteGated:'--qm-state-prerequisite-gated', LevelGated:'--qm-state-level-gated',
+  Locked:'--qm-state-locked', PrerequisiteGated:'--qm-state-prerequisite-gated', PrestigeGated:'--qm-state-level-gated', LevelGated:'--qm-state-level-gated',
   TraderGated:'--qm-state-trader-gated', TraderUnavailable:'--qm-state-trader-unavailable', Available:'--qm-state-available',
   InProgress:'--qm-state-in-progress', ReadyToFinish:'--qm-state-ready-to-finish', Completed:'--qm-state-completed',
   Failed:'--qm-state-failed', Excluded:'--qm-state-excluded', RestartableFailure:'--qm-state-restartable-failure',

@@ -35,6 +35,7 @@ public enum QuestMapDisplayStateKind
 {
     Locked,
     PrerequisiteGated,
+    PrestigeGated,
     LevelGated,
     TraderGated,
     TraderUnavailable,
@@ -244,7 +245,10 @@ public sealed record LiveProfileSnapshot(
     string Faction,
     int Level,
     IReadOnlyList<LiveQuestSnapshot> Quests,
-    IReadOnlyList<LiveTraderSnapshot> Traders);
+    IReadOnlyList<LiveTraderSnapshot> Traders)
+{
+    public int PrestigeLevel { get; init; }
+}
 
 public sealed record QuestLiveState(
     string QuestId,
@@ -263,6 +267,8 @@ public sealed record QuestProfileOverlay(
     IReadOnlyDictionary<string, LiveTraderSnapshot> TradersById,
     IReadOnlyList<string> MissingLiveQuestIds)
 {
+    public int PrestigeLevel { get; init; }
+
     public IReadOnlyDictionary<string, QuestMapDisplayStateKind> AuthoritativeDisplayStates { get; init; }
         = new ReadOnlyDictionary<string, QuestMapDisplayStateKind>(new Dictionary<string, QuestMapDisplayStateKind>(StringComparer.Ordinal));
 

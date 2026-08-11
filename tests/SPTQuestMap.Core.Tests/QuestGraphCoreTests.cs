@@ -268,6 +268,32 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
+    public void Normalize_PreservesPrestigeRequirementForNativeClientClassification()
+    {
+        var node = Node("new-beginning-p3", "Ref", "Any");
+        node.DirectRequirements =
+        [
+            new QuestRequirementPayload { Kind = "PrestigeLevel", Compare = "==", Value = 3 },
+            new QuestRequirementPayload { Kind = "Level", Compare = ">=", Value = 40 },
+        ];
+        node.EffectiveRequirements = node.DirectRequirements;
+        var feed = Feed([node], []);
+        feed.DefaultVisibleQuestIds = [node.Id];
+        feed.AllApplicableQuestIds = [node.Id];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot()) with { PrestigeLevel = 2 };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(topology.NodesById[node.Id].DirectRequirements,
+                Does.Contain(new QuestRequirement("PrestigeLevel", null, "==", 3)));
+            Assert.That(
+                QuestGraphRules.ClassifyProfileDisplayState(topology, topology.NodesById[node.Id], overlay),
+                Is.EqualTo(QuestMapDisplayStateKind.PrestigeGated));
+        });
+    }
+
+    [Test]
     public void NativeAvailabilityGuard_HidesServerAvailableQuestMissingFromClient()
     {
         var feed = Feed(

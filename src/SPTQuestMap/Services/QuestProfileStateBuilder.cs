@@ -80,6 +80,7 @@ internal sealed class QuestProfileStateBuilder(
             var blockers = QuestProfileRules.GetBlockers(
                 quest,
                 pmc.Info.Level ?? 0,
+                pmc.Info.PrestigeLevel ?? 0,
                 pmc.TradersInfo,
                 profileQuests,
                 topology.Edges,

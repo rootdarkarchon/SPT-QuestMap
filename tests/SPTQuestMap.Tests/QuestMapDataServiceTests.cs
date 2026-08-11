@@ -164,7 +164,7 @@ public sealed class QuestMapDataServiceTests
             "legend.priorGate", "legend.levelGate", "legend.traderRequirement", "legend.failedExcluded",
             "legend.collectorRoute", "legend.lightkeeperRoute", "legend.requiresSuccess", "legend.requiresFailure",
             "legend.requiresStarted", "legend.requiresOutcome",
-            "state.PrerequisiteGated", "state.LevelGated", "state.TraderGated", "state.TraderUnavailable",
+            "state.PrerequisiteGated", "state.PrestigeGated", "state.LevelGated", "state.TraderGated", "state.TraderUnavailable",
             "state.InProgress", "state.ReadyToFinish", "state.Excluded", "state.RestartableFailure", "state.Expired",
             "state.Pending", "state.FailRestartable", "state.AvailableAfter", "details.effectiveGates",
             "details.availableAfter", "details.currentBlockers", "details.mutualExclusion", "details.branchAlternatives",
@@ -567,7 +567,7 @@ public sealed class QuestMapDataServiceTests
         };
         QuestEdgeDto[] edges = [new("prior-quest", quest.Id, [nameof(QuestStatusEnum.Success)], 0)];
 
-        var blockers = QuestProfileRules.GetBlockers(quest, 9, traders, [], edges, Availability(traders, new Dictionary<string, string>()));
+        var blockers = QuestProfileRules.GetBlockers(quest, 9, 0, traders, [], edges, Availability(traders, new Dictionary<string, string>()));
 
         Assert.Multiple(() =>
         {
@@ -584,6 +584,45 @@ public sealed class QuestMapDataServiceTests
         var result = QuestProfileRules.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers);
 
         Assert.That(result, Is.EqualTo("TraderGated"));
+    }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    public void ContentBackportPrestigeQuestUsesExactPrestigeGate(int requiredPrestige)
+    {
+        var condition = Condition("695030570ff3a824dca38f0f", 1) with
+        {
+            ConditionType = "PrestigeLevel",
+            CompareMethod = "==",
+            Value = requiredPrestige,
+        };
+        var requirement = QuestTemplateMapper.ToRequirement(condition);
+        var quest = Node($"prestige-{requiredPrestige}", null) with
+        {
+            EffectiveRequirements = [requirement!],
+        };
+        var traders = new Dictionary<MongoId, TraderInfo>();
+
+        var matching = QuestProfileRules.GetBlockers(
+            quest, 60, requiredPrestige, traders, [], [],
+            Availability(traders, new Dictionary<string, string>()));
+        var mismatching = QuestProfileRules.GetBlockers(
+            quest, 60, (requiredPrestige + 1) % 6, traders, [], [],
+            Availability(traders, new Dictionary<string, string>()));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(requirement, Is.EqualTo(new RequirementDto("PrestigeLevel", null, "==", requiredPrestige)));
+            Assert.That(matching, Is.Empty);
+            Assert.That(mismatching.Select(blocker => blocker.Kind), Is.EqualTo(new[] { "PrestigeLevel" }));
+            Assert.That(
+                QuestProfileRules.Classify(quest, QuestStatusEnum.Locked, false, null, mismatching),
+                Is.EqualTo("PrestigeGated"));
+        });
     }
 
     [Test]

@@ -69,6 +69,7 @@
   "legend.requiresStarted": "Требуется начало",
   "legend.requiresOutcome": "Любой исход",
   "state.PrerequisiteGated": "Заблокировано предыдущим заданием",
+  "state.PrestigeGated": "Заблокировано престижем",
   "state.LevelGated": "Заблокировано уровнем",
   "state.TraderGated": "Заблокировано торговцем",
   "state.TraderUnavailable": "Торговец недоступен",

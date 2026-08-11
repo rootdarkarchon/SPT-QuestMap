@@ -69,6 +69,7 @@
   "legend.requiresStarted": "Requer início",
   "legend.requiresOutcome": "Qualquer resultado",
   "state.PrerequisiteGated": "Bloqueada por missão anterior",
+  "state.PrestigeGated": "Bloqueada por prestígio",
   "state.LevelGated": "Bloqueada por nível",
   "state.TraderGated": "Bloqueada por comerciante",
   "state.TraderUnavailable": "Comerciante indisponível",

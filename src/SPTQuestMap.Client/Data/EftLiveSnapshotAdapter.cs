@@ -33,7 +33,10 @@ internal static class EftLiveSnapshotAdapter
             profile.Side.ToString(),
             profile.Info.Level,
             quests,
-            traders);
+            traders)
+        {
+            PrestigeLevel = profile.Info.PrestigeLevel,
+        };
     }
 
     internal static LiveQuestSnapshot CaptureQuest(QuestClass quest)

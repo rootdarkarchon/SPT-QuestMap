@@ -11,6 +11,7 @@ internal static class QuestProfileRules
     internal static QuestBlockerDto[] GetBlockers(
         QuestNodeDto quest,
         int level,
+        int prestigeLevel,
         Dictionary<MongoId, TraderInfo> traders,
         Dictionary<string, QuestStatus> profileQuests,
         IReadOnlyCollection<QuestEdgeDto> edges,
@@ -27,6 +28,13 @@ internal static class QuestProfileRules
         // Classification and the detail pane intentionally use the same inherited gates.
         foreach (var requirement in quest.EffectiveRequirements)
         {
+            if (requirement.Kind == "PrestigeLevel"
+                && !QuestGraphRules.Compare(prestigeLevel, requirement.Value, requirement.Compare))
+            {
+                blockers.Add(new QuestBlockerDto("PrestigeLevel", null, requirement.Compare, requirement.Value, []));
+                continue;
+            }
+
             if (requirement.Kind == "Level" && !QuestGraphRules.Compare(level, requirement.Value, requirement.Compare))
             {
                 blockers.Add(new QuestBlockerDto("Level", null, requirement.Compare, requirement.Value, []));
@@ -81,6 +89,7 @@ internal static class QuestProfileRules
         if (coreState is CoreDisplayState.Fail or CoreDisplayState.MarkedAsFailed) return "Failed";
         if (blockers.Any(blocker => blocker.Kind == "TraderUnavailable")) return "TraderUnavailable";
         if (coreState == CoreDisplayState.AvailableAfter) return "Pending";
+        if (blockers.Any(blocker => blocker.Kind == "PrestigeLevel")) return "PrestigeGated";
         if (blockers.Any(blocker => blocker.Kind == "Level")) return "LevelGated";
         if (blockers.Any(blocker => blocker.Kind is "TraderLoyalty" or "TraderStanding")) return "TraderGated";
         if (blockers.Any(blocker => blocker.Kind == "Prerequisite")) return "PrerequisiteGated";
