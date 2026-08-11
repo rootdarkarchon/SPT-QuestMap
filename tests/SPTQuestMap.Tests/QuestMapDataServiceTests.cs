@@ -4,6 +4,7 @@ using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Enums;
 using SPTarkov.Server.Core.Utils.Json;
+using SPTQuestMap.Routers;
 using SPTQuestMap.Services;
 using CoreProgressRules = SPTQuestMap.Core.Rules.QuestProgressRules;
 
@@ -11,6 +12,22 @@ namespace SPTQuestMap.Tests;
 
 public sealed class QuestMapDataServiceTests
 {
+    [TestCase("/questmap/client/topology/ge", "/questmap/client/topology", "ge")]
+    [TestCase("/questmap/client/topology/es-mx", "/questmap/client/topology", "es-mx")]
+    [TestCase("/questmap/client/repeatables/ru", "/questmap/client/repeatables", "ru")]
+    public void ClientRouteExtractsRequestedEftLanguage(string url, string route, string expected)
+    {
+        Assert.That(QuestMapClientStaticRouter.GetRequestedLanguage(url, route), Is.EqualTo(expected));
+    }
+
+    [TestCase("/questmap/client/topology", "/questmap/client/topology")]
+    [TestCase("/questmap/client/topology/", "/questmap/client/topology")]
+    [TestCase("/questmap/client/topology/ge/extra", "/questmap/client/topology")]
+    public void ClientRouteFallsBackWhenLanguageSegmentIsAbsentOrInvalid(string url, string route)
+    {
+        Assert.That(QuestMapClientStaticRouter.GetRequestedLanguage(url, route), Is.Null);
+    }
+
     [Test]
     public void BuildLocation_UsesSptLocaleNameForSpecificMap()
     {

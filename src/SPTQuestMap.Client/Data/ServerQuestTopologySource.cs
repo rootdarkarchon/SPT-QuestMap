@@ -28,7 +28,7 @@ internal sealed class ServerQuestTopologySource : IQuestTopologySource
     public async Task<QuestTopologySourceResult> LoadAsync()
     {
         var stopwatch = Stopwatch.StartNew();
-        var bytes = await RequestHandler.GetDataAsync(Route).ConfigureAwait(false);
+        var bytes = await RequestHandler.GetDataAsync(LocalizedRoute(Route)).ConfigureAwait(false);
         var json = Encoding.UTF8.GetString(bytes);
         var feed = JsonConvert.DeserializeObject<QuestTopologyFeed>(json)
             ?? throw new InvalidOperationException($"QuestMap topology route '{Route}' returned no data.");
@@ -56,7 +56,7 @@ internal sealed class ServerQuestTopologySource : IQuestTopologySource
     public async Task<QuestTopologySourceResult> LoadRepeatableDeltaAsync(QuestGraphTopology current)
     {
         var stopwatch = Stopwatch.StartNew();
-        var bytes = await RequestHandler.GetDataAsync(RepeatablesRoute).ConfigureAwait(false);
+        var bytes = await RequestHandler.GetDataAsync(LocalizedRoute(RepeatablesRoute)).ConfigureAwait(false);
         var json = Encoding.UTF8.GetString(bytes);
         var feed = JsonConvert.DeserializeObject<QuestRepeatableFeed>(json)
             ?? throw new InvalidOperationException($"QuestMap repeatable route '{RepeatablesRoute}' returned no data.");
@@ -99,6 +99,15 @@ internal sealed class ServerQuestTopologySource : IQuestTopologySource
                 .ToDictionary(pair => pair.Key, pair => (IReadOnlyCollection<string>)(pair.Value ?? []), StringComparer.Ordinal)),
             (defaultVisibleQuestIds ?? []).Distinct(StringComparer.Ordinal).ToArray(),
             (allApplicableQuestIds ?? []).Distinct(StringComparer.Ordinal).ToArray());
+    }
+
+    private static string LocalizedRoute(string route)
+    {
+        var localeManager = LocaleManagerClass.LocaleManagerClass;
+        var language = localeManager?.String_0;
+        if (string.IsNullOrWhiteSpace(language)) language = LocaleManagerClass.DefaultLanguage;
+        if (string.IsNullOrWhiteSpace(language)) language = LocaleManagerClass.ENGLISH_LOCALIZATION;
+        return $"{route}/{Uri.EscapeDataString(language)}";
     }
 }
 

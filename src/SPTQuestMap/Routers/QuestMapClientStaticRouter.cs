@@ -16,15 +16,16 @@ public sealed class QuestMapClientStaticRouter(
     JsonUtil jsonUtil,
     HttpResponseUtil httpResponseUtil,
     QuestMapDataService dataService)
-    : StaticRouter(
+    : DynamicRouter(
         jsonUtil,
         [
             new RouteAction<EmptyRequestData>(
                 "/questmap/client/topology",
-                (_, _, sessionId, _) =>
+                (url, _, sessionId, _) =>
                 {
-                    var topology = dataService.GetTopology();
-                    var profileState = dataService.GetProfileState(sessionId.ToString());
+                    var requestedLanguage = GetRequestedLanguage(url, Route);
+                    var topology = dataService.GetTopology(requestedLanguage);
+                    var profileState = dataService.GetProfileState(sessionId.ToString(), requestedLanguage);
                     var generated = profileState?.RepeatableQuestGroups
                         .SelectMany(group => group.Quests)
                         .Select(entry => entry.Node)
@@ -104,9 +105,10 @@ public sealed class QuestMapClientStaticRouter(
                 }),
             new RouteAction<EmptyRequestData>(
                 "/questmap/client/repeatables",
-                (_, _, sessionId, _) =>
+                (url, _, sessionId, _) =>
                 {
-                    var profileState = dataService.GetProfileState(sessionId.ToString());
+                    var requestedLanguage = GetRequestedLanguage(url, RepeatablesRoute);
+                    var profileState = dataService.GetProfileState(sessionId.ToString(), requestedLanguage);
                     var generated = profileState?.RepeatableQuestGroups
                         .SelectMany(group => group.Quests)
                         .Select(entry => entry.Node)
@@ -179,4 +181,17 @@ public sealed class QuestMapClientStaticRouter(
 {
     public const string Route = "/questmap/client/topology";
     public const string RepeatablesRoute = "/questmap/client/repeatables";
+
+    internal static string? GetRequestedLanguage(string url, string route)
+    {
+        if (string.Equals(url, route, StringComparison.Ordinal)) return null;
+
+        var prefix = route + "/";
+        if (!url.StartsWith(prefix, StringComparison.Ordinal)) return null;
+
+        var encodedLanguage = url[prefix.Length..];
+        if (encodedLanguage.Length == 0 || encodedLanguage.Contains('/')) return null;
+
+        return Uri.UnescapeDataString(encodedLanguage);
+    }
 }

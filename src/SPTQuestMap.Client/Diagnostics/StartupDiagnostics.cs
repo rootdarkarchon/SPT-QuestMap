@@ -44,6 +44,8 @@ internal static class StartupDiagnostics
             $"globalGraph={configuration.EnableGlobalTasksGraph.Value}; " +
             "customDetails=required-with-replacement; " +
             $"defaultDetailsSummary={configuration.DefaultQuestDetailsToSummary.Value}; " +
+            $"taskSkipping={configuration.EnableTaskSkipping.Value}; " +
+            $"taskSkipModifier={configuration.TaskSkipModifier.Value}; " +
             $"autoTrackNew={configuration.AutoTrackNewQuests.Value}; " +
             $"trackFavorites={configuration.TrackFavoriteQuests.Value}; " +
             $"autoTrackMap={configuration.AutoTrackMapRelatedQuests.Value}; " +

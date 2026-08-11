@@ -1,6 +1,25 @@
 # Quest actions and inventory synchronization plan
 
-Status: design only. This is a possible post-acceptance extension; the current mod remains read-only.
+Status: browser/server quest transactions remain design only. The native client now has one separately gated objective-skip action described below; it does not add a server write endpoint.
+
+## Native objective skipping
+
+The optional in-game action is source-matched to EFT `0.16.9.40087` and SPT-Skipper `1.1.4` (the SPT 4.0 release). SPT-Skipper patches `QuestObjectiveView.Show`, clones the native handover button, replaces the selected condition checker's current-value getter with the condition target, and calls the quest condition controller's `SetConditionCurrentValue(...)`. That marks one objective checker complete and lets Tarkov run its normal condition notification and quest-status reevaluation. It does not call `QuestComplete` and does not grant quest rewards.
+
+QuestMap implements the same Tarkov operation directly rather than depending on SPT-Skipper's private reflected fields or its hidden native objective rows. The fixed client hash guard already restricts the plugin to the exact ABI, so the bridge binds `GClass4005.GClass4024_0.SetConditionCurrentValue(...)` at compile time and fails closed when the live quest, started status, finish condition, progress checker, or exact controller is unavailable.
+
+The F12 `Quest actions/Enable task skipping` option defaults off. When enabled, holding the configurable `Task skip modifier` (left Ctrl by default) swaps a `SKIP` control into the left-side task action slot in both custom Tasks tables and the quest-description objective list. A native Tarkov confirmation window names the quest and task. Confirmation revalidates the live condition, changes only that objective, and requests the existing targeted quest reconciliation. The action is unavailable in raid; ordinary hand-in and quest turn-in remain separate.
+
+### Alternatives considered
+
+- Calling `IQuestActions.QuestHandover` or `AbstractQuestControllerClass.HandoverItem` is authoritative only for handover/weapon objectives and consumes the selected items. It cannot generically skip a task.
+- Calling `QuestComplete`/`FinishQuest` completes the whole quest and applies rewards, failures, and unlocks, which is explicitly outside this feature.
+- Writing `TaskConditionCounterClass.Value` alone is insufficient for objectives whose checker derives progress from inventory, location, statistics, quest state, or another live source. It also bypasses the shared controller notification/status path.
+- Adding an ID to `CompletedConditions` does not replace the active progress checker and does not provide the required UI/status propagation.
+- Injecting synthetic condition events through `ConditionalBook.TestConditions` is condition-type-specific and can affect multiple matching quests/objectives.
+- A custom server endpoint could persist an arbitrary objective counter independently, but it would introduce a new profile-write API plus client/server synchronization and validation concerns. That remains a separate design choice rather than part of this narrow in-client action.
+
+Like SPT-Skipper, this path performs no objective-specific server transaction. It updates Tarkov's live client profile/checker state so normal quest turn-in can follow; standalone task-only persistence across a full client/server reload is not claimed.
 
 ## 4.0.13 source findings
 

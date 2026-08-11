@@ -1,13 +1,13 @@
 # SPT-QuestMap
 
-SPT-QuestMap is a read-only, profile-aware quest map for **SPT 4.0.13**. It runs inside the existing SPT server and turns the game's quest data and your selected profile into an interactive dependency graph at `/questmap`.
+SPT-QuestMap is a profile-aware quest map for **SPT 4.0.13**. Its browser/server surface is read-only; its exact-version in-game client also offers a separately gated, default-off objective-skip action. It runs inside the existing SPT server and turns the game's quest data and your selected profile into an interactive dependency graph at `/questmap`.
 
 > [!WARNING]
 > ## This project is AI-coded
 >
 > Most of SPT-QuestMap was written by **OpenAI Codex**, starting from detailed human direction and continuing through many rounds of hands-on review, visual feedback, testing, and correction. It is not a traditionally authored or independently audited codebase.
 >
-> The mod is deliberately read-only, but you should still treat it like any other community tool: keep profile backups, review releases before installing them, and report anything that looks wrong. AI-generated code can contain convincing mistakes.
+> The browser/server map is deliberately read-only. The in-game client has an optional objective-skip action which is disabled by default; keep profile backups before enabling it. You should still treat the complete mod like any other community tool: review releases before installing them and report anything that looks wrong. AI-generated code can contain convincing mistakes.
 
 SPT-QuestMap is an independent community project. It is not affiliated with or endorsed by Battlestate Games or the SPT project.
 
@@ -31,12 +31,15 @@ SPT-QuestMap is an independent community project. It is not affiliated with or e
 - Compares two profiles on one shared graph with explicit change categories, readable A/B transitions, objective deltas, profile-exclusive quests and category filters.
 - Uses a Canvas renderer so the full graph remains practical to pan and zoom.
 - Refreshes only when you ask it to. It does not poll or modify the profile.
+- Optionally lets the exact-version in-game client mark one active objective complete after a confirmation, without handing in items or completing the whole quest; this action defaults off.
 
 ## Compatibility
 
 This release targets **SPT 4.0.13 exactly**. It was built and tested against the matching 4.0.13 server source and assemblies. Do not assume it is compatible with SPT 4.1 or later.
 
 When either in-game Tasks replacement is enabled, QuestMap renders a completely custom task table rather than extending EFT's native task-list rows. Mods that patch or decorate the native list—most notably **DrakiaXYZ Quest Tracker** and **Task List Fixes**—cannot apply their task-list integration to QuestMap's replacement. QuestMap provides its own profile-scoped pin/tracking controls, in-raid progress notifications, tracked-quest overlay, sorting, filtering, and corrected task presentation; the corresponding Quest Tracker and Task List Fixes behavior is therefore largely redundant. Do not expect those mods' native-list additions to appear inside QuestMap.
+
+Individual task skipping is implemented directly against the guarded EFT `0.16.9.40087` quest-condition controller; QuestMap does not require SPT-Skipper. Enable **Quest actions / Enable task skipping** in F12, then hold the configurable **Task skip modifier** (left Ctrl by default) to reveal **SKIP** beside incomplete objectives in either custom Tasks table or Quest Description. Confirmation changes only that objective; hand-ins and quest turn-in remain separate, and the control is unavailable in raid. Like SPT-Skipper's native technique, this is not a standalone server transaction, so task-only persistence across a full client/server reload before normal quest turn-in is not guaranteed.
 
 ## Installation
 
@@ -115,6 +118,8 @@ The relevant-item data for Gunsmith quests and quest-required keys was derived f
 QuestMap's quest-tracking functionality and in-raid tracked-quest display were inspired by [DrakiaXYZ's SPT Quest Tracker](https://github.com/DrakiaXYZ/SPT-QuestTracker). QuestMap's implementation was written independently for its custom task tables and data model; it does not incorporate Quest Tracker source code.
 
 QuestMap's Wiki-link additions were inspired by [Tyfon's WikiLinks](https://github.com/tyfon7/WikiLinks). WikiLinks source code was not referenced while implementing the feature, and no WikiLinks code is incorporated into QuestMap.
+
+The objective-skip mechanism was source-matched against [acidphantasm's SPT-Skipper 1.1.4](https://github.com/acidphantasm/SPT-Skipper/tree/1.1.4). QuestMap reimplements the narrow Tarkov controller operation for its custom task rows and does not incorporate SPT-Skipper as a dependency.
 
 ## License
 

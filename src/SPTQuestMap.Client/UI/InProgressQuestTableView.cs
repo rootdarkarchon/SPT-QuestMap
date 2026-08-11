@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using BepInEx.Configuration;
 using BepInEx.Logging;
+using EFT;
+using EFT.Quests;
 using SPTQuestMap.Client.Data;
 using SPTQuestMap.Core.Layout;
 using SPTQuestMap.Core.Models;
@@ -45,6 +48,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private readonly QuestTrackingService _tracking;
     private readonly Func<bool> _mutationsAllowed;
     private readonly Func<RectTransform, string, string, NativeQuestHandoverAction?> _createHandoverAction;
+    private readonly Func<bool> _taskSkippingEnabled;
+    private readonly QuestObjectiveSkipVisibility _skipVisibility;
+    private readonly AbstractQuestControllerClass _questController;
     private readonly Func<string, bool> _canAccept;
     private readonly Func<RectTransform, string, Task> _acceptQuest;
     private readonly Func<string, bool> _canComplete;
@@ -86,6 +92,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         QuestTrackingService tracking,
         Func<bool> mutationsAllowed,
         Func<RectTransform, string, string, NativeQuestHandoverAction?> createHandoverAction,
+        Func<bool> taskSkippingEnabled,
+        Func<KeyboardShortcut> taskSkipModifier,
+        AbstractQuestControllerClass questController,
         Func<string, bool> canAccept,
         Func<RectTransform, string, Task> acceptQuest,
         Func<string, bool> canComplete,
@@ -117,6 +126,10 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         _tracking = tracking;
         _mutationsAllowed = mutationsAllowed;
         _createHandoverAction = createHandoverAction;
+        _taskSkippingEnabled = taskSkippingEnabled;
+        _questController = questController;
+        _skipVisibility = root.gameObject.AddComponent<QuestObjectiveSkipVisibility>();
+        _skipVisibility.Bind(taskSkippingEnabled, taskSkipModifier);
         _canAccept = canAccept;
         _acceptQuest = acceptQuest;
         _canComplete = canComplete;
@@ -160,6 +173,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         QuestTrackingService tracking,
         Func<bool> mutationsAllowed,
         Func<RectTransform, string, string, NativeQuestHandoverAction?> createHandoverAction,
+        Func<bool> taskSkippingEnabled,
+        Func<KeyboardShortcut> taskSkipModifier,
+        AbstractQuestControllerClass questController,
         Func<string, bool> canAccept,
         Func<RectTransform, string, Task> acceptQuest,
         Func<string, bool> canComplete,
@@ -231,7 +247,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var view = new InProgressQuestTableView(root, viewport, scrollViewport, content, nativeHostRoot, scrollRect, topology,
             projection, overlay, sortCriteria, hideCompletedTasks, expandedQuestIds, onSelected, onBackgroundClick, onSortChanged,
             onExpansionChanged, log, assetCache, favoriteQuestService, tracking, mutationsAllowed, createHandoverAction,
-            canAccept, acceptQuest, canComplete, completeQuest, canReplace, replaceQuest, onQuestMutated, sectionMode,
+            taskSkippingEnabled, taskSkipModifier, questController, canAccept, acceptQuest, canComplete, completeQuest,
+            canReplace, replaceQuest, onQuestMutated, sectionMode,
             contextTraderId);
         view.BuildHeader(tableHeader);
         view.RebuildAllRows(cacheNodes);
@@ -601,7 +618,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
 
     private static bool HasNativeMutationControls(QuestGraphNode node) =>
         node.RepeatableKind is "Daily" or "Weekly"
-        || node.Objectives.Any(objective => objective.ConditionType is "HandoverItem" or "WeaponAssembly");
+        || node.Objectives.Any(objective =>
+            objective.ConditionType is "HandoverItem" or "WeaponAssembly");
 
     private static bool LiveStateEquals(QuestLiveState? left, QuestLiveState? right)
     {
@@ -827,9 +845,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private void BuildQuestCell(RectTransform row, QuestGraphNode node)
     {
         var cell = CreateAnchoredCell("Quest", row, ShowFavoriteColumn ? 0.03f : 0f, 0.27f, 2, 2);
-        var button = UnityUiFactory.AddButton(cell.gameObject, Color.clear);
-        button.onClick.AddListener(() => _onSelected(node.Id));
         var content = CreateTopContentFrame(cell, "QuestContent");
+        var button = UnityUiFactory.AddButton(content.gameObject, Color.clear);
+        button.onClick.AddListener(() => _onSelected(node.Id));
         AddWidthFittedImage(content, "QuestArt", node.ImageUrl, 0.64f,
             new Color(0.015f, 0.018f, 0.02f, 0.48f));
 
@@ -896,7 +914,47 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             AddQuestAction(content, "Accept", "✓", actionOffset, button => RunAccept(node.Id, button));
         else if (canComplete)
             AddQuestAction(content, "Complete", "→", actionOffset, button => RunComplete(node.Id, button));
+
+        AddClickableHoverOutline(content, "QuestHover", bottomOnly: false);
         AddTopRightBorder(cell);
+    }
+
+    private static void AddClickableHoverOutline(RectTransform surface, string name, bool bottomOnly)
+    {
+        var hoverLayer = UnityUiFactory.CreateRect(name, surface);
+        UnityUiFactory.Stretch(hoverLayer);
+        var bottom = AddClickableHoverBorder(
+            hoverLayer, "Bottom", Vector2.zero, new Vector2(1, 0), new Vector2(0, 1), new Vector2(0, 2));
+        var hoverBorders = bottomOnly
+            ? new[] { bottom }
+            : new[]
+            {
+                AddClickableHoverBorder(hoverLayer, "Top", new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -1), new Vector2(0, 2)),
+                bottom,
+                AddClickableHoverBorder(hoverLayer, "Left", Vector2.zero, new Vector2(0, 1), new Vector2(1, 0), new Vector2(2, 0)),
+                AddClickableHoverBorder(hoverLayer, "Right", new Vector2(1, 0), Vector2.one, new Vector2(-1, 0), new Vector2(2, 0)),
+            };
+        surface.gameObject.AddComponent<QuestTableClickableHoverVisual>().Bind(hoverBorders);
+    }
+
+    private static Image AddClickableHoverBorder(
+        RectTransform parent,
+        string name,
+        Vector2 anchorMin,
+        Vector2 anchorMax,
+        Vector2 anchoredPosition,
+        Vector2 sizeDelta)
+    {
+        var border = UnityUiFactory.CreateRect(name, parent);
+        border.anchorMin = anchorMin;
+        border.anchorMax = anchorMax;
+        border.pivot = new Vector2(0.5f, 0.5f);
+        border.anchoredPosition = anchoredPosition;
+        border.sizeDelta = sizeDelta;
+        var image = border.gameObject.AddComponent<Image>();
+        image.color = Color.clear;
+        image.raycastTarget = false;
+        return image;
     }
 
     private PinVisual BuildPinCell(RectTransform row, QuestGraphNode node)
@@ -982,6 +1040,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         visual.Text.richText = true;
         visual.Text.lineSpacing = -8;
         RefreshTrackingVisual(node, visual);
+        AddClickableHoverOutline(content, "StatusHover", bottomOnly: true);
         AddTopRightBorder(cell);
         return visual;
     }
@@ -1055,30 +1114,17 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             task.sizeDelta = new Vector2(0, taskHeight);
             var value = ObjectivePrefix(progress);
             var suffix = ObjectiveSuffix(progress);
-            NativeQuestHandoverAction? handover = null;
-            if (_mutationsAllowed()
+            // Native EFT constructs objective views for the selected quest, not
+            // for every task-list row. Resolve exact row eligibility gradually
+            // and show no action until the native result is known.
+            var handoverCandidate = _mutationsAllowed()
                 && progress?.Complete != true
-                && definition.ConditionType is "HandoverItem" or "WeaponAssembly")
-            {
-                handover = _createHandoverAction(_nativeHostRoot, node.Id, definition.Id);
-                if (handover is not null) nativeActions.Add(handover);
-            }
-            var actionWidth = handover is null ? 0f : 70f;
-            if (handover is not null)
-            {
-                var actionRect = UnityUiFactory.CreateRect("Handover", task);
-                actionRect.anchorMin = new Vector2(0, 0.12f);
-                actionRect.anchorMax = new Vector2(0, 0.88f);
-                actionRect.pivot = new Vector2(0, 0.5f);
-                actionRect.anchoredPosition = new Vector2(5, 0);
-                actionRect.sizeDelta = new Vector2(62, 0);
-                var actionButton = UnityUiFactory.AddButton(actionRect.gameObject, QuestGraphPalette.ControlActive);
-                var actionText = UnityUiFactory.AddText(actionRect.gameObject, "HAND IN", 8,
-                    TextAlignmentOptions.Center, Color.white);
-                actionText.fontStyle = FontStyles.Bold;
-                var captured = handover;
-                actionButton.onClick.AddListener(() => RunHandover(node.Id, captured, actionButton));
-            }
+                && definition.ConditionType is "HandoverItem" or "WeaponAssembly";
+            _overlay.QuestsById.TryGetValue(node.Id, out var liveQuest);
+            var skipCandidate = _mutationsAllowed()
+                && liveQuest?.ExactStatus == nameof(EQuestStatus.Started)
+                && progress?.Complete != true;
+            var actionWidth = handoverCandidate ? 70f : 0f;
             var textRect = UnityUiFactory.CreateRect("Text", task);
             UnityUiFactory.Stretch(textRect, 10 + actionWidth, 8, 0, percent.HasValue ? 9 : 0);
             var text = UnityUiFactory.AddText(textRect.gameObject, value + definition.Text + suffix, 11,
@@ -1088,6 +1134,82 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
                 AddProgressBar(task, percent.Value / 100d, 10, 3, progress?.Complete == true
                     ? QuestGraphPalette.Status(QuestMapDisplayStateKind.ReadyToFinish)
                     : QuestGraphPalette.Status(QuestMapDisplayStateKind.InProgress), actionWidth);
+            var progressTrack = task.Find("ProgressTrack") as RectTransform;
+            RectTransform? actionRect = null;
+            Button? actionButton = null;
+            TMP_Text? actionText = null;
+            if (handoverCandidate)
+            {
+                actionRect = UnityUiFactory.CreateRect("Handover", task);
+                actionRect.anchorMin = new Vector2(0, 0.12f);
+                actionRect.anchorMax = new Vector2(0, 0.88f);
+                actionRect.pivot = new Vector2(0, 0.5f);
+                actionRect.anchoredPosition = new Vector2(5, 0);
+                actionRect.sizeDelta = new Vector2(62, 0);
+                actionButton = UnityUiFactory.AddButton(actionRect.gameObject, QuestGraphPalette.ControlActive);
+                actionButton.interactable = false;
+                actionText = UnityUiFactory.AddText(actionRect.gameObject, "…", 8,
+                    TextAlignmentOptions.Center, Color.white);
+                actionText.fontStyle = FontStyles.Bold;
+            }
+
+            QuestObjectiveSkipSlot? skipSlot = null;
+            if (skipCandidate)
+            {
+                var skipRect = UnityUiFactory.CreateRect("Skip", task);
+                skipRect.anchorMin = new Vector2(0, 0.12f);
+                skipRect.anchorMax = new Vector2(0, 0.88f);
+                skipRect.pivot = new Vector2(0, 0.5f);
+                skipRect.anchoredPosition = new Vector2(5, 0);
+                skipRect.sizeDelta = new Vector2(62, 0);
+                var skipButton = UnityUiFactory.AddButton(skipRect.gameObject, QuestGraphPalette.Failed);
+                var skipText = UnityUiFactory.AddText(skipRect.gameObject, "SKIP", 8,
+                    TextAlignmentOptions.Center, Color.white);
+                skipText.fontStyle = FontStyles.Bold;
+                skipButton.onClick.AddListener(() => RequestObjectiveSkip(node, definition));
+                skipSlot = _skipVisibility.Register(
+                    skipRect.gameObject,
+                    actionRect?.gameObject,
+                    occupied =>
+                    {
+                        var left = occupied ? 80f : 10f;
+                        textRect.offsetMin = new Vector2(left, textRect.offsetMin.y);
+                        if (progressTrack != null)
+                            progressTrack.offsetMin = new Vector2(left, progressTrack.offsetMin.y);
+                    });
+            }
+
+            if (handoverCandidate && actionRect is not null && actionButton is not null && actionText is not null)
+            {
+                NativeQuestTableActions.ResolveHandoverDeferred(
+                    task,
+                    false,
+                    () => !_disposed && task != null,
+                    () => _createHandoverAction(_nativeHostRoot, node.Id, definition.Id),
+                    action =>
+                    {
+                        if (action is null)
+                        {
+                            if (skipSlot is not null) skipSlot.SetFallbackAvailable(false);
+                            else
+                            {
+                                actionRect.gameObject.SetActive(false);
+                                textRect.offsetMin = new Vector2(10, textRect.offsetMin.y);
+                                if (progressTrack != null)
+                                    progressTrack.offsetMin = new Vector2(10, progressTrack.offsetMin.y);
+                            }
+                            return;
+                        }
+
+                        nativeActions.Add(action);
+                        actionText.text = "HAND IN";
+                        actionButton.interactable = true;
+                        actionButton.onClick.AddListener(() => RunHandover(node.Id, action, actionButton));
+                    },
+                    _log,
+                    node.Id,
+                    definition.Id);
+            }
             taskOffset += taskHeight;
         }
 
@@ -1117,14 +1239,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
 
     private static string ObjectivePrefix(QuestObjectiveProgress? progress)
     {
-        if (progress is null || progress.Required == 1) return string.Empty;
-        if (progress.Complete)
-        {
-            var current = CappedCurrent(progress);
-            if (progress.Current.HasValue && progress.Required.HasValue)
-                return $"{current:0.##} / {progress.Required.Value:0.##}  ";
-            return string.Empty;
-        }
+        if (progress is null || progress.Complete || progress.Required == 1) return string.Empty;
         if (progress.Current.HasValue && progress.Required.HasValue)
             return $"{CappedCurrent(progress):0.##} / {progress.Required.Value:0.##}  ";
         return string.Empty;
@@ -1194,6 +1309,27 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         strip.anchoredPosition = new Vector2(-right, 0);
         strip.sizeDelta = new Vector2(5, 0);
         strip.gameObject.AddComponent<Image>().color = color;
+    }
+
+    private void RequestObjectiveSkip(QuestGraphNode node, QuestObjectiveDefinition objective)
+    {
+        if (_disposed || !_taskSkippingEnabled() || !_mutationsAllowed()) return;
+        var quest = _questController.Quests.LastOrDefault(value =>
+            string.Equals(value.Id, node.Id, StringComparison.Ordinal));
+        if (quest is null) return;
+
+        NativeQuestObjectiveSkip.ShowConfirmation(
+            _questController,
+            quest,
+            objective.Id,
+            node.Name,
+            objective.Text,
+            () => !_disposed && _taskSkippingEnabled() && _mutationsAllowed(),
+            () =>
+            {
+                if (!_disposed) _onQuestMutated(node.Id, QuestDetailsActionKind.SkipObjective);
+            },
+            _log);
     }
 
     private async void RunHandover(string questId, NativeQuestHandoverAction action, Button button)
@@ -1617,33 +1753,16 @@ internal sealed class QuestTableRowClickBlocker : MonoBehaviour, IPointerClickHa
     }
 }
 
-internal sealed class QuestTableRowBackgroundVisual : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+internal sealed class QuestTableRowBackgroundVisual : MonoBehaviour
 {
     private Image? _background;
     private Color _normalColor;
-    private bool _hovered;
     private bool _selected;
 
     public void Bind(Image background, Color normalColor)
     {
         _background = background;
         _normalColor = normalColor;
-    }
-
-    private void OnEnable() => QuestGraphPalette.RowHighlightSettingChanged += Refresh;
-
-    private void OnDisable() => QuestGraphPalette.RowHighlightSettingChanged -= Refresh;
-
-    public void OnPointerEnter(PointerEventData eventData)
-    {
-        _hovered = true;
-        Refresh();
-    }
-
-    public void OnPointerExit(PointerEventData eventData)
-    {
-        _hovered = false;
-        Refresh();
     }
 
     public void SetSelected(bool selected)
@@ -1655,14 +1774,44 @@ internal sealed class QuestTableRowBackgroundVisual : MonoBehaviour, IPointerEnt
     private void Refresh()
     {
         if (_background is null) return;
-        if (!QuestGraphPalette.RowHighlightsEnabled || !_selected && !_hovered)
+        if (!_selected)
         {
             _background.color = _normalColor;
             return;
         }
 
         var highlight = QuestGraphPalette.Selected;
-        highlight.a = _selected ? _normalColor.a : 0.42f;
+        highlight.a = _normalColor.a;
         _background.color = highlight;
+    }
+}
+
+internal sealed class QuestTableClickableHoverVisual : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+{
+    private Image[] _borders = Array.Empty<Image>();
+
+    public void Bind(Image[] borders)
+    {
+        _borders = borders;
+        SetColor(Color.clear);
+    }
+
+    private void OnDisable() => SetColor(Color.clear);
+
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        var color = QuestGraphPalette.Selected;
+        color.a = 0.9f;
+        SetColor(color);
+    }
+
+    public void OnPointerExit(PointerEventData eventData) => SetColor(Color.clear);
+
+    private void SetColor(Color color)
+    {
+        foreach (var border in _borders)
+        {
+            if (border is not null) border.color = color;
+        }
     }
 }

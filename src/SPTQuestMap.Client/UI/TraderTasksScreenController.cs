@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using BepInEx.Configuration;
 using BepInEx.Logging;
 using EFT.InventoryLogic;
 using EFT.Quests;
@@ -44,6 +45,8 @@ internal sealed class TraderTasksScreenController : IDisposable
     private readonly bool _customDetailsEnabled;
     private readonly Func<bool> _showHiddenRewards;
     private readonly Func<bool> _defaultDetailsToSummary;
+    private readonly Func<bool> _taskSkippingEnabled;
+    private readonly Func<KeyboardShortcut> _taskSkipModifier;
     private readonly Action<string, QuestDetailsActionKind> _requestQuestRefresh;
     private readonly List<QuestTableSortCriterion> _sortCriteria = [];
     private readonly HashSet<string> _expandedQuestIds = new(StringComparer.Ordinal);
@@ -92,6 +95,8 @@ internal sealed class TraderTasksScreenController : IDisposable
         bool customDetailsEnabled,
         Func<bool> showHiddenRewards,
         Func<bool> defaultDetailsToSummary,
+        Func<bool> taskSkippingEnabled,
+        Func<KeyboardShortcut> taskSkipModifier,
         Action<string, QuestDetailsActionKind> requestQuestRefresh)
     {
         _screen = screen;
@@ -106,6 +111,8 @@ internal sealed class TraderTasksScreenController : IDisposable
         _customDetailsEnabled = customDetailsEnabled;
         _showHiddenRewards = showHiddenRewards;
         _defaultDetailsToSummary = defaultDetailsToSummary;
+        _taskSkippingEnabled = taskSkippingEnabled;
+        _taskSkipModifier = taskSkipModifier;
         _requestQuestRefresh = requestQuestRefresh;
     }
 
@@ -247,7 +254,8 @@ internal sealed class TraderTasksScreenController : IDisposable
                     mount, _projection, _topology, _overlay, _projection.Nodes, _sortCriteria,
                     _hideCompletedTasks, _expandedQuestIds, SelectQuest, ClearSelection, ToggleSort,
                     ToggleExpansion, _log, _assetCache, _favoriteQuestService, _tracking,
-                    MutationsAllowed, CreateHandoverAction, CanAcceptQuest, AcceptQuestAsync,
+                    MutationsAllowed, CreateHandoverAction, _taskSkippingEnabled, _taskSkipModifier, _questController,
+                    CanAcceptQuest, AcceptQuestAsync,
                     CanCompleteQuest, CompleteQuestAsync, CanReplaceQuest, ReplaceQuestAsync,
                     HandleQuestMutation, viewport, HeaderHeight, QuestTableSectionMode.TraderStatus, _trader.Id)
                 : QuestGraphView.Create(
@@ -384,7 +392,8 @@ internal sealed class TraderTasksScreenController : IDisposable
             _contentView.Root.Find("Viewport") as RectTransform
                 ?? throw new InvalidOperationException("Trader workspace viewport was not created."),
             _session, _inventoryController, _questController, _assetCache, _log,
-            _showHiddenRewards, _defaultDetailsToSummary, HandleQuestMutation, _trader.Id, 2f / 3f);
+            _showHiddenRewards, _defaultDetailsToSummary, _taskSkippingEnabled, _taskSkipModifier,
+            HandleQuestMutation, _trader.Id, 2f / 3f);
         _detailPane.Show(_topology, _overlay, _selectedQuestId);
         _detailsVisible = true;
         _detailPane.ShowRoot();

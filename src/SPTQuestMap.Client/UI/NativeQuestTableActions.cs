@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -23,6 +25,27 @@ internal static class NativeQuestTableActions
         ?? throw new MissingFieldException(typeof(QuestObjectivesView).FullName, "_objectivePrefab");
     private static readonly FieldInfo HandoverButtonField = AccessTools.Field(typeof(QuestObjectiveView), "_handoverButton")
         ?? throw new MissingFieldException(typeof(QuestObjectiveView).FullName, "_handoverButton");
+    // EFT's QuestObjectivesView reuses one configured objective prefab for its
+    // selected-quest view list. Avoid repeating a global Resources scan for
+    // every QuestMap objective host.
+    private static QuestObjectiveView? _cachedObjectivePrefab;
+
+    public static void ResolveHandoverDeferred(
+        RectTransform lifetimeRoot,
+        bool selectedDetails,
+        Func<bool> stillValid,
+        Func<NativeQuestHandoverAction?> resolve,
+        Action<NativeQuestHandoverAction?> completed,
+        ManualLogSource log,
+        string questId,
+        string objectiveId)
+    {
+        var schedulerRoot = lifetimeRoot.root.gameObject;
+        var scheduler = schedulerRoot.GetComponent<NativeQuestHandoverResolver>()
+            ?? schedulerRoot.AddComponent<NativeQuestHandoverResolver>();
+        scheduler.Enqueue(new NativeHandoverResolutionRequest(
+            stillValid, resolve, completed, log, questId, objectiveId), selectedDetails);
+    }
 
     public static NativeQuestHandoverAction? TryCreateHandover(
         RectTransform parent,
@@ -34,9 +57,7 @@ internal static class NativeQuestTableActions
         if (!quest.Template.Conditions.TryGetValue(EQuestStatus.AvailableForFinish, out var finish)) return null;
         var condition = finish.IEnumerable_0.FirstOrDefault(value => string.Equals(value.id, objectiveId, StringComparison.Ordinal));
         if (condition is not (ConditionHandoverItem or ConditionWeaponAssembly)) return null;
-        var source = FindQuestViewSource();
-        var objectives = source is null ? null : ObjectivesBlockField.GetValue(source) as QuestObjectivesView;
-        var prefab = objectives is null ? null : ObjectivePrefabField.GetValue(objectives) as QuestObjectiveView;
+        var prefab = FindObjectivePrefab();
         if (prefab is null) return null;
         var host = UnityEngine.Object.Instantiate(prefab, parent, false);
         host.gameObject.name = $"QuestMapTableHandover-{quest.Id}-{objectiveId}";
@@ -177,6 +198,96 @@ internal static class NativeQuestTableActions
             .FirstOrDefault(view => view != null
                 && !view.name.StartsWith("QuestMap", StringComparison.Ordinal)
                 && ObjectivesBlockField.GetValue(view) is QuestObjectivesView);
+
+    private static QuestObjectiveView? FindObjectivePrefab()
+    {
+        if (_cachedObjectivePrefab != null) return _cachedObjectivePrefab;
+        var source = FindQuestViewSource();
+        var objectives = source is null ? null : ObjectivesBlockField.GetValue(source) as QuestObjectivesView;
+        _cachedObjectivePrefab = objectives is null ? null : ObjectivePrefabField.GetValue(objectives) as QuestObjectiveView;
+        return _cachedObjectivePrefab;
+    }
+}
+
+internal sealed class NativeHandoverResolutionRequest
+{
+    public NativeHandoverResolutionRequest(
+        Func<bool> stillValid,
+        Func<NativeQuestHandoverAction?> resolve,
+        Action<NativeQuestHandoverAction?> completed,
+        ManualLogSource log,
+        string questId,
+        string objectiveId)
+    {
+        StillValid = stillValid;
+        Resolve = resolve;
+        Completed = completed;
+        Log = log;
+        QuestId = questId;
+        ObjectiveId = objectiveId;
+    }
+
+    public Func<bool> StillValid { get; }
+    public Func<NativeQuestHandoverAction?> Resolve { get; }
+    public Action<NativeQuestHandoverAction?> Completed { get; }
+    public ManualLogSource Log { get; }
+    public string QuestId { get; }
+    public string ObjectiveId { get; }
+}
+
+internal sealed class NativeQuestHandoverResolver : MonoBehaviour
+{
+    private readonly Queue<NativeHandoverResolutionRequest> _selectedDetails = new();
+    private readonly Queue<NativeHandoverResolutionRequest> _tableRows = new();
+
+    public void Enqueue(NativeHandoverResolutionRequest request, bool selectedDetails) =>
+        (selectedDetails ? _selectedDetails : _tableRows).Enqueue(request);
+
+    private void Update()
+    {
+        if (TryResolveNext(_selectedDetails)) return;
+        TryResolveNext(_tableRows);
+    }
+
+    private bool TryResolveNext(Queue<NativeHandoverResolutionRequest> requests)
+    {
+        while (requests.Count > 0)
+        {
+            var request = requests.Dequeue();
+            if (!request.StillValid()) continue;
+
+            var startedAt = Stopwatch.GetTimestamp();
+            NativeQuestHandoverAction? action = null;
+            try
+            {
+                action = request.Resolve();
+            }
+            catch (Exception exception)
+            {
+                request.Log.LogError(
+                    $"QUESTMAP_M07_HANDOVER_RESOLVE_ERROR quest={request.QuestId}; objective={request.ObjectiveId}; {exception}");
+            }
+
+            if (!request.StillValid()) action?.Dispose();
+            else request.Completed(action);
+            QuestMapDebugLog.Info(request.Log,
+                 "QUESTMAP_M07_HANDOVER_RESOLVE " +
+                 $"quest={request.QuestId}; objective={request.ObjectiveId}; eligible={action is not null}; " +
+                 $"elapsedMs={(Stopwatch.GetTimestamp() - startedAt) * 1000d / Stopwatch.Frequency:F2}; " +
+                 $"remaining={_selectedDetails.Count + _tableRows.Count}; perFrame=1");
+            // QuestObjectiveView.Show performs condition-specific inventory
+            // scans. Never resolve a second native objective in this frame.
+            return true;
+        }
+
+        return false;
+    }
+
+    private void OnDestroy()
+    {
+        _selectedDetails.Clear();
+        _tableRows.Clear();
+    }
 }
 
 internal sealed class NativeQuestHandoverAction : IDisposable

@@ -34,6 +34,7 @@ The In Progress view is a full quest table rather than a simple list. It include
 - search plus trader, status, location, and repeatable filters;
 - separate sections for pinned, Daily, Scav Daily, Weekly, and ordinary quests;
 - native favorite stars and QuestMap tracking controls;
+- numerical `current / required` task counts only while a subtask remains incomplete, with completed subtasks reduced to their text and checkmark;
 - Scav Daily badges;
 - native Accept and Turn In buttons when those actions are available; and
 - row hover/selection feedback using configurable QuestMap colors and Tarkov sounds.
@@ -133,7 +134,7 @@ The client never fills EFT's live quest book with fake future quests.
 
 ### Quest tracking
 
-QuestMap adds profile-scoped manual tracking. Clicking the Status cell in the In Progress table toggles manual tracking for that quest.
+QuestMap adds profile-scoped manual tracking. Clicking the Status cell in the In Progress table toggles manual tracking for that quest. The clickable status surface shows a selected-color underline while hovered; the quest banner keeps its separate four-edge hover outline.
 
 Tracking can also be enabled automatically for:
 
@@ -219,6 +220,7 @@ The F12 menu adds:
 
 - independent global/trader replacement toggles;
 - hidden-reward and preferred-Summary settings;
+- default-off task skipping and its configurable reveal modifier;
 - automatic new/favorite/current-map tracking policies;
 - tracked-list hotkey and duration;
 - notification mode, opacity, display duration, and fade duration;
@@ -227,7 +229,7 @@ The F12 menu adds:
 - configurable selected, prerequisite, successor, quest-state, gate, Collector, Lightkeeper, and end-of-line colors; and
 - opt-in detailed diagnostics.
 
-The feature, tracking, and interface-feedback settings default on. Minimal notifications and detailed diagnostics default off.
+The replacement, tracking, and interface-feedback settings default on. Task skipping, minimal notifications, and detailed diagnostics default off.
 
 ### State preservation
 
@@ -251,7 +253,7 @@ When a replacement is disabled or cannot initialize safely, QuestMap restores th
 
 QuestMap's tables replace EFT's native task rows. Mods that patch those rows, especially DrakiaXYZ Quest Tracker and Task List Fixes, cannot inject their row additions into QuestMap's tables. Disabling the relevant QuestMap replacement restores those mods' native integration surface. QuestMap supplies its own tracking, pinning, sorting, filtering, raid notification/list, and task-presentation equivalents.
 
-Objective skipping was investigated but is not included. The branch has no dependency on SPT-Skipper.
+Objective skipping is available as a default-off exact-version client action with no SPT-Skipper dependency. When enabled in F12, holding its configurable modifier reveals a `SKIP` button in the left action slot of incomplete objectives in both Tasks tables and Quest Description. A native confirmation identifies the quest and objective before QuestMap sets only that objective's current-value getter and invokes Tarkov's shared quest-condition controller. The action is disabled in raid and never calls whole-quest completion or hands in items. It has the same persistence boundary as SPT-Skipper's technique: there is no standalone server objective transaction, so task-only persistence across a complete client/server reload before normal quest turn-in is not guaranteed.
 
 ### Installation and release layout
 

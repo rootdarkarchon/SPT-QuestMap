@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using BepInEx.Configuration;
 using BepInEx.Logging;
 using EFT;
 using EFT.InventoryLogic;
@@ -42,12 +43,15 @@ internal sealed class QuestDetailsPane : IDisposable
     private readonly ManualLogSource _log;
     private readonly Func<bool> _showHiddenRewards;
     private readonly Func<bool> _defaultToSummary;
+    private readonly Func<bool> _taskSkippingEnabled;
+    private readonly Func<KeyboardShortcut> _taskSkipModifier;
     private readonly Action<string, QuestDetailsActionKind> _requestQuestRefresh;
     private readonly string? _contextTraderId;
     private readonly float _headerHeight;
     private readonly RectTransform _shadow;
     private readonly RectTransform _nativeHostRoot;
     private readonly NativeQuestViewHost? _actionHost;
+    private readonly QuestObjectiveSkipVisibility _skipVisibility;
     private readonly List<NativeQuestHandoverAction> _objectiveHosts = [];
     private string? _selectedQuestId;
     private DetailTextTab _textTab;
@@ -65,6 +69,8 @@ internal sealed class QuestDetailsPane : IDisposable
         ManualLogSource log,
         Func<bool> showHiddenRewards,
         Func<bool> defaultToSummary,
+        Func<bool> taskSkippingEnabled,
+        Func<KeyboardShortcut> taskSkipModifier,
         Action<string, QuestDetailsActionKind> requestQuestRefresh,
         string? contextTraderId,
         float headerHeightScale)
@@ -78,6 +84,8 @@ internal sealed class QuestDetailsPane : IDisposable
         _log = log;
         _showHiddenRewards = showHiddenRewards;
         _defaultToSummary = defaultToSummary;
+        _taskSkippingEnabled = taskSkippingEnabled;
+        _taskSkipModifier = taskSkipModifier;
         _requestQuestRefresh = requestQuestRefresh;
         _contextTraderId = contextTraderId;
         _headerHeight = HeaderHeight * Mathf.Clamp(headerHeightScale, 0.5f, 1f);
@@ -85,6 +93,8 @@ internal sealed class QuestDetailsPane : IDisposable
         UnityUiFactory.Stretch(_nativeHostRoot);
         _nativeHostRoot.gameObject.SetActive(false);
         _actionHost = NativeQuestViewHost.TryCreate(_nativeHostRoot, session, inventoryController, questController, log);
+        _skipVisibility = root.gameObject.AddComponent<QuestObjectiveSkipVisibility>();
+        _skipVisibility.Bind(taskSkippingEnabled, taskSkipModifier);
     }
 
     public RectTransform Root { get; }
@@ -99,6 +109,8 @@ internal sealed class QuestDetailsPane : IDisposable
         ManualLogSource log,
         Func<bool> showHiddenRewards,
         Func<bool> defaultToSummary,
+        Func<bool> taskSkippingEnabled,
+        Func<KeyboardShortcut> taskSkipModifier,
         Action<string, QuestDetailsActionKind> requestQuestRefresh,
         string? contextTraderId = null,
         float headerHeightScale = 1f)
@@ -126,7 +138,8 @@ internal sealed class QuestDetailsPane : IDisposable
         outline.effectDistance = new Vector2(-1, 0);
         var pane = new QuestDetailsPane(
             root, shadow, session, inventoryController, questController, assetCache, log,
-            showHiddenRewards, defaultToSummary, requestQuestRefresh, contextTraderId, headerHeightScale);
+            showHiddenRewards, defaultToSummary, taskSkippingEnabled, taskSkipModifier,
+            requestQuestRefresh, contextTraderId, headerHeightScale);
         shadow.gameObject.SetActive(false);
         root.gameObject.SetActive(false);
         return pane;
@@ -621,12 +634,14 @@ internal sealed class QuestDetailsPane : IDisposable
 
             const float actionWidth = 76f;
             const float valueWidth = 72f;
+            QuestObjectiveSkipSlot? skipSlot = null;
+            GameObject? handoverObject = null;
             var canHandover = !future
                 && QuestMutationsAllowed()
                 && liveQuest?.QuestStatus == EQuestStatus.Started
                 && objectiveProgress?.Complete != true
                 && condition is ConditionHandoverItem or ConditionWeaponAssembly;
-            if (canHandover && condition is not null && TryCreateEligibleObjectiveHost(liveQuest!, condition, out var objectiveHost))
+            if (canHandover && condition is not null)
             {
                 var buttonRect = UnityUiFactory.CreateRect("Handover", row);
                 buttonRect.anchorMin = new Vector2(0, 0.15f);
@@ -634,12 +649,60 @@ internal sealed class QuestDetailsPane : IDisposable
                 buttonRect.pivot = new Vector2(0, 0.5f);
                 buttonRect.anchoredPosition = new Vector2(5, 0);
                 buttonRect.sizeDelta = new Vector2(actionWidth - 10, 0);
+                handoverObject = buttonRect.gameObject;
                 var button = UnityUiFactory.AddButton(buttonRect.gameObject, QuestGraphPalette.ControlActive);
-                var buttonText = UnityUiFactory.AddText(buttonRect.gameObject, "HAND OVER", 9,
+                button.interactable = false;
+                var buttonText = UnityUiFactory.AddText(buttonRect.gameObject, "…", 9,
                     TextAlignmentOptions.Center, Color.white);
                 buttonText.fontStyle = FontStyles.Bold;
-                button.onClick.AddListener(() => RunNativeAction(
-                    objectiveHost.Execute, QuestDetailsActionKind.Handover, button));
+                var capturedCondition = condition;
+                NativeQuestTableActions.ResolveHandoverDeferred(
+                    row,
+                    true,
+                    () => !_disposed
+                        && row != null
+                        && string.Equals(_selectedQuestId, node.Id, StringComparison.Ordinal),
+                    () => NativeQuestTableActions.TryCreateHandover(
+                        _nativeHostRoot, liveQuest!, capturedCondition.id, _questController, _inventoryController),
+                    objectiveHost =>
+                    {
+                        if (objectiveHost is null)
+                        {
+                            if (skipSlot is not null) skipSlot.SetFallbackAvailable(false);
+                            else buttonRect.gameObject.SetActive(false);
+                            return;
+                        }
+
+                        _objectiveHosts.Add(objectiveHost);
+                        buttonText.text = "HAND OVER";
+                        button.interactable = true;
+                        button.onClick.AddListener(() => RunNativeAction(
+                            objectiveHost.Execute, QuestDetailsActionKind.Handover, button));
+                    },
+                    _log,
+                    node.Id,
+                    objective.Id);
+            }
+
+            var canSkip = !future
+                && QuestMutationsAllowed()
+                && liveQuest?.QuestStatus == EQuestStatus.Started
+                && objectiveProgress?.Complete != true
+                && condition is not null;
+            if (canSkip && liveQuest is not null)
+            {
+                var skipRect = UnityUiFactory.CreateRect("Skip", row);
+                skipRect.anchorMin = new Vector2(0, 0.15f);
+                skipRect.anchorMax = new Vector2(0, 0.85f);
+                skipRect.pivot = new Vector2(0, 0.5f);
+                skipRect.anchoredPosition = new Vector2(5, 0);
+                skipRect.sizeDelta = new Vector2(actionWidth - 10, 0);
+                var skipButton = UnityUiFactory.AddButton(skipRect.gameObject, QuestGraphPalette.Failed);
+                var skipText = UnityUiFactory.AddText(skipRect.gameObject, "SKIP", 9,
+                    TextAlignmentOptions.Center, Color.white);
+                skipText.fontStyle = FontStyles.Bold;
+                skipButton.onClick.AddListener(() => RequestObjectiveSkip(node, objective, liveQuest));
+                skipSlot = _skipVisibility.Register(skipRect.gameObject, handoverObject);
             }
 
             var valueRect = UnityUiFactory.CreateRect("Value", row);
@@ -827,23 +890,32 @@ internal sealed class QuestDetailsPane : IDisposable
         message.margin = new Vector4(28, 80, 28, 28);
     }
 
-    private bool TryCreateEligibleObjectiveHost(QuestClass quest, Condition condition, out NativeQuestHandoverAction host)
-    {
-        host = NativeQuestTableActions.TryCreateHandover(
-            _nativeHostRoot, quest, condition.id, _questController, _inventoryController)!;
-        if (host is null) return false;
-        _objectiveHosts.Add(host);
-        return true;
-    }
-
     private void ClearNativeObjectiveHosts()
     {
+        _skipVisibility.Clear();
         foreach (var host in _objectiveHosts)
         {
             if (host == null) continue;
             host.Dispose();
         }
         _objectiveHosts.Clear();
+    }
+
+    private void RequestObjectiveSkip(QuestGraphNode node, QuestObjectiveDefinition objective, QuestClass quest)
+    {
+        if (_disposed || !_taskSkippingEnabled() || !QuestMutationsAllowed()) return;
+        NativeQuestObjectiveSkip.ShowConfirmation(
+            _questController,
+            quest,
+            objective.Id,
+            node.Name,
+            objective.Text,
+            () => !_disposed && _taskSkippingEnabled() && QuestMutationsAllowed(),
+            () =>
+            {
+                if (!_disposed) _requestQuestRefresh(node.Id, QuestDetailsActionKind.SkipObjective);
+            },
+            _log);
     }
 
     private async void RunNativeAction(Func<Task> action, QuestDetailsActionKind kind, Button button)
@@ -1330,6 +1402,7 @@ internal enum QuestDetailsActionKind
     Complete,
     Replace,
     Handover,
+    SkipObjective,
 }
 
 internal sealed class QuestDetailsTextContentSizer : MonoBehaviour

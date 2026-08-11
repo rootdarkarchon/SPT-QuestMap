@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using BepInEx.Configuration;
 using BepInEx.Logging;
 using EFT;
 using EFT.InventoryLogic;
@@ -51,6 +52,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private readonly bool _customDetailsEnabled;
     private readonly Func<bool> _showHiddenRewards;
     private readonly Func<bool> _defaultDetailsToSummary;
+    private readonly Func<bool> _taskSkippingEnabled;
+    private readonly Func<KeyboardShortcut> _taskSkipModifier;
     private readonly Action<string, QuestDetailsActionKind> _requestQuestRefresh;
     private readonly Dictionary<GameObject, bool> _nativeControlStates = new();
     private TasksPanel? _tasksPanel;
@@ -110,6 +113,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private string _surfaceTopSource = "native-union";
     private bool _mounted;
     private bool _visible;
+    private bool _inventoryUpdatesSubscribed;
     private bool _disposed;
 
     public GlobalTasksScreenController(
@@ -124,11 +128,12 @@ internal sealed class GlobalTasksScreenController : IDisposable
         bool customDetailsEnabled,
         Func<bool> showHiddenRewards,
         Func<bool> defaultDetailsToSummary,
+        Func<bool> taskSkippingEnabled,
+        Func<KeyboardShortcut> taskSkipModifier,
         Action<string, QuestDetailsActionKind> requestQuestRefresh)
     {
         _screen = screen;
         _inventoryController = inventoryController;
-        _inventoryController.OnProfileUpdate += OnInventoryProfileUpdate;
         _questController = questController;
         _session = session;
         _log = log;
@@ -136,6 +141,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
         _assetCache = assetCache;
         _tracking = tracking;
         _defaultDetailsToSummary = defaultDetailsToSummary;
+        _taskSkippingEnabled = taskSkippingEnabled;
+        _taskSkipModifier = taskSkipModifier;
         _requestQuestRefresh = requestQuestRefresh;
         _customDetailsEnabled = customDetailsEnabled;
         _showHiddenRewards = showHiddenRewards;
@@ -192,6 +199,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         HideNativeTasksWorkspace();
         _mounted = true;
         _visible = true;
+        SubscribeInventoryUpdates();
         QuestMapDebugLog.Info(_log,
             "QUESTMAP_M06_MOUNT " +
             $"screen={_screen.GetInstanceID()}; mode={_mode}; nodes={_projection?.Nodes.Count ?? 0}; " +
@@ -201,6 +209,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
     }
 
     public bool CanResume => !_disposed && _mounted && _graphView?.Root != null;
+
+    public bool IsVisible => !_disposed && _visible;
 
     public string Resume(
         InventoryController inventoryController,
@@ -251,6 +261,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             if (_customDetailsEnabled && _selectedQuestId is not null) ShowSelectedQuestDetails();
         }
         _visible = true;
+        SubscribeInventoryUpdates();
         UpdateQuestItemsButtonState();
         var cachedRows = (_graphView as InProgressQuestTableView)?.CachedRowCount ?? 0;
         QuestMapDebugLog.Info(_log,
@@ -268,6 +279,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         ClearNativeOverlays();
         if (_graphView?.Root != null) _graphView.Root.gameObject.SetActive(false);
         _visible = false;
+        UnsubscribeInventoryUpdates();
         var cachedRows = (_graphView as InProgressQuestTableView)?.CachedRowCount ?? 0;
         QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_SUSPEND screen={_screen.GetInstanceID()}; cached=True; rows={cachedRows}");
     }
@@ -414,7 +426,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         PersistCurrentState();
         QuestGraphViewStateStore.Flush();
         _disposed = true;
-        _inventoryController.OnProfileUpdate -= OnInventoryProfileUpdate;
+        UnsubscribeInventoryUpdates();
         _visible = false;
         foreach (var pair in _nativeControlStates)
             if (pair.Key != null) pair.Key.SetActive(pair.Value);
@@ -553,6 +565,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
                  _tracking,
                  QuestMutationsAllowed,
                  CreateTableHandoverAction,
+                 _taskSkippingEnabled,
+                 _taskSkipModifier,
+                 _questController,
                   CanAcceptTableQuest,
                   AcceptTableQuestAsync,
                   CanCompleteTableQuest,
@@ -1390,6 +1405,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
                 _log,
                 _showHiddenRewards,
                 _defaultDetailsToSummary,
+                _taskSkippingEnabled,
+                _taskSkipModifier,
                 _requestQuestRefresh);
         }
         _detailPane.Show(_topology, _overlay, _selectedQuestId);
@@ -1544,15 +1561,31 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
     private void OnInventoryProfileUpdate()
     {
-        if (!_disposed && _mounted) UpdateQuestItemsButtonState();
+        if (!_disposed && _visible) UpdateQuestItemsButtonState();
     }
 
     private void RebindInventoryController(InventoryController inventoryController)
     {
-        if (ReferenceEquals(_inventoryController, inventoryController)) return;
-        _inventoryController.OnProfileUpdate -= OnInventoryProfileUpdate;
-        _inventoryController = inventoryController;
+        if (!ReferenceEquals(_inventoryController, inventoryController))
+        {
+            UnsubscribeInventoryUpdates();
+            _inventoryController = inventoryController;
+        }
+        SubscribeInventoryUpdates();
+    }
+
+    private void SubscribeInventoryUpdates()
+    {
+        if (_inventoryUpdatesSubscribed) return;
         _inventoryController.OnProfileUpdate += OnInventoryProfileUpdate;
+        _inventoryUpdatesSubscribed = true;
+    }
+
+    private void UnsubscribeInventoryUpdates()
+    {
+        if (!_inventoryUpdatesSubscribed) return;
+        _inventoryController.OnProfileUpdate -= OnInventoryProfileUpdate;
+        _inventoryUpdatesSubscribed = false;
     }
 
     private void HideNativeTasksWorkspace()

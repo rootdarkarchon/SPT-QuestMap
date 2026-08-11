@@ -200,6 +200,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         if (!_configuration.EnableTraderQuestGraph.Value)
         {
             _pendingTraderScreen = null;
+            ReleaseInventoryMonitoringIfInactive();
             QuestMapDebugLog.Info(_log, $"QUESTMAP_M03_STATE screen={screen.GetInstanceID()}; trader={trader.Id}; active=False; safelyDisabled=True; reason=feature disabled; vanillaRestored=True");
         }
     }
@@ -217,11 +218,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
             controller.Dispose();
         }
 
-        if (_pendingTraderScreen is null && _traderControllers.Count == 0
-            && _pendingGlobalScreen is null && _globalControllers.Count == 0)
-        {
-            _reactiveMonitor?.SetInventoryController(null);
-        }
+        ReleaseInventoryMonitoringIfInactive();
     }
 
     public void ShowGlobalTasksScreen(TasksScreen screen, object[] arguments)
@@ -289,6 +286,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         if (!_configuration.EnableGlobalTasksGraph.Value)
         {
             _pendingGlobalScreen = null;
+            ReleaseInventoryMonitoringIfInactive();
             QuestMapDebugLog.Info(_log, $"QUESTMAP_M06_STATE screen={screen.GetInstanceID()}; active=False; safelyDisabled=True; reason=feature disabled; vanillaRestored=True");
             return;
         }
@@ -313,11 +311,17 @@ internal sealed class QuestMapDataRuntime : IDisposable
             controller.Suspend();
         }
 
-        if (_pendingTraderScreen is null && _traderControllers.Count == 0
-            && _pendingGlobalScreen is null && _globalControllers.Count == 0)
-        {
-            _reactiveMonitor?.SetInventoryController(null);
-        }
+        ReleaseInventoryMonitoringIfInactive();
+    }
+
+    private void ReleaseInventoryMonitoringIfInactive()
+    {
+        // Suspended global controllers stay cached for fast resume, but must not
+        // keep transaction-driven overlay work alive elsewhere in the menu.
+        if (_pendingTraderScreen is not null || _traderControllers.Count > 0
+            || _pendingGlobalScreen is not null
+            || _globalControllers.Values.Any(controller => controller.IsVisible)) return;
+        _reactiveMonitor?.SetInventoryController(null);
     }
 
     public void Dispose()
@@ -1194,6 +1198,8 @@ internal sealed class QuestMapDataRuntime : IDisposable
             true,
             () => _configuration.ShowHiddenQuestRewards.Value,
             () => _configuration.DefaultQuestDetailsToSummary.Value,
+            () => _configuration.EnableTaskSkipping.Value,
+            () => _configuration.TaskSkipModifier.Value,
             ScheduleQuestActionReconciliation);
         try
         {
@@ -1207,6 +1213,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         catch (Exception exception)
         {
             controller.Dispose();
+            ReleaseInventoryMonitoringIfInactive();
             _log.LogError($"QUESTMAP_M03_ERROR screen={pending.Screen.GetInstanceID()}; trader={pending.Trader.Id}; {exception}");
             _log.LogWarning($"QUESTMAP_M03_STATE screen={pending.Screen.GetInstanceID()}; trader={pending.Trader.Id}; active=False; safelyDisabled=True; reason=graph initialization failed; vanillaRestored=True");
         }
@@ -1217,6 +1224,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         var pending = _pendingTraderScreen;
         if (pending is null) return;
         _pendingTraderScreen = null;
+        ReleaseInventoryMonitoringIfInactive();
         _log.LogError($"QUESTMAP_M03_ERROR screen={pending.Screen.GetInstanceID()}; trader={pending.Trader.Id}; reason={reason}; {exception}");
         _log.LogWarning($"QUESTMAP_M03_STATE screen={pending.Screen.GetInstanceID()}; trader={pending.Trader.Id}; active=False; safelyDisabled=True; reason={reason}; vanillaRestored=True");
     }
@@ -1250,6 +1258,8 @@ internal sealed class QuestMapDataRuntime : IDisposable
             true,
             () => _configuration.ShowHiddenQuestRewards.Value,
             () => _configuration.DefaultQuestDetailsToSummary.Value,
+            () => _configuration.EnableTaskSkipping.Value,
+            () => _configuration.TaskSkipModifier.Value,
             ScheduleQuestActionReconciliation);
         try
         {
@@ -1263,6 +1273,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         catch (Exception exception)
         {
             controller.Dispose();
+            ReleaseInventoryMonitoringIfInactive();
             _log.LogError($"QUESTMAP_M06_ERROR screen={pending.Screen.GetInstanceID()}; {exception}");
             _log.LogWarning($"QUESTMAP_M06_STATE screen={pending.Screen.GetInstanceID()}; active=False; safelyDisabled=True; reason=graph initialization failed; vanillaRestored=True");
         }
@@ -1273,6 +1284,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
         var pending = _pendingGlobalScreen;
         if (pending is null) return;
         _pendingGlobalScreen = null;
+        ReleaseInventoryMonitoringIfInactive();
         _log.LogError($"QUESTMAP_M06_ERROR screen={pending.Screen.GetInstanceID()}; reason={reason}; {exception}");
         _log.LogWarning($"QUESTMAP_M06_STATE screen={pending.Screen.GetInstanceID()}; active=False; safelyDisabled=True; reason={reason}; vanillaRestored=True");
     }

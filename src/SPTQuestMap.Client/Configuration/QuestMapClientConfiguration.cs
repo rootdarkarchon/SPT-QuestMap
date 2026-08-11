@@ -11,6 +11,8 @@ internal sealed class QuestMapClientConfiguration
         ConfigEntry<bool> enableGlobalTasksGraph,
         ConfigEntry<bool> showHiddenQuestRewards,
         ConfigEntry<bool> defaultQuestDetailsToSummary,
+        ConfigEntry<bool> enableTaskSkipping,
+        ConfigEntry<KeyboardShortcut> taskSkipModifier,
         ConfigEntry<bool> autoTrackNewQuests,
         ConfigEntry<bool> trackFavoriteQuests,
         ConfigEntry<bool> autoTrackMapRelatedQuests,
@@ -20,7 +22,6 @@ internal sealed class QuestMapClientConfiguration
         ConfigEntry<float> raidNotificationDisplayDurationSeconds,
         ConfigEntry<float> trackedQuestListDisplayDurationSeconds,
         ConfigEntry<KeyboardShortcut> trackedQuestListHotkey,
-        ConfigEntry<bool> enableRowHighlights,
         ConfigEntry<bool> playHoverSounds,
         ConfigEntry<bool> playClickSounds,
         ConfigEntry<Color> selectedHighlightColor,
@@ -44,6 +45,8 @@ internal sealed class QuestMapClientConfiguration
         EnableGlobalTasksGraph = enableGlobalTasksGraph;
         ShowHiddenQuestRewards = showHiddenQuestRewards;
         DefaultQuestDetailsToSummary = defaultQuestDetailsToSummary;
+        EnableTaskSkipping = enableTaskSkipping;
+        TaskSkipModifier = taskSkipModifier;
         AutoTrackNewQuests = autoTrackNewQuests;
         TrackFavoriteQuests = trackFavoriteQuests;
         AutoTrackMapRelatedQuests = autoTrackMapRelatedQuests;
@@ -53,7 +56,6 @@ internal sealed class QuestMapClientConfiguration
         RaidNotificationDisplayDurationSeconds = raidNotificationDisplayDurationSeconds;
         TrackedQuestListDisplayDurationSeconds = trackedQuestListDisplayDurationSeconds;
         TrackedQuestListHotkey = trackedQuestListHotkey;
-        EnableRowHighlights = enableRowHighlights;
         PlayHoverSounds = playHoverSounds;
         PlayClickSounds = playClickSounds;
         SelectedHighlightColor = selectedHighlightColor;
@@ -83,6 +85,10 @@ internal sealed class QuestMapClientConfiguration
 
     public ConfigEntry<bool> DefaultQuestDetailsToSummary { get; }
 
+    public ConfigEntry<bool> EnableTaskSkipping { get; }
+
+    public ConfigEntry<KeyboardShortcut> TaskSkipModifier { get; }
+
     public ConfigEntry<bool> AutoTrackNewQuests { get; }
 
     public ConfigEntry<bool> TrackFavoriteQuests { get; }
@@ -100,8 +106,6 @@ internal sealed class QuestMapClientConfiguration
     public ConfigEntry<float> TrackedQuestListDisplayDurationSeconds { get; }
 
     public ConfigEntry<KeyboardShortcut> TrackedQuestListHotkey { get; }
-
-    public ConfigEntry<bool> EnableRowHighlights { get; }
 
     public ConfigEntry<bool> PlayHoverSounds { get; }
 
@@ -162,9 +166,19 @@ internal sealed class QuestMapClientConfiguration
                 true,
                 "Open the Summary tab by default when the selected quest has a QuestMap summary."),
             config.Bind(
+                "Quest actions",
+                "Enable task skipping",
+                false,
+                "Allow individual active quest tasks to be marked complete without performing their requirements. Hold the configured modifier to reveal SKIP buttons. Quest turn-in remains separate."),
+            config.Bind(
+                "Quest actions",
+                "Task skip modifier",
+                new KeyboardShortcut(KeyCode.LeftControl),
+                "Hold this configurable key or shortcut to reveal SKIP buttons while task skipping is enabled."),
+            config.Bind(
                 "Quest tracking",
                 "Track newly accepted quests",
-                true,
+                false,
                 "Automatically add newly accepted quests to QuestMap's manual tracking list."),
             config.Bind(
                 "Quest tracking",
@@ -214,11 +228,6 @@ internal sealed class QuestMapClientConfiguration
                 "Tracked quest list hotkey",
                 new KeyboardShortcut(KeyCode.I),
                 "Show or hide the compact in-raid list of tracked quests applicable to the current map, Any, or transit."),
-            config.Bind(
-                "Interface feedback",
-                "Highlight quest rows",
-                true,
-                "Highlight Tasks-table quest rows while hovered or selected."),
             config.Bind(
                 "Interface feedback",
                 "Play mouse-over sounds",

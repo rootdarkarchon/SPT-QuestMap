@@ -41,9 +41,19 @@ internal sealed class ReactiveQuestMonitor : IDisposable
     public void SetInventoryController(InventoryController? inventoryController)
     {
         if (ReferenceEquals(_inventoryController, inventoryController)) return;
+        var monitoredTransactions = _inventoryController is not null;
         if (_inventoryController is not null) _inventoryController.OnProfileUpdate -= OnInventoryProfileUpdate;
         _inventoryController = inventoryController;
         if (_inventoryController is not null) _inventoryController.OnProfileUpdate += OnInventoryProfileUpdate;
+        // SalesSum changes on every trader transaction, so scope it to the same
+        // visible quest-screen lifetime as inventory-driven objective refreshes.
+        var monitorTransactions = _inventoryController is not null;
+        if (monitoredTransactions == monitorTransactions) return;
+        foreach (var trader in _traders)
+        {
+            if (monitorTransactions) trader.OnSalesSumChanged += OnTraderSalesSumChanged;
+            else trader.OnSalesSumChanged -= OnTraderSalesSumChanged;
+        }
     }
 
     public void Resync()
@@ -124,7 +134,7 @@ internal sealed class ReactiveQuestMonitor : IDisposable
         trader.OnAvailabilityChanged += OnTraderAvailabilityChanged;
         trader.OnStandingChanged += OnTraderStandingChanged;
         trader.OnLoyaltyChanged += OnTraderLoyaltyChanged;
-        trader.OnSalesSumChanged += OnTraderSalesSumChanged;
+        if (_inventoryController is not null) trader.OnSalesSumChanged += OnTraderSalesSumChanged;
     }
 
     private void UnsubscribeTrader(Profile.TraderInfo trader)
@@ -133,7 +143,7 @@ internal sealed class ReactiveQuestMonitor : IDisposable
         trader.OnAvailabilityChanged -= OnTraderAvailabilityChanged;
         trader.OnStandingChanged -= OnTraderStandingChanged;
         trader.OnLoyaltyChanged -= OnTraderLoyaltyChanged;
-        trader.OnSalesSumChanged -= OnTraderSalesSumChanged;
+        if (_inventoryController is not null) trader.OnSalesSumChanged -= OnTraderSalesSumChanged;
     }
 
     private void OnQuestStatusChanged(QuestClass quest, bool _) => _invalidate("quest-status", quest.Id);
