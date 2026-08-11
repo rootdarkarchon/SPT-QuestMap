@@ -184,7 +184,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
             $"screen={_screen.GetInstanceID()}; mode={_mode}; nodes={_projection?.Nodes.Count ?? 0}; " +
             $"edges={_projection?.Edges.Count ?? 0}; nativeNotes=True; nativeQuestItems=True; fullSurface=True; nativeSelectorsUnmodified=True; " +
             $"raidInProgressOnly={_raidInProgressOnly}; favoriteQuestService=native; assetCache=shared; cachedAssets={_assetCache.CachedCount}; " +
-            $"pendingAssets={_assetCache.PendingCount}; networkRequests={_assetCache.NetworkRequests}; cacheHits={_assetCache.CacheHits}");
+            $"pendingAssets={_assetCache.PendingCount}; activeAssetRequests={_assetCache.ActiveRequestCount}; " +
+            $"queuedAssets={_assetCache.QueuedCount}; networkRequests={_assetCache.NetworkRequests}; cacheHits={_assetCache.CacheHits}");
     }
 
     public bool CanResume => !_disposed && _mounted && _graphView?.Root != null;
@@ -201,7 +202,6 @@ internal sealed class GlobalTasksScreenController : IDisposable
     {
         if (!CanResume) return "screen-cache-invalid";
         RebindInventoryController(inventoryController);
-        _overlay = overlay;
 
         _favoriteQuestService = FavoriteQuestServiceField.GetValue(_tasksPanel) as GClass3794
             ?? throw new InvalidOperationException("TasksPanel native favorite-quest service was null while resuming.");
@@ -267,19 +267,17 @@ internal sealed class GlobalTasksScreenController : IDisposable
         var locationsChanged = EnableLocationsForNewTaskStates(_overlay, overlay);
         _overlay = overlay;
         UpdateQuestItemsButtonState();
-        var nextProjection = BuildProjection();
-        var membershipChanged = _projection is null
-            || !_projection.Nodes.Select(node => node.Id).SequenceEqual(nextProjection.Nodes.Select(node => node.Id), StringComparer.Ordinal)
-            || !_projection.Edges.SequenceEqual(nextProjection.Edges);
+        var nextMembership = BuildProjection(membershipOnly: true);
+        var membershipChanged = _projection is null || !SameMembership(_projection, nextMembership);
         if (_graphView is InProgressQuestTableView table)
         {
-            _projection = nextProjection;
+            _projection = nextMembership;
             if (_selectedQuestId is not null && !_projection.NodesById.ContainsKey(_selectedQuestId))
             {
                 _selectedQuestId = null;
                 CloseQuestDetails();
             }
-            table.RefreshOverlay(overlay, _selectedQuestId, nextProjection, refreshAllNativeControls);
+            table.RefreshOverlay(overlay, _selectedQuestId, nextMembership, refreshAllNativeControls);
             if (membershipChanged || locationsChanged) RebuildInProgressChrome();
             UpdateSelectionDetails();
             return membershipChanged ? "global-projection-updated" : "global-overlay-refreshed";
@@ -299,17 +297,21 @@ internal sealed class GlobalTasksScreenController : IDisposable
     }
 
     public string RefreshQuest(QuestProfileOverlay overlay, string questId)
+        => RefreshQuests(overlay, new[] { questId });
+
+    public string RefreshQuests(QuestProfileOverlay overlay, IReadOnlyCollection<string> questIds)
     {
         if (_disposed || !_mounted || _graphView is null) return "screen-inactive";
+        var changedQuestIds = questIds.Distinct(StringComparer.Ordinal).ToArray();
+        if (changedQuestIds.Length == 0) return "global-quests-unchanged";
+        var locationsChanged = EnableLocationsForNewTaskStates(_overlay, overlay);
         _overlay = overlay;
         UpdateQuestItemsButtonState();
-        var nextProjection = BuildProjection();
-        var membershipChanged = _projection is null
-            || !_projection.Nodes.Select(node => node.Id).SequenceEqual(nextProjection.Nodes.Select(node => node.Id), StringComparer.Ordinal)
-            || !_projection.Edges.SequenceEqual(nextProjection.Edges);
+        var nextMembership = BuildProjection(membershipOnly: true);
+        var membershipChanged = _projection is null || !SameMembership(_projection, nextMembership);
         if (membershipChanged)
         {
-            _projection = nextProjection;
+            _projection = nextMembership;
             if (_selectedQuestId is not null && !_projection.NodesById.ContainsKey(_selectedQuestId))
             {
                 _selectedQuestId = null;
@@ -318,17 +320,24 @@ internal sealed class GlobalTasksScreenController : IDisposable
             }
             if (_graphView is InProgressQuestTableView table)
             {
-                table.RefreshOverlay(overlay, _selectedQuestId, nextProjection, false);
+                table.RefreshOverlay(overlay, _selectedQuestId, nextMembership, false);
                 RebuildInProgressChrome();
             }
             else RebuildGraph(true);
             UpdateSelectionDetails();
             return "global-projection-updated";
         }
-        if (_projection is null || !_projection.NodesById.ContainsKey(questId)) return "global-quest-not-visible";
-        _graphView.RefreshQuest(overlay, questId);
-        if (string.Equals(_selectedQuestId, questId, StringComparison.Ordinal)) UpdateSelectionDetails();
-        return "global-quest-refreshed";
+        if (_graphView is InProgressQuestTableView) _projection = nextMembership;
+        var visibleChangedQuestIds = changedQuestIds
+            .Where(questId => nextMembership.NodesById.ContainsKey(questId))
+            .ToArray();
+        _graphView.RefreshQuests(overlay, visibleChangedQuestIds);
+        if (locationsChanged && _graphView is InProgressQuestTableView) RebuildInProgressChrome();
+        if (_selectedQuestId is not null && changedQuestIds.Contains(_selectedQuestId, StringComparer.Ordinal))
+            UpdateSelectionDetails();
+        return visibleChangedQuestIds.Length == 0
+            ? "global-quests-not-visible"
+            : $"global-quests-refreshed:{visibleChangedQuestIds.Length}";
     }
 
     public string RebuildTopology(
@@ -582,34 +591,36 @@ internal sealed class GlobalTasksScreenController : IDisposable
         }
     }
 
-    private GlobalQuestGraphProjection BuildProjection(bool applyLocationFilter = true, bool applyTraderFilter = true)
+    private GlobalQuestGraphProjection BuildProjection(
+        bool applyLocationFilter = true,
+        bool applyTraderFilter = true,
+        bool membershipOnly = false)
     {
         if (_topology is null || _layout is null || _overlay is null) throw new InvalidOperationException("Global graph data is not ready.");
-        return GlobalQuestGraphProjectionBuilder.Build(
-            _topology,
-            _layout,
-            _overlay,
-            new GlobalQuestGraphOptions(
-                _mode,
-                _showAllFuture,
-                _hideFinished,
-                _levelEligibleOnly,
-                null,
-                applyTraderFilter ? _traderId : null,
-                _search,
-                _focusQuestId,
-                QuestRouteFilter.None,
-                _selectedQuestId,
-                applyLocationFilter && _mode == GlobalQuestGraphMode.InProgress ? _inProgressLocationIds : null,
-                _includeAvailableRepeatables,
-                ExcludeReadyToFinish: _raidInProgressOnly));
+        var options = new GlobalQuestGraphOptions(
+            _mode,
+            _showAllFuture,
+            _hideFinished,
+            _levelEligibleOnly,
+            null,
+            applyTraderFilter ? _traderId : null,
+            _search,
+            _focusQuestId,
+            QuestRouteFilter.None,
+            _selectedQuestId,
+            applyLocationFilter && _mode == GlobalQuestGraphMode.InProgress ? _inProgressLocationIds : null,
+            _includeAvailableRepeatables,
+            ExcludeReadyToFinish: _raidInProgressOnly);
+        return membershipOnly || _mode == GlobalQuestGraphMode.InProgress
+            ? GlobalQuestGraphProjectionBuilder.BuildMembershipOnly(_topology, _layout, _overlay, options)
+            : GlobalQuestGraphProjectionBuilder.Build(_topology, _layout, _overlay, options);
     }
 
     private GlobalQuestGraphProjection BuildInProgressCacheProjection()
     {
         if (_topology is null || _layout is null || _overlay is null)
             throw new InvalidOperationException("Global graph data is not ready.");
-        return GlobalQuestGraphProjectionBuilder.Build(
+        return GlobalQuestGraphProjectionBuilder.BuildMembershipOnly(
             _topology,
             _layout,
             _overlay,
@@ -626,10 +637,14 @@ internal sealed class GlobalTasksScreenController : IDisposable
                 IncludeAvailableRepeatables: true));
     }
 
+    private static bool SameMembership(GlobalQuestGraphProjection left, GlobalQuestGraphProjection right) =>
+        left.Nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal)
+            .SetEquals(right.Nodes.Select(node => node.Id));
+
     private void InitializeInProgressLocations()
     {
         if (_inProgressLocationsInitialized || _topology is null || _layout is null || _overlay is null) return;
-        foreach (var node in BuildProjection(false).Nodes)
+        foreach (var node in BuildProjection(applyLocationFilter: false, membershipOnly: true).Nodes)
             _inProgressLocationIds.Add(node.Location.Any ? "any" : node.Location.Id);
         _inProgressLocationsInitialized = true;
     }
@@ -728,7 +743,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         _selectedQuestId = questId;
         if (_mode == GlobalQuestGraphMode.Full)
         {
-            var nextProjection = BuildProjection();
+            var nextProjection = BuildProjection(membershipOnly: true);
             var membershipChanged = _projection is null
                 || !_projection.Nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal)
                     .SetEquals(nextProjection.Nodes.Select(node => node.Id));
@@ -1127,7 +1142,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private void BuildTraderStrip(RectTransform header)
     {
         if (_graphView is null || _topology is null) return;
-        var relevantTraderIds = BuildProjection(true, false).Nodes
+        var relevantTraderIds = BuildProjection(applyTraderFilter: false, membershipOnly: true).Nodes
             .Select(node => node.TraderId)
             .ToHashSet(StringComparer.Ordinal);
         var traders = _topology.Traders

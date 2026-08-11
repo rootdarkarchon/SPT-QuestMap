@@ -270,30 +270,37 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     }
 
     public void RefreshQuest(QuestProfileOverlay overlay, string questId)
+        => RefreshQuests(overlay, new[] { questId });
+
+    public void RefreshQuests(QuestProfileOverlay overlay, IReadOnlyCollection<string> questIds)
     {
         if (_disposed) return;
         _overlay = overlay;
-        if (!_rows.TryGetValue(questId, out var current)) return;
+        var changedIds = questIds
+            .Where(_rows.ContainsKey)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (changedIds.Length == 0) return;
 
         var stopwatch = Stopwatch.StartNew();
         var viewport = CaptureViewportState();
-        var priorHeight = current.Height;
-        var priorPosition = current.Root.anchoredPosition;
-        var priorSiblingIndex = current.Root.GetSiblingIndex();
-        RebuildRow(questId);
-        var replacement = _rows[questId];
-        replacement.Root.anchoredPosition = priorPosition;
-        replacement.Root.SetSiblingIndex(priorSiblingIndex);
-
-        var sortCanMoveRow = _sectionMode == QuestTableSectionMode.TraderStatus
-            || _sortCriteria.Any(criterion => criterion.Column is QuestTableSortColumn.Status or QuestTableSortColumn.Progress);
-        if (sortCanMoveRow || !Mathf.Approximately(priorHeight, replacement.Height)) LayoutRows();
+        _content.gameObject.SetActive(false);
+        try
+        {
+            foreach (var questId in changedIds) RebuildRow(questId);
+            LayoutRows();
+            RefreshSortHeaders();
+        }
+        finally
+        {
+            _content.gameObject.SetActive(true);
+        }
         SetSelected(_selectedQuestId);
         RestoreViewport(viewport);
         stopwatch.Stop();
         QuestMapDebugLog.Info(_log,
-            "QUESTMAP_M06_TABLE_QUEST_UPDATE " +
-            $"quest={questId}; relaidOut={sortCanMoveRow || !Mathf.Approximately(priorHeight, replacement.Height)}; " +
+            "QUESTMAP_M06_TABLE_QUESTS_UPDATE " +
+            $"changedRows={changedIds.Length}; relaidOut=True; " +
             $"elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}");
     }
 

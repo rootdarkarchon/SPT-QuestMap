@@ -403,6 +403,133 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
+    public void StaticTopologyVersionMatch_IgnoresGeneratedFingerprintAndFailsClosed()
+    {
+        var feed = Feed([Node("root", "Prapor", "Any")], []);
+        feed.ProfileGeneratedQuests = [Node("daily", "Prapor", "Any")];
+        feed.RepeatableKinds["daily"] = "Daily";
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(QuestTopologyNormalizer.GetStaticTopologyVersion(topology), Is.EqualTo("test"));
+            Assert.That(QuestTopologyNormalizer.MatchesStaticTopologyVersion(topology, "test"), Is.True);
+            Assert.That(QuestTopologyNormalizer.MatchesStaticTopologyVersion(topology, "different"), Is.False);
+            Assert.That(QuestTopologyNormalizer.MatchesStaticTopologyVersion(topology, null), Is.False);
+            Assert.That(QuestTopologyNormalizer.MatchesStaticTopologyVersion(topology, string.Empty), Is.False);
+        });
+    }
+
+    [Test]
+    public void MembershipOnlyProjection_PreservesVisibleNodesWithoutBuildingGraphGeometry()
+    {
+        var topology = QuestTopologyNormalizer.Normalize(Feed(
+            [Node("root", "Prapor", "Any"), Node("next", "Therapist", "Any")],
+            [Edge("root", "next", "Success")]));
+        var layout = DeterministicGraphLayout.Build(topology);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("root", "Started"), Quest("next", "Started")));
+        var options = new GlobalQuestGraphOptions(
+            GlobalQuestGraphMode.Full, true, false, false, null, null, null, null, QuestRouteFilter.None);
+
+        var graph = GlobalQuestGraphProjectionBuilder.Build(topology, layout, overlay, options);
+        var membership = GlobalQuestGraphProjectionBuilder.BuildMembershipOnly(topology, layout, overlay, options);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(membership.Nodes.Select(node => node.Id), Is.EqualTo(graph.Nodes.Select(node => node.Id)));
+            Assert.That(graph.Edges, Has.Count.EqualTo(1));
+            Assert.That(membership.Edges, Is.Empty);
+            Assert.That(membership.Width, Is.Zero);
+            Assert.That(membership.Height, Is.Zero);
+            Assert.That(membership.NodesById["root"], Is.SameAs(layout.NodesById["root"]));
+        });
+    }
+
+    [Test]
+    public void OverlayChangeDetector_CoversNativeAndAuthoritativeRefreshInputs()
+    {
+        const string questId = "quest";
+        var state = new QuestLiveState(
+            questId,
+            "Started",
+            true,
+            true,
+            [new QuestObjectiveProgress("objective", false, 0, 1, true)],
+            null,
+            false);
+        var baseline = new QuestProfileOverlay(
+            "profile",
+            "USEC",
+            10,
+            new Dictionary<string, QuestLiveState>(StringComparer.Ordinal) { [questId] = state },
+            new Dictionary<string, LiveTraderSnapshot>(StringComparer.Ordinal),
+            [])
+        {
+            AuthoritativeDisplayStates = new Dictionary<string, QuestMapDisplayStateKind>(StringComparer.Ordinal)
+            {
+                [questId] = QuestMapDisplayStateKind.InProgress,
+            },
+            AuthoritativeProgressPercentages = new Dictionary<string, double?>(StringComparer.Ordinal)
+            {
+                [questId] = 0,
+            },
+            RepeatableEndTimes = new Dictionary<string, long>(StringComparer.Ordinal),
+            PrerequisiteBlockerIds = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal)
+            {
+                [questId] = ["blocker"],
+            },
+            DefaultVisibleQuestIds = [questId],
+            ApplicableQuestIds = [questId],
+        };
+
+        var authoritativeStateChanged = baseline with
+        {
+            AuthoritativeDisplayStates = new Dictionary<string, QuestMapDisplayStateKind>(StringComparer.Ordinal)
+            {
+                [questId] = QuestMapDisplayStateKind.ReadyToFinish,
+            },
+        };
+        var progressChanged = baseline with
+        {
+            AuthoritativeProgressPercentages = new Dictionary<string, double?>(StringComparer.Ordinal)
+            {
+                [questId] = 50,
+            },
+        };
+        var blockersChanged = baseline with
+        {
+            PrerequisiteBlockerIds = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal)
+            {
+                [questId] = [],
+            },
+        };
+        var visibilityChanged = baseline with { DefaultVisibleQuestIds = [] };
+        var applicabilityChanged = baseline with { ApplicableQuestIds = [] };
+        var nativeProgressChanged = baseline with
+        {
+            QuestsById = new Dictionary<string, QuestLiveState>(StringComparer.Ordinal)
+            {
+                [questId] = state with
+                {
+                    Objectives = [new QuestObjectiveProgress("objective", true, 1, 1, true)],
+                },
+            },
+        };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(QuestOverlayChangeDetector.HasQuestChanged(baseline, baseline, questId), Is.False);
+            Assert.That(QuestOverlayChangeDetector.HasQuestChanged(baseline, authoritativeStateChanged, questId), Is.True);
+            Assert.That(QuestOverlayChangeDetector.HasQuestChanged(baseline, progressChanged, questId), Is.True);
+            Assert.That(QuestOverlayChangeDetector.HasQuestChanged(baseline, blockersChanged, questId), Is.True);
+            Assert.That(QuestOverlayChangeDetector.HasQuestChanged(baseline, visibilityChanged, questId), Is.True);
+            Assert.That(QuestOverlayChangeDetector.HasQuestChanged(baseline, applicabilityChanged, questId), Is.True);
+            Assert.That(QuestOverlayChangeDetector.FindChangedQuestIds(baseline, nativeProgressChanged), Is.EqualTo(new[] { questId }));
+        });
+    }
+
+    [Test]
     public void Normalize_AttachesClientDetailMetadataWithoutChangingNodeTransportShape()
     {
         var feed = Feed([Node("quest", "Prapor", "Any")], []);

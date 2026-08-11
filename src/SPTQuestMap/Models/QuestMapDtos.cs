@@ -104,6 +104,7 @@ public sealed record QuestMapClientTopologyFeedDto(
     IReadOnlyDictionary<string, string> QuestSummaries,
     IReadOnlyDictionary<string, QuestMetaInfoDto> QuestMetaInfo);
 public sealed record QuestMapClientRepeatableFeedDto(
+    string StaticTopologyVersion,
     QuestNodeDto[] ProfileGeneratedQuests,
     IReadOnlyDictionary<string, string> RepeatableKinds,
     string[] DefaultVisibleQuestIds,

@@ -9,6 +9,7 @@ using EFT.InventoryLogic;
 using SPTQuestMap.Client.Configuration;
 using SPTQuestMap.Client.UI;
 using SPTQuestMap.Core.Models;
+using SPTQuestMap.Core.Rules;
 using UnityEngine;
 
 namespace SPTQuestMap.Client.Data;
@@ -194,6 +195,7 @@ internal sealed class QuestRefreshCoordinator : IDisposable
         }
 
         var topologyReloaded = !inRaid && RequiresTopologyReload(reasons, signaledQuestIds, originalTopology);
+        var topologyUpdate = QuestTopologyUpdateKind.None;
         if (inRaid)
         {
             if (_configuration.EnableDebugLogging.Value)
@@ -205,7 +207,7 @@ internal sealed class QuestRefreshCoordinator : IDisposable
         }
         else if (topologyReloaded)
         {
-            Task topologyTask;
+            Task<QuestTopologyUpdateKind> topologyTask;
             try
             {
                 topologyTask = reasons.Contains("quest-details-replace") || reasons.Contains("repeatable-expired")
@@ -231,10 +233,11 @@ internal sealed class QuestRefreshCoordinator : IDisposable
                 CompleteRefresh();
                 yield break;
             }
+            topologyUpdate = topologyTask.Result;
         }
         else
         {
-            Task<bool> profileTask;
+            Task<QuestTopologyUpdateKind> profileTask;
             try
             {
                 profileTask = _adapter.RefreshServerProfileAsync();
@@ -258,8 +261,9 @@ internal sealed class QuestRefreshCoordinator : IDisposable
                 CompleteRefresh();
                 yield break;
             }
-            topologyReloaded = profileTask.Result;
+            topologyUpdate = profileTask.Result;
         }
+        topologyReloaded = topologyUpdate != QuestTopologyUpdateKind.None;
 
         QuestProfileOverlay newOverlay;
         try
@@ -276,12 +280,7 @@ internal sealed class QuestRefreshCoordinator : IDisposable
             yield break;
         }
 
-        var changedQuestIds = oldOverlay.QuestsById.Keys
-            .Concat(newOverlay.QuestsById.Keys)
-            .Distinct(StringComparer.Ordinal)
-            .Where(questId => QuestStateChanged(oldOverlay, newOverlay, questId))
-            .OrderBy(questId => questId, StringComparer.Ordinal)
-            .ToArray();
+        var changedQuestIds = QuestOverlayChangeDetector.FindChangedQuestIds(oldOverlay, newOverlay);
         var topology = _adapter.Topology!;
         _tracking.ApplyNewQuestTransitions(oldOverlay, newOverlay, changedQuestIds, topology.NodesById);
         var layout = _adapter.Layout!;
@@ -289,24 +288,39 @@ internal sealed class QuestRefreshCoordinator : IDisposable
             _raid.PublishProgressChanges(topology, oldOverlay, newOverlay, changedQuestIds, preferredObjectiveIds);
         if (inRaid) _raid.RefreshTrackedListIfVisible();
         var refreshAllNativeControls = !reasons.Contains("quest-details-action-settled");
-        var repeatableTopologyDelta = topologyReloaded
-            && (reasons.Contains("quest-details-replace") || reasons.Contains("repeatable-expired"));
+        var repeatableTopologyDelta = topologyUpdate == QuestTopologyUpdateKind.ProfileGeneratedDelta;
+        var pendingHandoverIds = _actionReconciler.PendingHandoverQuestIds.ToHashSet(StringComparer.Ordinal);
+        var forcedActionQuestIds = reasons.Any(reason => reason is
+                "quest-details-action-settled" or "quest-details-action-timeout")
+            ? signaledQuestIds
+            : [];
+        var uiChangedQuestIds = changedQuestIds
+            .Concat(forcedActionQuestIds)
+            .Where(questId => !pendingHandoverIds.Contains(questId))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(questId => questId, StringComparer.Ordinal)
+            .ToArray();
+        var batchChangedQuests = !topologyReloaded
+            && (uiChangedQuestIds.Length > 0 || pendingHandoverIds.Count > 0);
         string[] selectionConsequences;
         try
         {
-            selectionConsequences = _screens.RefreshAll(
-                topologyReloaded,
-                repeatableTopologyDelta,
-                topology,
-                layout,
-                newOverlay,
-                refreshAllNativeControls);
+            selectionConsequences = batchChangedQuests
+                ? _screens.RefreshQuests(newOverlay, uiChangedQuestIds)
+                : _screens.RefreshAll(
+                    topologyReloaded,
+                    repeatableTopologyDelta,
+                    topology,
+                    layout,
+                    newOverlay,
+                    refreshAllNativeControls);
         }
         catch (Exception exception)
         {
             _log.LogError(
                 "QUESTMAP_M07_UI_REFRESH_ERROR " +
-                $"reasons={string.Join(",", reasons)}; topologyDelta={repeatableTopologyDelta}; {exception}");
+                $"reasons={string.Join(",", reasons)}; topologyDelta={repeatableTopologyDelta}; " +
+                $"batchedQuests={batchChangedQuests}; {exception}");
             CompleteRefresh();
             yield break;
         }
@@ -318,6 +332,7 @@ internal sealed class QuestRefreshCoordinator : IDisposable
                 "QUESTMAP_M04_REFRESH " +
                 $"reasons={string.Join(",", reasons)}; signaledQuests={string.Join(",", signaledQuestIds)}; " +
                 $"changedQuests={changedQuestIds.Length}; topologyInvalidated={topologyReloaded}; " +
+                $"batchedQuests={batchChangedQuests}; protectedHandovers={pendingHandoverIds.Count}; serverProfileSkipped={inRaid}; " +
                 $"topologyReused={ReferenceEquals(originalTopology, _adapter.Topology)}; " +
                 $"layoutReused={ReferenceEquals(originalLayout, _adapter.Layout)}; " +
                 $"selection={string.Join(",", selectionConsequences)}; detail=native-owned");
@@ -360,7 +375,7 @@ internal sealed class QuestRefreshCoordinator : IDisposable
                     .ToDictionary(pair => pair.Key, pair => pair.Value!, StringComparer.Ordinal),
             };
             var changedQuestIds = requestedIds
-                .Where(questId => QuestStateChanged(targetedOldOverlay, newOverlay, questId))
+                .Where(questId => QuestOverlayChangeDetector.HasQuestChanged(targetedOldOverlay, newOverlay, questId))
                 .OrderBy(questId => questId, StringComparer.Ordinal)
                 .ToArray();
             _tracking.ApplyNewQuestTransitions(targetedOldOverlay, newOverlay, changedQuestIds, topology.NodesById);
@@ -437,28 +452,6 @@ internal sealed class QuestRefreshCoordinator : IDisposable
         if (reasons.Any(reason => reason == "quest-book-removed" || reason == "quest-book-removed-range")
             && signaledQuestIds.Any(questId =>
                 topology.NodesById.TryGetValue(questId, out var node) && node.ProfileGenerated)) return true;
-        return false;
-    }
-
-    private static bool QuestStateChanged(
-        QuestProfileOverlay oldOverlay,
-        QuestProfileOverlay newOverlay,
-        string questId)
-    {
-        var hasOld = oldOverlay.QuestsById.TryGetValue(questId, out var oldState);
-        var hasNew = newOverlay.QuestsById.TryGetValue(questId, out var newState);
-        if (!hasOld || !hasNew) return true;
-        if (oldState!.HasLiveQuest != newState!.HasLiveQuest
-            || oldState.ExactStatus != newState.ExactStatus
-            || oldState.Visible != newState.Visible
-            || oldState.ExpirationTime != newState.ExpirationTime
-            || oldState.HandoverReady != newState.HandoverReady
-            || oldState.Objectives.Count != newState.Objectives.Count) return true;
-
-        for (var index = 0; index < oldState.Objectives.Count; index++)
-        {
-            if (oldState.Objectives[index] != newState.Objectives[index]) return true;
-        }
         return false;
     }
 

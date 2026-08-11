@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using SPTQuestMap.Core.Models;
 using UnityEngine;
 
@@ -13,5 +14,6 @@ internal interface IGlobalTasksContentView : IDisposable
     GraphViewportState CaptureViewportState();
     void RefreshOverlay(QuestProfileOverlay overlay, string? selectedQuestId);
     void RefreshQuest(QuestProfileOverlay overlay, string questId);
+    void RefreshQuests(QuestProfileOverlay overlay, IReadOnlyCollection<string> questIds);
     void SetSelected(string? questId);
 }

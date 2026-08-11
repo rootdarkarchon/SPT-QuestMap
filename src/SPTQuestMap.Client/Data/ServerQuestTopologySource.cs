@@ -17,7 +17,7 @@ namespace SPTQuestMap.Client.Data;
 internal interface IQuestTopologySource
 {
     Task<QuestTopologySourceResult> LoadAsync();
-    Task<QuestTopologySourceResult> LoadRepeatableDeltaAsync(QuestGraphTopology current);
+    Task<QuestTopologySourceResult> LoadProfileDeltaAsync(QuestGraphTopology current);
 }
 
 internal sealed class ServerQuestTopologySource : IQuestTopologySource
@@ -53,13 +53,16 @@ internal sealed class ServerQuestTopologySource : IQuestTopologySource
         return new QuestTopologySourceResult(topology, profile, rawTemplateCount, stopwatch.Elapsed.TotalMilliseconds);
     }
 
-    public async Task<QuestTopologySourceResult> LoadRepeatableDeltaAsync(QuestGraphTopology current)
+    public async Task<QuestTopologySourceResult> LoadProfileDeltaAsync(QuestGraphTopology current)
     {
         var stopwatch = Stopwatch.StartNew();
         var bytes = await RequestHandler.GetDataAsync(LocalizedRoute(RepeatablesRoute)).ConfigureAwait(false);
         var json = Encoding.UTF8.GetString(bytes);
         var feed = JsonConvert.DeserializeObject<QuestRepeatableFeed>(json)
             ?? throw new InvalidOperationException($"QuestMap repeatable route '{RepeatablesRoute}' returned no data.");
+        var staticTopologyChanged = !QuestTopologyNormalizer.MatchesStaticTopologyVersion(
+            current,
+            feed.StaticTopologyVersion);
         var topology = QuestTopologyNormalizer.ApplyProfileGeneratedDelta(current, feed);
         var profile = BuildProfile(
             feed.DisplayStates,
@@ -73,7 +76,8 @@ internal sealed class ServerQuestTopologySource : IQuestTopologySource
             topology,
             profile,
             feed.ProfileGeneratedQuests?.Length ?? 0,
-            stopwatch.Elapsed.TotalMilliseconds);
+            stopwatch.Elapsed.TotalMilliseconds,
+            staticTopologyChanged);
     }
 
     private static QuestServerProfileProjection BuildProfile(
@@ -113,12 +117,18 @@ internal sealed class ServerQuestTopologySource : IQuestTopologySource
 
 internal sealed class QuestTopologySourceResult
 {
-    public QuestTopologySourceResult(QuestGraphTopology topology, QuestServerProfileProjection profile, int rawTemplateCount, double elapsedMilliseconds)
+    public QuestTopologySourceResult(
+        QuestGraphTopology topology,
+        QuestServerProfileProjection profile,
+        int rawTemplateCount,
+        double elapsedMilliseconds,
+        bool requiresFullTopologyReload = false)
     {
         Topology = topology;
         Profile = profile;
         RawTemplateCount = rawTemplateCount;
         ElapsedMilliseconds = elapsedMilliseconds;
+        RequiresFullTopologyReload = requiresFullTopologyReload;
     }
 
     public QuestGraphTopology Topology { get; }
@@ -128,4 +138,6 @@ internal sealed class QuestTopologySourceResult
     public int RawTemplateCount { get; }
 
     public double ElapsedMilliseconds { get; }
+
+    public bool RequiresFullTopologyReload { get; }
 }

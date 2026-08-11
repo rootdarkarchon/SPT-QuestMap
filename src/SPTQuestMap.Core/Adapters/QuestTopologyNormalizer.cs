@@ -6,6 +6,16 @@ namespace SPTQuestMap.Core.Adapters;
 
 public static class QuestTopologyNormalizer
 {
+    public static string GetStaticTopologyVersion(QuestGraphTopology topology)
+    {
+        if (topology is null) throw new ArgumentNullException(nameof(topology));
+        return topology.Version.Split(new[] { ":generated:" }, StringSplitOptions.None)[0];
+    }
+
+    public static bool MatchesStaticTopologyVersion(QuestGraphTopology topology, string? staticTopologyVersion) =>
+        !string.IsNullOrWhiteSpace(staticTopologyVersion)
+        && string.Equals(GetStaticTopologyVersion(topology), staticTopologyVersion, StringComparison.Ordinal);
+
     public static QuestGraphTopology ApplyProfileGeneratedDelta(
         QuestGraphTopology current,
         QuestRepeatableFeed feed)
@@ -26,7 +36,7 @@ public static class QuestTopologyNormalizer
             .ToArray();
         var nodes = staticNodes.Concat(generatedNodes).OrderBy(node => node.Id, StringComparer.Ordinal).ToArray();
         var nodeIds = nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
-        var staticVersion = current.Version.Split(new[] { ":generated:" }, StringSplitOptions.None)[0];
+        var staticVersion = GetStaticTopologyVersion(current);
         var diagnostics = current.Diagnostics with
         {
             UnknownConditionCount = staticNodes.Sum(node => node.UnknownConditions.Count)

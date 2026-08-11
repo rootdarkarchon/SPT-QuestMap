@@ -10,20 +10,26 @@ namespace SPTQuestMap.Client.UI;
 
 internal sealed class QuestAssetSpriteCache : MonoBehaviour
 {
+    private const int MaxConcurrentRequests = 8;
+    private const int MaxCompletionsPerFrame = 1;
     private readonly Dictionary<string, Sprite?> _sprites = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingSprite> _pending = new(StringComparer.Ordinal);
+    private readonly Queue<string> _requestQueue = new();
     private readonly List<Texture2D> _ownedTextures = new();
     private readonly List<Sprite> _ownedSprites = new();
     private ManualLogSource? _log;
     private int _cacheHits;
     private int _pendingHits;
     private int _networkRequests;
+    private int _activeRequests;
 
     public int CachedCount => _sprites.Count;
     public int PendingCount => _pending.Count;
     public int CacheHits => _cacheHits;
     public int PendingHits => _pendingHits;
     public int NetworkRequests => _networkRequests;
+    public int ActiveRequestCount => _activeRequests;
+    public int QueuedCount => _requestQueue.Count;
 
     public void Bind(ManualLogSource log)
     {
@@ -51,36 +57,59 @@ internal sealed class QuestAssetSpriteCache : MonoBehaviour
             return;
         }
 
-        try
-        {
-            _networkRequests++;
-            _pending[url] = new PendingSprite(RequestHandler.GetDataAsync(url), completed);
-        }
-        catch (Exception exception)
-        {
-            _sprites[url] = null;
-            _log?.LogWarning($"QUESTMAP_M06_ASSET url={url}; loaded=False; reason={exception.GetType().Name}");
-            completed(null);
-        }
+        _pending[url] = new PendingSprite(completed);
+        _requestQueue.Enqueue(url);
+        StartQueuedRequests();
     }
 
     private void Update()
     {
-        foreach (var pair in _pending.Where(pair => pair.Value.Request.IsCompleted).ToArray())
+        for (var completion = 0; completion < MaxCompletionsPerFrame; completion++)
         {
+            var pair = _pending.FirstOrDefault(candidate => candidate.Value.Request?.IsCompleted == true);
+            if (pair.Key is null || pair.Value.Request is null) break;
             _pending.Remove(pair.Key);
+            _activeRequests = Math.Max(0, _activeRequests - 1);
             var sprite = Complete(pair.Key, pair.Value.Request);
             _sprites[pair.Key] = sprite;
-            foreach (var callback in pair.Value.Callbacks)
+            CompleteCallbacks(pair.Key, pair.Value, sprite);
+        }
+        StartQueuedRequests();
+    }
+
+    private void StartQueuedRequests()
+    {
+        while (_activeRequests < MaxConcurrentRequests && _requestQueue.Count > 0)
+        {
+            var url = _requestQueue.Dequeue();
+            if (!_pending.TryGetValue(url, out var pending) || pending.Request is not null) continue;
+            try
             {
-                try
-                {
-                    callback(sprite);
-                }
-                catch (Exception exception)
-                {
-                    _log?.LogWarning($"QUESTMAP_M06_ASSET_CALLBACK url={pair.Key}; reason={exception.GetType().Name}");
-                }
+                _networkRequests++;
+                pending.Request = RequestHandler.GetDataAsync(url);
+                _activeRequests++;
+            }
+            catch (Exception exception)
+            {
+                _pending.Remove(url);
+                _sprites[url] = null;
+                _log?.LogWarning($"QUESTMAP_M06_ASSET url={url}; loaded=False; reason={exception.GetType().Name}");
+                CompleteCallbacks(url, pending, null);
+            }
+        }
+    }
+
+    private void CompleteCallbacks(string url, PendingSprite pending, Sprite? sprite)
+    {
+        foreach (var callback in pending.Callbacks)
+        {
+            try
+            {
+                callback(sprite);
+            }
+            catch (Exception exception)
+            {
+                _log?.LogWarning($"QUESTMAP_M06_ASSET_CALLBACK url={url}; reason={exception.GetType().Name}");
             }
         }
     }
@@ -118,6 +147,8 @@ internal sealed class QuestAssetSpriteCache : MonoBehaviour
     private void OnDestroy()
     {
         _pending.Clear();
+        _requestQueue.Clear();
+        _activeRequests = 0;
         foreach (var sprite in _ownedSprites) UnityEngine.Object.Destroy(sprite);
         foreach (var texture in _ownedTextures) UnityEngine.Object.Destroy(texture);
         _ownedSprites.Clear();
@@ -133,13 +164,12 @@ internal sealed class QuestAssetSpriteCache : MonoBehaviour
 
     private sealed class PendingSprite
     {
-        public PendingSprite(Task<byte[]> request, Action<Sprite?> callback)
+        public PendingSprite(Action<Sprite?> callback)
         {
-            Request = request;
             Callbacks = [callback];
         }
 
-        public Task<byte[]> Request { get; }
+        public Task<byte[]>? Request { get; set; }
         public List<Action<Sprite?>> Callbacks { get; }
     }
 }

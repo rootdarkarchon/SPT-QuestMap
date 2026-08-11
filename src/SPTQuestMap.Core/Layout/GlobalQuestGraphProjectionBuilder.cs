@@ -12,23 +12,8 @@ public static class GlobalQuestGraphProjectionBuilder
         QuestProfileOverlay overlay,
         GlobalQuestGraphOptions options)
     {
-        if (topology is null) throw new ArgumentNullException(nameof(topology));
-        if (layout is null) throw new ArgumentNullException(nameof(layout));
-        if (overlay is null) throw new ArgumentNullException(nameof(overlay));
-        if (options is null) throw new ArgumentNullException(nameof(options));
-        if (!string.Equals(topology.Version, layout.TopologyVersion, StringComparison.Ordinal))
-        {
-            throw new ArgumentException("The topology and layout versions do not match.", nameof(layout));
-        }
-
-        var visible = BuildVisibleIds(topology, overlay, options);
-        var nodes = topology.Nodes
-            .Where(node => visible.Contains(node.Id) && layout.NodesById.ContainsKey(node.Id))
-            .OrderBy(node => layout.NodesById[node.Id].Rank)
-            .ThenBy(node => node.TraderName, StringComparer.Ordinal)
-            .ThenBy(node => node.Name, StringComparer.Ordinal)
-            .ThenBy(node => node.Id, StringComparer.Ordinal)
-            .ToArray();
+        ValidateInputs(topology, layout, overlay, options);
+        var nodes = BuildOrderedVisibleNodes(topology, layout, overlay, options);
         var visibleIds = nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
         var positions = CompactPositions(nodes, layout, options.Mode);
         var edges = topology.Edges
@@ -44,6 +29,60 @@ public static class GlobalQuestGraphProjectionBuilder
             new ReadOnlyDictionary<string, QuestNodePosition>(positions),
             positions.Count == 0 ? 0 : positions.Values.Max(position => position.X + position.Width),
             positions.Count == 0 ? 0 : positions.Values.Max(position => position.Y + position.Height));
+    }
+
+    /// <summary>
+    /// Builds the same ordered visible membership as <see cref="Build"/> without
+    /// compacting graph positions or materializing the visible edge set. Table
+    /// views use only nodes and membership lookups, so graph geometry is wasted
+    /// work for both their initial construction and state-only refreshes.
+    /// </summary>
+    public static GlobalQuestGraphProjection BuildMembershipOnly(
+        QuestGraphTopology topology,
+        QuestGraphLayout layout,
+        QuestProfileOverlay overlay,
+        GlobalQuestGraphOptions options)
+    {
+        ValidateInputs(topology, layout, overlay, options);
+        var nodes = BuildOrderedVisibleNodes(topology, layout, overlay, options);
+        var positions = nodes.ToDictionary(node => node.Id, node => layout.NodesById[node.Id], StringComparer.Ordinal);
+        return new GlobalQuestGraphProjection(
+            options.Mode,
+            nodes,
+            [],
+            new ReadOnlyDictionary<string, QuestNodePosition>(positions),
+            0,
+            0);
+    }
+
+    private static QuestGraphNode[] BuildOrderedVisibleNodes(
+        QuestGraphTopology topology,
+        QuestGraphLayout layout,
+        QuestProfileOverlay overlay,
+        GlobalQuestGraphOptions options)
+    {
+        var visible = BuildVisibleIds(topology, overlay, options);
+        return topology.Nodes
+            .Where(node => visible.Contains(node.Id) && layout.NodesById.ContainsKey(node.Id))
+            .OrderBy(node => layout.NodesById[node.Id].Rank)
+            .ThenBy(node => node.TraderName, StringComparer.Ordinal)
+            .ThenBy(node => node.Name, StringComparer.Ordinal)
+            .ThenBy(node => node.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static void ValidateInputs(
+        QuestGraphTopology topology,
+        QuestGraphLayout layout,
+        QuestProfileOverlay overlay,
+        GlobalQuestGraphOptions options)
+    {
+        if (topology is null) throw new ArgumentNullException(nameof(topology));
+        if (layout is null) throw new ArgumentNullException(nameof(layout));
+        if (overlay is null) throw new ArgumentNullException(nameof(overlay));
+        if (options is null) throw new ArgumentNullException(nameof(options));
+        if (!string.Equals(topology.Version, layout.TopologyVersion, StringComparison.Ordinal))
+            throw new ArgumentException("The topology and layout versions do not match.", nameof(layout));
     }
 
     private static HashSet<string> BuildVisibleIds(

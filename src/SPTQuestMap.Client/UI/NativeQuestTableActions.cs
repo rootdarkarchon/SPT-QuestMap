@@ -292,8 +292,13 @@ internal sealed class NativeQuestHandoverResolver : MonoBehaviour
 
 internal sealed class NativeQuestHandoverAction : IDisposable
 {
+    private static readonly Dictionary<string, HashSet<NativeQuestHandoverAction>> RetainedByQuest =
+        new(StringComparer.Ordinal);
+    private static Transform? _retainedRoot;
+
     private QuestObjectiveView? _host;
     private readonly QuestClass _quest;
+    private bool _retained;
 
     public NativeQuestHandoverAction(QuestObjectiveView host, QuestClass quest)
     {
@@ -301,13 +306,85 @@ internal sealed class NativeQuestHandoverAction : IDisposable
         _quest = quest;
     }
 
-    public Task Execute() => _host?.method_2(_quest) ?? Task.CompletedTask;
+    public async Task Execute()
+    {
+        if (_host is null) return;
+        RetainForTransaction();
+        try
+        {
+            await _host.method_2(_quest);
+        }
+        catch
+        {
+            ReleaseAfterTransaction();
+            throw;
+        }
+    }
+
+    public static void ReleaseRetained(string questId)
+    {
+        if (!RetainedByQuest.Remove(questId, out var actions)) return;
+        foreach (var action in actions.ToArray()) action.ReleaseAfterTransaction();
+        DestroyRetainedRootIfUnused();
+    }
+
+    public static void ReleaseAllRetained()
+    {
+        foreach (var questId in RetainedByQuest.Keys.ToArray()) ReleaseRetained(questId);
+    }
 
     public void Dispose()
+    {
+        if (_retained) return;
+        DisposeHost();
+    }
+
+    private void RetainForTransaction()
+    {
+        if (_retained) return;
+        _retained = true;
+        _retainedRoot ??= CreateRetainedRoot(_host!);
+        _host!.transform.SetParent(_retainedRoot, false);
+        if (!RetainedByQuest.TryGetValue(_quest.Id, out var actions))
+        {
+            actions = [];
+            RetainedByQuest.Add(_quest.Id, actions);
+        }
+        actions.Add(this);
+    }
+
+    private void ReleaseAfterTransaction()
+    {
+        _retained = false;
+        if (RetainedByQuest.TryGetValue(_quest.Id, out var actions))
+        {
+            actions.Remove(this);
+            if (actions.Count == 0) RetainedByQuest.Remove(_quest.Id);
+        }
+        DisposeHost();
+        DestroyRetainedRootIfUnused();
+    }
+
+    private void DisposeHost()
     {
         if (_host is null) return;
         _host.Close();
         UnityEngine.Object.Destroy(_host.gameObject);
         _host = null;
+    }
+
+    private static Transform CreateRetainedRoot(QuestObjectiveView host)
+    {
+        var root = new GameObject("QuestMapRetainedNativeActions", typeof(RectTransform)).transform;
+        root.SetParent(host.transform.root, false);
+        root.gameObject.SetActive(false);
+        return root;
+    }
+
+    private static void DestroyRetainedRootIfUnused()
+    {
+        if (RetainedByQuest.Count != 0 || _retainedRoot == null) return;
+        UnityEngine.Object.Destroy(_retainedRoot.gameObject);
+        _retainedRoot = null;
     }
 }

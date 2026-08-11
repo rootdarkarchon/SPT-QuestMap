@@ -250,9 +250,15 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
     }
 
     public void RefreshQuest(QuestProfileOverlay overlay, string questId)
+        => RefreshQuests(overlay, new[] { questId });
+
+    public void RefreshQuests(QuestProfileOverlay overlay, IReadOnlyCollection<string> questIds)
     {
         _overlay = overlay;
-        if (_activeNodes.TryGetValue(questId, out var view)) ApplyNodeState(questId, view);
+        foreach (var questId in questIds)
+        {
+            if (_activeNodes.TryGetValue(questId, out var view)) ApplyNodeState(questId, view);
+        }
     }
 
     public bool ApplyTopologyDelta(

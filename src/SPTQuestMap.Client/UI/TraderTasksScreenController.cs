@@ -151,7 +151,44 @@ internal sealed class TraderTasksScreenController : IDisposable
         => RefreshOverlay(overlay, true, "trader-overlay-refreshed");
 
     public string RefreshQuest(QuestProfileOverlay overlay, string questId)
-        => RefreshOverlay(overlay, false, $"trader-quest-refreshed:{questId}");
+        => RefreshQuests(overlay, new[] { questId });
+
+    public string RefreshQuests(QuestProfileOverlay overlay, IReadOnlyCollection<string> questIds)
+    {
+        if (_disposed || !_mounted || _contentView is null) return "screen-inactive";
+        var changedQuestIds = questIds.Distinct(StringComparer.Ordinal).ToArray();
+        if (changedQuestIds.Length == 0) return "trader-quests-unchanged";
+        _overlay = overlay;
+        var nextMembership = BuildProjection(true);
+        var membershipChanged = _projection is null || !SameMembership(_projection, nextMembership);
+        if (_selectedQuestId is not null && !nextMembership.NodesById.ContainsKey(_selectedQuestId)) ClearSelection();
+
+        GlobalQuestGraphProjection? nextProjection = null;
+        if (membershipChanged)
+        {
+            if (_contentView is InProgressQuestTableView table)
+            {
+                nextProjection = nextMembership;
+                table.RefreshOverlay(overlay, _selectedQuestId, nextMembership, false);
+            }
+            else if (_contentView is QuestGraphView graph)
+            {
+                nextProjection = BuildProjection();
+                if (!graph.ApplyTopologyDelta(nextProjection, _topology!, overlay, _selectedQuestId)) RebuildView(true);
+            }
+        }
+        else
+        {
+            _contentView.RefreshQuests(overlay, changedQuestIds);
+        }
+
+        if (nextProjection is not null) _projection = nextProjection;
+        if (_selectedQuestId is not null && changedQuestIds.Contains(_selectedQuestId, StringComparer.Ordinal))
+            RefreshSelectedDetails();
+        return membershipChanged
+            ? "trader-projection-updated"
+            : $"trader-quests-refreshed:{changedQuestIds.Length}";
+    }
 
     public string RebuildTopology(QuestGraphTopology topology, QuestGraphLayout layout, QuestProfileOverlay overlay)
     {
@@ -191,18 +228,25 @@ internal sealed class TraderTasksScreenController : IDisposable
     {
         if (_disposed || !_mounted || _contentView is null) return "screen-inactive";
         _overlay = overlay;
-        var next = BuildProjection();
-        if (_selectedQuestId is not null && !next.NodesById.ContainsKey(_selectedQuestId)) ClearSelection();
+        var nextMembership = BuildProjection(true);
+        var membershipChanged = _projection is null || !SameMembership(_projection, nextMembership);
+        if (_selectedQuestId is not null && !nextMembership.NodesById.ContainsKey(_selectedQuestId)) ClearSelection();
 
         if (_contentView is InProgressQuestTableView table)
         {
-            table.RefreshOverlay(overlay, _selectedQuestId, next, refreshAllNativeControls);
+            _projection = nextMembership;
+            table.RefreshOverlay(overlay, _selectedQuestId, nextMembership, refreshAllNativeControls);
         }
         else if (_contentView is QuestGraphView graph)
         {
-            if (!graph.ApplyTopologyDelta(next, _topology!, overlay, _selectedQuestId)) RebuildView(true);
+            if (membershipChanged)
+            {
+                var nextProjection = BuildProjection();
+                if (!graph.ApplyTopologyDelta(nextProjection, _topology!, overlay, _selectedQuestId)) RebuildView(true);
+                _projection = nextProjection;
+            }
+            else graph.RefreshOverlay(overlay, _selectedQuestId);
         }
-        _projection = next;
         RefreshSelectedDetails();
         return result;
     }
@@ -248,18 +292,19 @@ internal sealed class TraderTasksScreenController : IDisposable
         }
     }
 
-    private GlobalQuestGraphProjection BuildProjection()
+    private GlobalQuestGraphProjection BuildProjection(bool membershipOnly = false)
     {
         if (_topology is null || _layout is null || _overlay is null)
             throw new InvalidOperationException("Trader workspace data is not ready.");
-        return GlobalQuestGraphProjectionBuilder.Build(
-            _topology, _layout, _overlay,
-            new GlobalQuestGraphOptions(
-                _mode, _showAllFuture, _hideFinished, _levelEligibleOnly, null, _trader.Id,
-                _search, _focusQuestId, QuestRouteFilter.None, _selectedQuestId, null, true,
-                TraderTasksContext: _mode == GlobalQuestGraphMode.InProgress,
-                TraderGraphContext: _mode == GlobalQuestGraphMode.Full,
-                HideUnavailableTraderTasks: _mode == GlobalQuestGraphMode.InProgress && _hideUnavailable));
+        var options = new GlobalQuestGraphOptions(
+            _mode, _showAllFuture, _hideFinished, _levelEligibleOnly, null, _trader.Id,
+            _search, _focusQuestId, QuestRouteFilter.None, _selectedQuestId, null, true,
+            TraderTasksContext: _mode == GlobalQuestGraphMode.InProgress,
+            TraderGraphContext: _mode == GlobalQuestGraphMode.Full,
+            HideUnavailableTraderTasks: _mode == GlobalQuestGraphMode.InProgress && _hideUnavailable);
+        return membershipOnly || _mode == GlobalQuestGraphMode.InProgress
+            ? GlobalQuestGraphProjectionBuilder.BuildMembershipOnly(_topology, _layout, _overlay, options)
+            : GlobalQuestGraphProjectionBuilder.Build(_topology, _layout, _overlay, options);
     }
 
     private void RebuildView(bool preserveViewport)
@@ -299,7 +344,7 @@ internal sealed class TraderTasksScreenController : IDisposable
         SaveSharedSelection();
         if (_mode == GlobalQuestGraphMode.Full)
         {
-            var next = BuildProjection();
+            var next = BuildProjection(true);
             if (_projection is null || !SameMembership(_projection, next)) RebuildView(true);
             else _contentView.SetSelected(questId);
         }

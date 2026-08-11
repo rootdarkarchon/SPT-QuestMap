@@ -33,7 +33,7 @@ internal sealed class QuestMapDataAdapter
 
     public QuestServerProfileProjection? ServerProfile { get; private set; }
 
-    public async Task LoadTopologyAsync()
+    public async Task<QuestTopologyUpdateKind> LoadTopologyAsync()
     {
         var loaded = await _topologySource.LoadAsync().ConfigureAwait(false);
         var layoutStopwatch = Stopwatch.StartNew();
@@ -53,15 +53,39 @@ internal sealed class QuestMapDataAdapter
             $"missingTargets={Topology.Diagnostics.MissingTargetIds.Count}; " +
             $"unsupportedConditions={Topology.Diagnostics.UnknownConditionCount}; " +
             $"topologyMs={loaded.ElapsedMilliseconds:F2}; layoutMs={layoutStopwatch.Elapsed.TotalMilliseconds:F2}");
+        return QuestTopologyUpdateKind.FullTopology;
     }
 
-    public async Task LoadRepeatableTopologyDeltaAsync()
+    public Task<QuestTopologyUpdateKind> LoadRepeatableTopologyDeltaAsync() =>
+        RefreshProfileDeltaAsync(true);
+
+    public Task<QuestTopologyUpdateKind> RefreshServerProfileAsync() =>
+        RefreshProfileDeltaAsync(false);
+
+    private async Task<QuestTopologyUpdateKind> RefreshProfileDeltaAsync(bool logGeneratedDelta)
     {
         var currentTopology = Topology
             ?? throw new InvalidOperationException("QuestMap topology must be loaded before applying a repeatable delta.");
         var currentLayout = Layout
             ?? throw new InvalidOperationException("QuestMap layout must be loaded before applying a repeatable delta.");
-        var loaded = await _topologySource.LoadRepeatableDeltaAsync(currentTopology).ConfigureAwait(false);
+        var loaded = await _topologySource.LoadProfileDeltaAsync(currentTopology).ConfigureAwait(false);
+        if (loaded.RequiresFullTopologyReload)
+        {
+            QuestMapDebugLog.Info(_log,
+                "QUESTMAP_M04_PROFILE_DELTA_FALLBACK reason=static-topology-version-mismatch; fullTopologyRequested=True");
+            return await RefreshFullTopologyAsync(currentTopology).ConfigureAwait(false);
+        }
+
+        ServerProfile = loaded.Profile;
+        if (string.Equals(currentTopology.Version, loaded.Topology.Version, StringComparison.Ordinal))
+        {
+            QuestMapDebugLog.Info(_log,
+                "QUESTMAP_M04_PROFILE_DELTA " +
+                $"generated={loaded.RawTemplateCount}; fetchMs={loaded.ElapsedMilliseconds:F2}; " +
+                "topologyChanged=False; staticNodesReused=True; fullTopologyNormalized=False");
+            return QuestTopologyUpdateKind.None;
+        }
+
         var layoutStopwatch = Stopwatch.StartNew();
         var positions = currentLayout.NodesById
             .Where(pair => loaded.Topology.NodesById.TryGetValue(pair.Key, out var node) && !node.ProfileGenerated)
@@ -90,25 +114,35 @@ internal sealed class QuestMapDataAdapter
 
         Topology = loaded.Topology;
         Layout = layout;
-        ServerProfile = loaded.Profile;
-        QuestMapDebugLog.Info(_log,
-            "QUESTMAP_M07_REPEATABLE_TOPOLOGY_DELTA " +
-            $"generated={loaded.RawTemplateCount}; nodes={Topology.Nodes.Count}; edges={Topology.Edges.Count}; " +
-            $"fetchMs={loaded.ElapsedMilliseconds:F2}; layoutPatchMs={layoutStopwatch.Elapsed.TotalMilliseconds:F2}; " +
-            "staticNodesReused=True; edgesReused=True; fullTopologyNormalized=False; fullLayoutRebuilt=False");
+        if (logGeneratedDelta)
+        {
+            QuestMapDebugLog.Info(_log,
+                "QUESTMAP_M07_REPEATABLE_TOPOLOGY_DELTA " +
+                $"generated={loaded.RawTemplateCount}; nodes={Topology.Nodes.Count}; edges={Topology.Edges.Count}; " +
+                $"fetchMs={loaded.ElapsedMilliseconds:F2}; layoutPatchMs={layoutStopwatch.Elapsed.TotalMilliseconds:F2}; " +
+                "staticNodesReused=True; edgesReused=True; fullTopologyNormalized=False; fullLayoutRebuilt=False");
+        }
+        else
+        {
+            QuestMapDebugLog.Info(_log,
+                "QUESTMAP_M04_PROFILE_DELTA " +
+                $"generated={loaded.RawTemplateCount}; fetchMs={loaded.ElapsedMilliseconds:F2}; " +
+                "topologyChanged=True; generatedDelta=True; staticNodesReused=True; fullTopologyNormalized=False");
+        }
+        return QuestTopologyUpdateKind.ProfileGeneratedDelta;
     }
 
-    public async Task<bool> RefreshServerProfileAsync()
+    private async Task<QuestTopologyUpdateKind> RefreshFullTopologyAsync(QuestGraphTopology currentTopology)
     {
         var loaded = await _topologySource.LoadAsync().ConfigureAwait(false);
-        var topologyChanged = Topology is null || !string.Equals(Topology.Version, loaded.Topology.Version, StringComparison.Ordinal);
+        var topologyChanged = !string.Equals(currentTopology.Version, loaded.Topology.Version, StringComparison.Ordinal);
         if (topologyChanged)
         {
             Topology = loaded.Topology;
             Layout = DeterministicGraphLayout.Build(loaded.Topology);
         }
         ServerProfile = loaded.Profile;
-        return topologyChanged;
+        return topologyChanged ? QuestTopologyUpdateKind.FullTopology : QuestTopologyUpdateKind.None;
     }
 
     public QuestProfileOverlay RefreshOverlay(IEnumerable<QuestClass> liveQuests, Profile profile, bool logDiagnostics = true)
@@ -203,4 +237,11 @@ internal sealed class QuestMapDataAdapter
         previousStates = new ReadOnlyDictionary<string, QuestLiveState?>(prior);
         return overlay;
     }
+}
+
+internal enum QuestTopologyUpdateKind
+{
+    None,
+    ProfileGeneratedDelta,
+    FullTopology,
 }

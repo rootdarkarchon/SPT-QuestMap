@@ -108,6 +108,7 @@ public sealed class QuestMapClientStaticRouter(
                 (url, _, sessionId, _) =>
                 {
                     var requestedLanguage = GetRequestedLanguage(url, RepeatablesRoute);
+                    var topology = dataService.GetTopology(requestedLanguage);
                     var profileState = dataService.GetProfileState(sessionId.ToString(), requestedLanguage);
                     var generated = profileState?.RepeatableQuestGroups
                         .SelectMany(group => group.Quests)
@@ -166,6 +167,7 @@ public sealed class QuestMapClientStaticRouter(
                             StringComparer.Ordinal);
                     return new ValueTask<string>(httpResponseUtil.NoBody(
                         new QuestMapClientRepeatableFeedDto(
+                            topology.Version,
                             generated,
                             repeatableKinds,
                             defaultVisibleQuestIds,

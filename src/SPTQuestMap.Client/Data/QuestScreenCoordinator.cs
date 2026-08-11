@@ -192,7 +192,7 @@ internal sealed class QuestScreenCoordinator : IDisposable
                     ? graph.ApplyRepeatableTopologyDelta(topology, layout, overlay)
                     : graph.RebuildTopology(topology, layout, overlay)
                 : graph.RefreshOverlay(overlay))
-            .Concat(_globalControllers.Values.Select(graph => topologyReloaded
+            .Concat(_globalControllers.Values.Where(graph => graph.IsVisible).Select(graph => topologyReloaded
                 ? repeatableTopologyDelta
                     ? graph.ApplyRepeatableTopologyDelta(topology, layout, overlay)
                     : graph.RebuildTopology(topology, layout, overlay)
@@ -202,10 +202,11 @@ internal sealed class QuestScreenCoordinator : IDisposable
             .ToArray();
 
     public string[] RefreshQuests(QuestProfileOverlay overlay, IReadOnlyCollection<string> questIds) =>
-        questIds
-            .SelectMany(questId => _traderControllers.Values
-                .Select(graph => graph.RefreshQuest(overlay, questId))
-                .Concat(_globalControllers.Values.Select(graph => graph.RefreshQuest(overlay, questId))))
+        _traderControllers.Values
+            .Select(graph => graph.RefreshQuests(overlay, questIds))
+            .Concat(_globalControllers.Values
+                .Where(graph => graph.IsVisible)
+                .Select(graph => graph.RefreshQuests(overlay, questIds)))
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();

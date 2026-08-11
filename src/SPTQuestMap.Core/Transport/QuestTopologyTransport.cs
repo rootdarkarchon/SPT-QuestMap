@@ -27,6 +27,7 @@ public sealed class QuestTopologyFeed
 
 public sealed class QuestRepeatableFeed
 {
+    public string StaticTopologyVersion { get; set; } = string.Empty;
     public QuestNodePayload[] ProfileGeneratedQuests { get; set; } = [];
     public Dictionary<string, string> RepeatableKinds { get; set; } = new(StringComparer.Ordinal);
     public string[] DefaultVisibleQuestIds { get; set; } = [];

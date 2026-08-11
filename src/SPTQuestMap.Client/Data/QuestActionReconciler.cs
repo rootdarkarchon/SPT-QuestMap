@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Logging;
 using SPTQuestMap.Client.UI;
+using SPTQuestMap.Core.Models;
 using UnityEngine;
 
 namespace SPTQuestMap.Client.Data;
@@ -15,7 +16,7 @@ internal sealed class QuestActionReconciler : IDisposable
     private readonly QuestMapDataAdapter _adapter;
     private readonly Func<AbstractQuestControllerClass?> _currentController;
     private readonly Action<string, string?> _requestRefresh;
-    private readonly Dictionary<string, Coroutine> _pending = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PendingAction> _pending = new(StringComparer.Ordinal);
     private bool _disposed;
 
     public QuestActionReconciler(
@@ -34,42 +35,62 @@ internal sealed class QuestActionReconciler : IDisposable
 
     public bool HasPending => _pending.Count > 0;
 
+    public IReadOnlyCollection<string> PendingHandoverQuestIds => _pending
+        .Where(pair => pair.Value.Action == QuestDetailsActionKind.Handover)
+        .Select(pair => pair.Key)
+        .ToArray();
+
     public void Schedule(string questId, QuestDetailsActionKind action)
     {
         if (_disposed || string.IsNullOrWhiteSpace(questId)) return;
-        if (_pending.Remove(questId, out var pending)) _coroutineOwner.StopCoroutine(pending);
-        _pending[questId] = _coroutineOwner.StartCoroutine(ReconcileAfterNativeTransaction(questId, action));
+        if (_pending.Remove(questId, out var pending)) _coroutineOwner.StopCoroutine(pending.Coroutine);
+        QuestLiveState? baseline = null;
+        _adapter.Overlay?.QuestsById.TryGetValue(questId, out baseline);
+        var coroutine = _coroutineOwner.StartCoroutine(ReconcileAfterNativeTransaction(questId, action, baseline));
+        _pending[questId] = new PendingAction(coroutine, action);
     }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        foreach (var coroutine in _pending.Values) _coroutineOwner.StopCoroutine(coroutine);
+        foreach (var pending in _pending.Values) _coroutineOwner.StopCoroutine(pending.Coroutine);
         _pending.Clear();
+        NativeQuestHandoverAction.ReleaseAllRetained();
     }
 
-    private IEnumerator ReconcileAfterNativeTransaction(string questId, QuestDetailsActionKind action)
+    private IEnumerator ReconcileAfterNativeTransaction(
+        string questId,
+        QuestDetailsActionKind action,
+        QuestLiveState? baseline)
     {
+        // StartCoroutine executes synchronously until its first yield. Let
+        // Schedule register this coroutine before it can remove itself.
+        yield return null;
+        if (_disposed) yield break;
+
         // Native replacement/handover methods can complete when their popup is
         // shown rather than when the confirmed transaction has propagated into
         // the quest book. Wait for an observable controller-state transition.
         var interactive = action is QuestDetailsActionKind.Replace or QuestDetailsActionKind.Handover;
         var startedAt = Time.realtimeSinceStartup;
         var deadline = startedAt + (interactive ? 120f : 10f);
-        var settled = QuestMutationObserved(questId, action);
+        var settled = QuestMutationObserved(questId, action, baseline);
         while (!_disposed && !settled && Time.realtimeSinceStartup < deadline)
         {
             yield return new WaitForSecondsRealtime(0.1f);
-            settled = QuestMutationObserved(questId, action);
+            settled = QuestMutationObserved(questId, action, baseline);
         }
         _pending.Remove(questId);
         if (_disposed) yield break;
+        if (action == QuestDetailsActionKind.Handover)
+            NativeQuestHandoverAction.ReleaseRetained(questId);
         if (!settled)
         {
             _log.LogWarning(
                 $"QUESTMAP_M07_ACTION_RECONCILE quest={questId}; action={action}; settled=False; " +
-                $"waitMs={(Time.realtimeSinceStartup - startedAt) * 1000f:F0}; refreshSkipped=True");
+                $"waitMs={(Time.realtimeSinceStartup - startedAt) * 1000f:F0}; forcedRefresh=True");
+            _requestRefresh("quest-details-action-timeout", questId);
             yield break;
         }
 
@@ -87,19 +108,21 @@ internal sealed class QuestActionReconciler : IDisposable
             questId);
     }
 
-    private bool QuestMutationObserved(string questId, QuestDetailsActionKind action)
+    private bool QuestMutationObserved(
+        string questId,
+        QuestDetailsActionKind action,
+        QuestLiveState? prior)
     {
         var controller = _currentController();
-        var overlay = _adapter.Overlay;
-        if (controller is null || overlay is null) return false;
+        if (controller is null) return false;
 
-        overlay.QuestsById.TryGetValue(questId, out var prior);
         var currentQuests = controller.Quests.ToArray();
         var liveQuest = currentQuests.LastOrDefault(quest =>
             string.Equals(quest.Id, questId, StringComparison.Ordinal));
         if (action == QuestDetailsActionKind.Replace)
         {
-            var priorLiveIds = overlay.QuestsById
+            var priorLiveIds = (_adapter.Overlay?.QuestsById ??
+                    new Dictionary<string, QuestLiveState>(StringComparer.Ordinal))
                 .Where(pair => pair.Value.HasLiveQuest)
                 .Select(pair => pair.Key)
                 .ToHashSet(StringComparer.Ordinal);
@@ -116,5 +139,17 @@ internal sealed class QuestActionReconciler : IDisposable
                || prior.ExpirationTime != current.ExpirationTime
                || prior.HandoverReady != current.HandoverReady
                || !prior.Objectives.SequenceEqual(current.Objectives);
+    }
+
+    private sealed class PendingAction
+    {
+        public PendingAction(Coroutine coroutine, QuestDetailsActionKind action)
+        {
+            Coroutine = coroutine;
+            Action = action;
+        }
+
+        public Coroutine Coroutine { get; }
+        public QuestDetailsActionKind Action { get; }
     }
 }
