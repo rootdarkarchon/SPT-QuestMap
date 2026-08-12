@@ -149,7 +149,7 @@ internal sealed class QuestTopologyBuilder(
                 ActualMaps = actualMaps.Maps,
                 ActualMapsComplete = actualMaps.Complete,
                 UnknownConditions = unknownConditions,
-                Summary = summaryCatalog.Get(questId, quest.TraderId.ToString(), language),
+                Summary = summaryCatalog.Get(questId, language),
                 WikiUrl = metaInfo?.WikiUrl,
                 RelevantItems = metaInfo?.RelevantItems ?? [],
             });

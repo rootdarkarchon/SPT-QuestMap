@@ -20,7 +20,7 @@ Do not commit machine-specific paths or credentials.
 3. Produce a clean deployment directory.
 4. Compare the new DLL hash with the deployed DLL.
 5. Copy deployment files into the installed SPT mod directory.
-   Preserve the user-managed `Summaries/` subtree when removing stale deployment artifacts.
+   Preserve the user-managed `summaries/` subtree when removing stale deployment artifacts.
 6. If and only if the DLL changed:
    - invoke the user-provided restart command, or
    - clearly report that restart is required if no command is configured.

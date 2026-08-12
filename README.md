@@ -80,22 +80,22 @@ Your browser may warn about SPT's local TLS certificate until you trust that cer
 - Daily, Weekly, and Scav Daily operational quests appear above the graph in trader order. Scav repeatables are explicitly marked on their band, quest cards, task rows, and details banner. Available, accepted, ready-to-finish, completed, and expired entries use the same state styling and details panel as ordinary quests; trader, search, and finished filters also apply. A default-on calendar filter toggles the complete band.
 - Press the circular refresh button after changing profile progress in-game. QuestMap never refreshes automatically.
 
-### Custom summaries for modded traders
+### Custom quest summaries
 
-QuestMap includes English summaries for the standard quest catalog. Server mods can add summaries for their traders beneath:
-
-```text
-SPT/user/mods/SPT-QuestMap/Summaries/
-```
-
-Each JSON file is an object whose keys are quest IDs and whose values are summary strings. Name a trader's default catalog `<traderId>.json`; if that file is absent, `<traderId>.en.json` is the English/default fallback. A localized `<traderId>.<language>.json` overrides the default per quest for that SPT language code. For example, German uses the SPT code `ge`:
+QuestMap includes English summaries for the standard quest catalog. Add summaries for modded or overridden quests beneath the server mod directory:
 
 ```text
-54cb50c76803fa8b248b4571.json
-54cb50c76803fa8b248b4571.ge.json
+SPT/user/mods/SPT-QuestMap/summaries/
 ```
 
-Missing summaries simply leave that quest's ordinary description visible without tabs. Restart the SPT server after adding or changing summary files. QuestMap's deployment script preserves files in this directory.
+Each JSON file uses the same simple object format as the bundled `en.json`: keys are quest IDs and values are summary strings. Files may contain quests from any trader. Name a catalog `<name>.json` for English or `<name>.<language>.json` for another SPT language code. For example, German uses `ge`:
+
+```text
+my-quest-pack.json
+my-quest-pack.ge.json
+```
+
+Files load in filename order, with later files overwriting earlier values for the same quest and language. Custom summaries take precedence over the bundled catalog. QuestMap prefers the requested custom language, then custom English; when a quest has only another custom language, that available summary is used for every language so the Summary tab is not empty. Missing summaries simply leave that quest's ordinary description visible without tabs. Restart the SPT server after adding or changing summary files. QuestMap's deployment script preserves files in this directory.
 
 ## Local-server warning
 

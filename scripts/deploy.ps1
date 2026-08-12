@@ -97,7 +97,7 @@ function Sync-Stage([string]$Stage, [string]$Destination, [switch]$PreserveSumma
     foreach ($deployedFile in Get-ChildItem -LiteralPath $Destination -Recurse -File) {
         $relativePath = [System.IO.Path]::GetRelativePath($Destination, $deployedFile.FullName)
         $isPreservedSummary = $PreserveSummaries -and
-            $relativePath.StartsWith("Summaries$([System.IO.Path]::DirectorySeparatorChar)", [StringComparison]::OrdinalIgnoreCase)
+            $relativePath.StartsWith("summaries$([System.IO.Path]::DirectorySeparatorChar)", [StringComparison]::OrdinalIgnoreCase)
         if (-not $sourceFiles.Contains($relativePath) -and -not $isPreservedSummary) {
             Remove-Item -LiteralPath $deployedFile.FullName -Force
             Write-Host "Removed stale deployment file: $relativePath"
