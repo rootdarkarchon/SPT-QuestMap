@@ -18,3 +18,5 @@ Typical commands:
 ```
 
 Use `-SkipBuild` only to deploy an already staged target and `-SkipTests` only for an explicit fast iteration. `-DeploymentSource` may identify either the common staging root containing `client/` and `server/`, or a direct single-target stage when `-Target` is not `Both`.
+
+During Milestone 8, every completed implementation slice must run the combined `Both` build/deployment validation as applicable and publish a fresh `package-release.ps1 -Target Both` archive. Inspect its entries and record its byte size and SHA-256 in `docs/development-status.md`; do not treat an archive generated before the latest packaged runtime/data change as current release evidence.

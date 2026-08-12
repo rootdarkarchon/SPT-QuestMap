@@ -14,7 +14,7 @@ internal static class QuestProfileRules
         int prestigeLevel,
         Dictionary<MongoId, TraderInfo> traders,
         Dictionary<string, QuestStatus> profileQuests,
-        IReadOnlyCollection<QuestEdgeDto> edges,
+        IReadOnlyCollection<QuestEdgeDto> incomingEdges,
         TraderAvailabilityEvaluator traderAvailability
     )
     {
@@ -59,7 +59,7 @@ internal static class QuestProfileRules
         }
 
         // Keep output in presentation priority: availability, level, trader requirements, prerequisites.
-        foreach (var edge in edges.Where(edge => edge.TargetId == quest.Id))
+        foreach (var edge in incomingEdges)
         {
             if (!profileQuests.TryGetValue(edge.SourceId, out var prerequisite)
                 || !edge.RequiredStatuses.Contains(prerequisite.Status.ToString(), StringComparer.Ordinal))

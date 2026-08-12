@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Models.Eft.Common;
+using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Utils;
 using SPTQuestMap.Services;
 
@@ -14,8 +16,8 @@ namespace SPTQuestMap.Routers;
 [Injectable]
 public sealed class QuestMapClientStaticRouter(
     JsonUtil jsonUtil,
-    HttpResponseUtil httpResponseUtil,
-    QuestMapDataService dataService)
+    QuestMapDataService dataService,
+    ISptLogger<QuestMapDataService> logger)
     : DynamicRouter(
         jsonUtil,
         [
@@ -23,9 +25,15 @@ public sealed class QuestMapClientStaticRouter(
                 "/questmap/client/topology",
                 (url, _, sessionId, _) =>
                 {
+                    var totalStopwatch = Stopwatch.StartNew();
+                    var stageStopwatch = Stopwatch.StartNew();
                     var requestedLanguage = GetRequestedLanguage(url, Route);
                     var topology = dataService.GetTopology(requestedLanguage);
+                    var topologyMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    stageStopwatch.Restart();
                     var profileState = dataService.GetProfileState(sessionId.ToString(), requestedLanguage);
+                    var profileMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    stageStopwatch.Restart();
                     var generated = profileState?.RepeatableQuestGroups
                         .SelectMany(group => group.Quests)
                         .Select(entry => entry.Node)
@@ -89,27 +97,47 @@ public sealed class QuestMapClientStaticRouter(
                                 return new QuestMetaInfoDto(node.WikiUrl!, node.RelevantItems);
                             },
                             StringComparer.Ordinal);
-                    return new ValueTask<string>(httpResponseUtil.NoBody(
-                        new QuestMapClientTopologyFeedDto(
-                            topology,
-                            generated,
-                            repeatableKinds,
-                            defaultVisibleQuestIds,
-                            allApplicableQuestIds,
-                            displayStates,
-                            progressPercentages,
-                            repeatableEndTimes,
-                            prerequisiteBlockerIds,
-                            questSummaries,
-                            questMetaInfo)));
+                    var feed = new QuestMapClientTopologyFeedDto(
+                        topology,
+                        generated,
+                        repeatableKinds,
+                        defaultVisibleQuestIds,
+                        allApplicableQuestIds,
+                        displayStates,
+                        progressPercentages,
+                        repeatableEndTimes,
+                        prerequisiteBlockerIds,
+                        questSummaries,
+                        questMetaInfo);
+                    var projectionMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    stageStopwatch.Restart();
+                    // JsonUtil already escapes JSON control characters. HttpResponseUtil.NoBody would
+                    // rescan this large, valid payload with five Regex.Replace passes for no change.
+                    var response = jsonUtil.Serialize(feed)
+                        ?? throw new InvalidOperationException("QuestMap topology feed serialization returned null.");
+                    var serializationMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    totalStopwatch.Stop();
+                    logger.Info(
+                        "QUESTMAP_M08_SERVER_TOPOLOGY_ROUTE " +
+                        $"quests={topology.Quests.Count}; generated={generated.Length}; chars={response.Length}; " +
+                        $"topologyMs={topologyMilliseconds:F2}; profileMs={profileMilliseconds:F2}; " +
+                        $"projectionMs={projectionMilliseconds:F2}; serializeMs={serializationMilliseconds:F2}; " +
+                        $"totalMs={totalStopwatch.Elapsed.TotalMilliseconds:F2}");
+                    return new ValueTask<string>(response);
                 }),
             new RouteAction<EmptyRequestData>(
                 "/questmap/client/repeatables",
                 (url, _, sessionId, _) =>
                 {
+                    var totalStopwatch = Stopwatch.StartNew();
+                    var stageStopwatch = Stopwatch.StartNew();
                     var requestedLanguage = GetRequestedLanguage(url, RepeatablesRoute);
                     var topology = dataService.GetTopology(requestedLanguage);
+                    var topologyMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    stageStopwatch.Restart();
                     var profileState = dataService.GetProfileState(sessionId.ToString(), requestedLanguage);
+                    var profileMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    stageStopwatch.Restart();
                     var generated = profileState?.RepeatableQuestGroups
                         .SelectMany(group => group.Quests)
                         .Select(entry => entry.Node)
@@ -165,19 +193,30 @@ public sealed class QuestMapClientStaticRouter(
                                 return new QuestMetaInfoDto(node.WikiUrl!, node.RelevantItems);
                             },
                             StringComparer.Ordinal);
-                    return new ValueTask<string>(httpResponseUtil.NoBody(
-                        new QuestMapClientRepeatableFeedDto(
-                            topology.Version,
-                            generated,
-                            repeatableKinds,
-                            defaultVisibleQuestIds,
-                            allApplicableQuestIds,
-                            displayStates,
-                            progressPercentages,
-                            repeatableEndTimes,
-                            prerequisiteBlockerIds,
-                            summaries,
-                            questMetaInfo)));
+                    var feed = new QuestMapClientRepeatableFeedDto(
+                        topology.Version,
+                        generated,
+                        repeatableKinds,
+                        defaultVisibleQuestIds,
+                        allApplicableQuestIds,
+                        displayStates,
+                        progressPercentages,
+                        repeatableEndTimes,
+                        prerequisiteBlockerIds,
+                        summaries,
+                        questMetaInfo);
+                    var projectionMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    stageStopwatch.Restart();
+                    var response = jsonUtil.Serialize(feed)
+                        ?? throw new InvalidOperationException("QuestMap repeatable feed serialization returned null.");
+                    var serializationMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    totalStopwatch.Stop();
+                    logger.Info(
+                        "QUESTMAP_M08_SERVER_REPEATABLE_ROUTE " +
+                        $"generated={generated.Length}; chars={response.Length}; topologyMs={topologyMilliseconds:F2}; " +
+                        $"profileMs={profileMilliseconds:F2}; projectionMs={projectionMilliseconds:F2}; " +
+                        $"serializeMs={serializationMilliseconds:F2}; totalMs={totalStopwatch.Elapsed.TotalMilliseconds:F2}");
+                    return new ValueTask<string>(response);
                 })
         ])
 {

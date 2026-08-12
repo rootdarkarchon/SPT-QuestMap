@@ -47,12 +47,14 @@ internal sealed class QuestMapDataAdapter
         _liveQuestStates = null;
         QuestMapDebugLog.Info(_log,
             "QUESTMAP_M02_TOPOLOGY " +
-            $"rawTemplates={loaded.RawTemplateCount}; nodes={Topology.Nodes.Count}; edges={Topology.Edges.Count}; " +
+            $"rawTemplates={loaded.RawTemplateCount}; responseBytes={loaded.ResponseBytes}; nodes={Topology.Nodes.Count}; edges={Topology.Edges.Count}; " +
             $"serverStates={loaded.Profile.DisplayStates.Count}; repeatableTimers={loaded.Profile.RepeatableEndTimes.Count}; " +
             $"missingPredecessors={Topology.Diagnostics.MissingPredecessorIds.Count}; " +
             $"missingTargets={Topology.Diagnostics.MissingTargetIds.Count}; " +
             $"unsupportedConditions={Topology.Diagnostics.UnknownConditionCount}; " +
-            $"topologyMs={loaded.ElapsedMilliseconds:F2}; layoutMs={layoutStopwatch.Elapsed.TotalMilliseconds:F2}");
+            $"topologyMs={loaded.ElapsedMilliseconds:F2}; requestMs={loaded.RequestMilliseconds:F2}; " +
+            $"deserializeMs={loaded.DeserializeMilliseconds:F2}; normalizeMs={loaded.NormalizeMilliseconds:F2}; " +
+            $"projectionMs={loaded.ProjectionMilliseconds:F2}; layoutMs={layoutStopwatch.Elapsed.TotalMilliseconds:F2}");
         return QuestTopologyUpdateKind.FullTopology;
     }
 

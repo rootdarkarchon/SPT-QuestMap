@@ -39,6 +39,12 @@ internal sealed class QuestMetaInfoCatalog
         Resolve(itemId => ResolveItem(items, itemId));
     }
 
+    internal void Resolve(IReadOnlyDictionary<MongoId, TemplateItem> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        Resolve(itemId => ResolveItem(items, itemId));
+    }
+
     internal QuestMetaInfoDto? Get(
         string questId,
         IReadOnlyDictionary<string, string> locale)

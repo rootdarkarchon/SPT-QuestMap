@@ -608,10 +608,12 @@ internal sealed class QuestDetailsPane : IDisposable
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         var conditions = LiveConditions(liveQuest);
         var y = 0f;
-        var orderedObjectives = node.Objectives
-            .OrderBy(value => value.Index ?? int.MaxValue)
-            .ThenBy(value => value.Id, StringComparer.Ordinal)
-            .ToArray();
+        var orderedObjectives = node.Objectives.Any(objective => !objective.ContributesToProgress)
+            ? node.Objectives.ToArray()
+            : node.Objectives
+                .OrderBy(value => value.Index ?? int.MaxValue)
+                .ThenBy(value => value.Id, StringComparer.Ordinal)
+                .ToArray();
         var contentHeight = orderedObjectives.Length == 0
             ? 42f
             : orderedObjectives.Select((objective, index) =>
@@ -690,6 +692,7 @@ internal sealed class QuestDetailsPane : IDisposable
                 && _workspace.MutationsAllowed()
                 && liveQuest?.QuestStatus == EQuestStatus.Started
                 && objectiveProgress?.Complete != true
+                && objective.ContributesToProgress
                 && condition is not null;
             if (canSkip && liveQuest is not null)
             {
@@ -729,7 +732,8 @@ internal sealed class QuestDetailsPane : IDisposable
             var descriptionRect = UnityUiFactory.CreateRect("Text", row);
             descriptionRect.anchorMin = Vector2.zero;
             descriptionRect.anchorMax = Vector2.one;
-            descriptionRect.offsetMin = new Vector2(actionWidth + valueWidth, numeric && objectiveProgress?.Complete != true ? 7 : 3);
+            var nestedIndent = objective.ContributesToProgress ? 0f : 16f;
+            descriptionRect.offsetMin = new Vector2(actionWidth + valueWidth + nestedIndent, numeric && objectiveProgress?.Complete != true ? 7 : 3);
             descriptionRect.offsetMax = new Vector2(-8, -3);
             var description = UnityUiFactory.AddText(descriptionRect.gameObject, objective.Text, 13,
                 TextAlignmentOptions.MidlineLeft,

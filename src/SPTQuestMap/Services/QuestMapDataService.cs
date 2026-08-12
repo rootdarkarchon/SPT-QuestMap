@@ -15,6 +15,7 @@ public sealed class QuestMapDataService : IOnLoad
     private readonly QuestMetaInfoCatalog _metaInfoCatalog;
     private readonly QuestTopologyBuilder _topology;
     private readonly QuestProfileStateBuilder _profiles;
+    private readonly QuestMapTopologyPreload _preload;
     private readonly SaveServer _saveServer;
 
     public QuestMapDataService(
@@ -23,11 +24,13 @@ public sealed class QuestMapDataService : IOnLoad
         SaveServer saveServer,
         QuestHelper questHelper,
         SeasonalEventService seasonalEventService,
+        QuestMapTopologyPreload preload,
         ISptLogger<QuestMapDataService> logger
     )
     {
         _databaseService = databaseService;
         _saveServer = saveServer;
+        _preload = preload;
         _localization = new QuestMapLocalizationService(databaseService, localeService);
         _metaInfoCatalog = new QuestMetaInfoCatalog(
             warning: message => logger.Warning(message));
@@ -37,6 +40,7 @@ public sealed class QuestMapDataService : IOnLoad
             localeService,
             questHelper,
             seasonalEventService,
+            preload,
             new QuestSummaryCatalog(warning: message => logger.Warning(message)),
             _metaInfoCatalog,
             zoneMapCatalog,
@@ -48,6 +52,7 @@ public sealed class QuestMapDataService : IOnLoad
             saveServer,
             questHelper,
             seasonalEventService,
+            preload,
             zoneMapCatalog,
             logger
         );
@@ -55,7 +60,7 @@ public sealed class QuestMapDataService : IOnLoad
 
     public Task OnLoad()
     {
-        _metaInfoCatalog.Resolve(_databaseService);
+        _metaInfoCatalog.Resolve(_preload.Items);
         return Task.CompletedTask;
     }
 

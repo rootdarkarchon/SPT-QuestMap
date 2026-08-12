@@ -13,7 +13,7 @@ Expected authoritative inputs include:
 - USEC/Bear quest configuration;
 - trader definitions and image data;
 - selected PMC profile;
-- server quest-availability helpers where reusable.
+- the exact SPT 4.0.13 quest-availability decision and its public comparison/applicability helpers.
 
 ## Static quest model
 
@@ -71,9 +71,9 @@ For each quest, derive a display state from:
 7. prerequisite status requirements;
 8. available-after timers;
 9. mutual exclusion outcome;
-10. server availability helper result, if exposed.
+10. the source-pinned SPT 4.0.13 availability projection.
 
-Prefer the server's own availability decision when accessible. Use local derivation to explain *why*, not to contradict authoritative server state.
+QuestMap follows the exact visibility/status decision order of `QuestHelper.GetClientQuests` and calls its public faction, event, level, loyalty, and standing helpers. It intentionally does not call `GetClientQuests` itself: that client-payload method mutates shared templates and deep-clones every visible full quest record before filtering rewards, while the sanitized overlay needs only ID/status pairs. Local blocker derivation explains *why* without contradicting the source-pinned result.
 
 ### Repeatable overlay
 

@@ -105,7 +105,7 @@ public static class QuestGraphRules
 
     public static double? CalculateObjectiveProgressPercent(IReadOnlyCollection<QuestObjectiveProgress> objectives)
         => QuestProgressRules.CalculateObjectiveProgressPercent(
-            objectives,
+            objectives.Where(objective => objective.ContributesToProgress).ToArray(),
             objective => objective.Complete,
             objective => objective.Current,
             objective => objective.Required);
@@ -116,10 +116,11 @@ public static class QuestGraphRules
         {
             var exact = ClassifyDisplayState(live.ExactStatus, true, false);
             if (exact == QuestDisplayStateKind.AvailableForFinish) return 100d;
-            if (exact == QuestDisplayStateKind.Started && live.Objectives.Count > 0
-                && live.Objectives.All(objective => objective.Complete || objective.ProgressKnown))
+            var progressOwners = live.Objectives.Where(objective => objective.ContributesToProgress).ToArray();
+            if (exact == QuestDisplayStateKind.Started && progressOwners.Length > 0
+                && progressOwners.All(objective => objective.Complete || objective.ProgressKnown))
             {
-                return CalculateObjectiveProgressPercent(live.Objectives);
+                return CalculateObjectiveProgressPercent(progressOwners);
             }
         }
         return overlay.AuthoritativeProgressPercentages.TryGetValue(questId, out var authoritative)
@@ -364,16 +365,27 @@ public static class QuestGraphRules
             .Where(edge => known.Contains(edge.SourceId) && known.Contains(edge.TargetId))
             .GroupBy(edge => edge.TargetId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Select(edge => edge.SourceId).Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
-        var changed = true;
-        while (changed)
+        var outgoing = incoming
+            .SelectMany(pair => pair.Value.Select(sourceId => new QuestDependency(sourceId, pair.Key)))
+            .GroupBy(edge => edge.SourceId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(edge => edge.TargetId).Distinct(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+        var remainingParents = incoming.ToDictionary(pair => pair.Key, pair => pair.Value.Length, StringComparer.Ordinal);
+        var queue = new Queue<string>(excluded);
+        while (queue.Count > 0)
         {
-            changed = false;
-            foreach (var pair in incoming)
+            var sourceId = queue.Dequeue();
+            if (!outgoing.TryGetValue(sourceId, out var targets)) continue;
+            foreach (var targetId in targets)
             {
-                if (!excluded.Contains(pair.Key) && pair.Value.Length > 0 && pair.Value.All(excluded.Contains))
+                if (excluded.Contains(targetId)) continue;
+                remainingParents[targetId]--;
+                if (remainingParents[targetId] == 0)
                 {
-                    excluded.Add(pair.Key);
-                    changed = true;
+                    excluded.Add(targetId);
+                    queue.Enqueue(targetId);
                 }
             }
         }

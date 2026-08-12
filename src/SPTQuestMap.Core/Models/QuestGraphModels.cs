@@ -77,6 +77,8 @@ public sealed record QuestObjectiveDefinition(
     public IReadOnlyList<string> MapIds { get; init; } = [];
 
     public IReadOnlyList<string> UnresolvedZoneIds { get; init; } = [];
+
+    public bool ContributesToProgress { get; init; } = true;
 }
 
 public sealed record QuestUnknownCondition(string Stage, string ConditionType, string? ConditionId);
@@ -240,7 +242,10 @@ public sealed record QuestObjectiveProgress(
     bool Complete,
     double? Current,
     double? Required,
-    bool ProgressKnown);
+    bool ProgressKnown)
+{
+    public bool ContributesToProgress { get; init; } = true;
+}
 
 public sealed record LiveQuestSnapshot(
     string QuestId,

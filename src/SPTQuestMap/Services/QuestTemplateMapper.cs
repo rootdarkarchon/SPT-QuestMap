@@ -2,6 +2,9 @@ using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Extensions;
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
 
 namespace SPTQuestMap.Services;
 
@@ -217,19 +220,108 @@ internal static class QuestTemplateMapper
             }
         }
 
-        return ordered.Select(item => new ObjectiveDefinitionDto(
-            item.Condition.Id.ToString(),
-            Localize(locale, item.Condition.Id.ToString(), item.Condition.ConditionType),
-            item.Condition.ConditionType,
-            item.Condition.Index,
-            item.Condition.ParentId,
-            item.Condition.Value,
-            item.Condition.CompareMethod,
-            item.Condition.VisibilityConditions?.Select(condition => condition.Target).Where(target => !string.IsNullOrEmpty(target)).Cast<string>().ToArray() ?? [],
-            GetObjectiveZoneIds(item.Condition),
-            item.Condition.OneSessionOnly == true,
-            item.Condition.DoNotResetIfCounterCompleted == true
-        ));
+        var result = new List<ObjectiveDefinitionDto>(ordered.Count);
+        foreach (var item in ordered)
+        {
+            var condition = item.Condition;
+            var conditionId = condition.Id.ToString();
+            result.Add(new ObjectiveDefinitionDto(
+                conditionId,
+                Localize(locale, conditionId, condition.ConditionType),
+                condition.ConditionType,
+                condition.Index,
+                condition.ParentId,
+                condition.Value,
+                condition.CompareMethod,
+                condition.VisibilityConditions?.Select(value => value.Target).Where(target => !string.IsNullOrEmpty(target)).Cast<string>().ToArray() ?? [],
+                GetObjectiveZoneIds(condition),
+                condition.OneSessionOnly == true,
+                condition.DoNotResetIfCounterCompleted == true));
+
+            var counterConditions = condition.Counter?.Conditions ?? [];
+            if (!counterConditions.Any(IsWttSalvageCondition)) continue;
+
+            for (var childIndex = 0; childIndex < counterConditions.Count; childIndex++)
+            {
+                var child = counterConditions[childIndex];
+                var childId = child.Id?.ToString();
+                if (string.IsNullOrWhiteSpace(childId)) childId = $"{conditionId}:nested:{childIndex}";
+                if (!seenIds.Add(childId))
+                {
+                    onDuplicateId?.Invoke(childId);
+                    continue;
+                }
+
+                result.Add(new ObjectiveDefinitionDto(
+                    childId,
+                    Localize(locale, childId, HumanizeConditionType(child.ConditionType)),
+                    child.ConditionType,
+                    null,
+                    conditionId,
+                    ToNullableDouble(child.Value),
+                    child.CompareMethod,
+                    [],
+                    GetCounterConditionZoneIds(child))
+                {
+                    ContributesToProgress = false,
+                });
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsWttSalvageCondition(QuestConditionCounterCondition condition) =>
+        string.Equals(condition.ConditionType, "Salvage", StringComparison.Ordinal);
+
+    private static string[] GetCounterConditionZoneIds(QuestConditionCounterCondition condition)
+    {
+        var zoneIds = new HashSet<string>(StringComparer.Ordinal);
+        AddZones(zoneIds, condition.Zones ?? []);
+        if (condition.ConditionType == "VisitPlace") AddZones(zoneIds, GetTargets(condition.Target));
+        return zoneIds.OrderBy(zoneId => zoneId, StringComparer.Ordinal).ToArray();
+    }
+
+    private static double? ToNullableDouble(object? value)
+    {
+        switch (value)
+        {
+            case null:
+                return null;
+            case double doubleValue:
+                return doubleValue;
+            case float floatValue:
+                return floatValue;
+            case decimal decimalValue:
+                return (double)decimalValue;
+            case byte or sbyte or short or ushort or int or uint or long or ulong:
+                return Convert.ToDouble(value, CultureInfo.InvariantCulture);
+            case JsonElement { ValueKind: JsonValueKind.Number } jsonNumber when jsonNumber.TryGetDouble(out var jsonNumberValue):
+                return jsonNumberValue;
+            case JsonElement { ValueKind: JsonValueKind.String } json:
+                return double.TryParse(json.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var jsonStringValue)
+                    ? jsonStringValue
+                    : null;
+            case string text:
+                return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var stringValue)
+                    ? stringValue
+                    : null;
+            default:
+                return null;
+        }
+    }
+
+    private static string HumanizeConditionType(string? conditionType)
+    {
+        if (string.IsNullOrWhiteSpace(conditionType)) return "Objective";
+        var result = new StringBuilder(conditionType.Length + 8);
+        for (var index = 0; index < conditionType.Length; index++)
+        {
+            var value = conditionType[index];
+            if (index > 0 && char.IsUpper(value) && char.IsLower(conditionType[index - 1])) result.Append(' ');
+            result.Append(index == 0 ? value : char.ToLowerInvariant(value));
+        }
+        return result.ToString();
     }
 
     internal static string[] GetObjectiveZoneIds(QuestCondition condition)

@@ -84,6 +84,8 @@ public sealed record ObjectiveDefinitionDto(
     public string[] MapIds { get; init; } = [];
 
     public string[] UnresolvedZoneIds { get; init; } = [];
+
+    public bool ContributesToProgress { get; init; } = true;
 }
 public sealed record QuestRewardDto(string Id, string Type, string? TargetId, string? TargetName, double? Value, int? LoyaltyLevel, string? TraderName, bool Unknown, bool Hidden, QuestRewardItemDto[] Items);
 public sealed record QuestRewardItemDto(string TemplateId, string Name, double Count);
@@ -101,7 +103,10 @@ public sealed record RepeatableQuestEntryDto(QuestNodeDto Node, QuestStateDto St
 public sealed record QuestStateDto(string QuestId, string? ExactStatus, string DisplayState, bool AuthoritativelyVisible, bool InProfile, double? AvailableAfter, QuestBlockerDto[] Blockers, QuestExclusionDto? Exclusion, ObjectiveProgressDto[] Objectives, double? ProgressPercent);
 public sealed record QuestBlockerDto(string Kind, string? SubjectId, string? Compare, double? RequiredValue, string[] RequiredStatuses);
 public sealed record QuestExclusionDto(string CausedByQuestId, string CauseStatus, bool Permanent);
-public sealed record ObjectiveProgressDto(string ObjectiveId, bool Complete, double? Current, double? Required, bool ProgressKnown);
+public sealed record ObjectiveProgressDto(string ObjectiveId, bool Complete, double? Current, double? Required, bool ProgressKnown)
+{
+    public bool ContributesToProgress { get; init; } = true;
+}
 public sealed record TraderStateDto(string TraderId, bool Available, int? LoyaltyLevel, double? Standing, double? SalesSum);
 public sealed record QuestMapBootstrapDto(string Language, string BrowserLocale, QuestMapLanguageDto[] Languages, IReadOnlyDictionary<string, string> Strings);
 public sealed record QuestMapLanguageDto(string Code, string Name);

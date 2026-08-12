@@ -149,6 +149,7 @@ public sealed class QuestObjectivePayload
     public string[] UnresolvedZoneIds { get; set; } = [];
     public bool OneSessionOnly { get; set; }
     public bool DoNotResetIfCounterCompleted { get; set; }
+    public bool ContributesToProgress { get; set; } = true;
 }
 
 public sealed class QuestUnknownConditionPayload

@@ -28,12 +28,19 @@ internal sealed class ServerQuestTopologySource : IQuestTopologySource
     public async Task<QuestTopologySourceResult> LoadAsync()
     {
         var stopwatch = Stopwatch.StartNew();
+        var stageStopwatch = Stopwatch.StartNew();
         var bytes = await RequestHandler.GetDataAsync(LocalizedRoute(Route)).ConfigureAwait(false);
+        var requestMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
         var json = Encoding.UTF8.GetString(bytes);
         var feed = JsonConvert.DeserializeObject<QuestTopologyFeed>(json)
             ?? throw new InvalidOperationException($"QuestMap topology route '{Route}' returned no data.");
         var rawTemplateCount = (feed.Topology.Quests?.Length ?? 0) + (feed.ProfileGeneratedQuests?.Length ?? 0);
+        var deserializeMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
         var topology = QuestTopologyNormalizer.Normalize(feed);
+        var normalizeMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
         var displayStates = (feed.DisplayStates ?? new Dictionary<string, string>(StringComparer.Ordinal))
             .Where(pair => QuestGraphRules.TryParseProfileDisplayState(pair.Value, out _))
             .ToDictionary(
@@ -49,21 +56,38 @@ internal sealed class ServerQuestTopologySource : IQuestTopologySource
                     .ToDictionary(pair => pair.Key, pair => (IReadOnlyCollection<string>)(pair.Value ?? []), StringComparer.Ordinal)),
             (feed.DefaultVisibleQuestIds ?? []).Distinct(StringComparer.Ordinal).ToArray(),
             (feed.AllApplicableQuestIds ?? []).Distinct(StringComparer.Ordinal).ToArray());
+        var projectionMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
         stopwatch.Stop();
-        return new QuestTopologySourceResult(topology, profile, rawTemplateCount, stopwatch.Elapsed.TotalMilliseconds);
+        return new QuestTopologySourceResult(
+            topology,
+            profile,
+            rawTemplateCount,
+            stopwatch.Elapsed.TotalMilliseconds,
+            responseBytes: bytes.Length,
+            requestMilliseconds: requestMilliseconds,
+            deserializeMilliseconds: deserializeMilliseconds,
+            normalizeMilliseconds: normalizeMilliseconds,
+            projectionMilliseconds: projectionMilliseconds);
     }
 
     public async Task<QuestTopologySourceResult> LoadProfileDeltaAsync(QuestGraphTopology current)
     {
         var stopwatch = Stopwatch.StartNew();
+        var stageStopwatch = Stopwatch.StartNew();
         var bytes = await RequestHandler.GetDataAsync(LocalizedRoute(RepeatablesRoute)).ConfigureAwait(false);
+        var requestMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
         var json = Encoding.UTF8.GetString(bytes);
         var feed = JsonConvert.DeserializeObject<QuestRepeatableFeed>(json)
             ?? throw new InvalidOperationException($"QuestMap repeatable route '{RepeatablesRoute}' returned no data.");
+        var deserializeMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
         var staticTopologyChanged = !QuestTopologyNormalizer.MatchesStaticTopologyVersion(
             current,
             feed.StaticTopologyVersion);
         var topology = QuestTopologyNormalizer.ApplyProfileGeneratedDelta(current, feed);
+        var normalizeMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
         var profile = BuildProfile(
             feed.DisplayStates,
             feed.ProgressPercentages,
@@ -71,13 +95,19 @@ internal sealed class ServerQuestTopologySource : IQuestTopologySource
             feed.PrerequisiteBlockerIds,
             feed.DefaultVisibleQuestIds,
             feed.AllApplicableQuestIds);
+        var projectionMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
         stopwatch.Stop();
         return new QuestTopologySourceResult(
             topology,
             profile,
             feed.ProfileGeneratedQuests?.Length ?? 0,
             stopwatch.Elapsed.TotalMilliseconds,
-            staticTopologyChanged);
+            staticTopologyChanged,
+            bytes.Length,
+            requestMilliseconds,
+            deserializeMilliseconds,
+            normalizeMilliseconds,
+            projectionMilliseconds);
     }
 
     private static QuestServerProfileProjection BuildProfile(
@@ -122,13 +152,23 @@ internal sealed class QuestTopologySourceResult
         QuestServerProfileProjection profile,
         int rawTemplateCount,
         double elapsedMilliseconds,
-        bool requiresFullTopologyReload = false)
+        bool requiresFullTopologyReload = false,
+        int responseBytes = 0,
+        double requestMilliseconds = 0,
+        double deserializeMilliseconds = 0,
+        double normalizeMilliseconds = 0,
+        double projectionMilliseconds = 0)
     {
         Topology = topology;
         Profile = profile;
         RawTemplateCount = rawTemplateCount;
         ElapsedMilliseconds = elapsedMilliseconds;
         RequiresFullTopologyReload = requiresFullTopologyReload;
+        ResponseBytes = responseBytes;
+        RequestMilliseconds = requestMilliseconds;
+        DeserializeMilliseconds = deserializeMilliseconds;
+        NormalizeMilliseconds = normalizeMilliseconds;
+        ProjectionMilliseconds = projectionMilliseconds;
     }
 
     public QuestGraphTopology Topology { get; }
@@ -140,4 +180,14 @@ internal sealed class QuestTopologySourceResult
     public double ElapsedMilliseconds { get; }
 
     public bool RequiresFullTopologyReload { get; }
+
+    public int ResponseBytes { get; }
+
+    public double RequestMilliseconds { get; }
+
+    public double DeserializeMilliseconds { get; }
+
+    public double NormalizeMilliseconds { get; }
+
+    public double ProjectionMilliseconds { get; }
 }

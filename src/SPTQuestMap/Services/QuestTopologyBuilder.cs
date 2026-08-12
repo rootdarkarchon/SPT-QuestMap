@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using SPTarkov.Server.Core.Extensions;
@@ -14,6 +15,7 @@ internal sealed class QuestTopologyBuilder(
     LocaleService localeService,
     QuestHelper questHelper,
     SeasonalEventService seasonalEventService,
+    QuestMapTopologyPreload preload,
     QuestSummaryCatalog summaryCatalog,
     QuestMetaInfoCatalog metaInfoCatalog,
     QuestZoneMapCatalog zoneMapCatalog,
@@ -36,28 +38,31 @@ internal sealed class QuestTopologyBuilder(
 
     private QuestTopologyDto Build(string language)
     {
+        var totalStopwatch = Stopwatch.StartNew();
+        var stageStopwatch = Stopwatch.StartNew();
         var locale = localeService.GetLocaleDb(language);
         var dbQuests = databaseService.GetQuests().Values.OrderBy(quest => quest.Id.ToString(), StringComparer.Ordinal).ToArray();
-        var items = databaseService.GetItems();
+        var items = preload.Items;
         var traders = databaseService.GetTraders();
-        var locationValues = databaseService
-            .GetLocations()
-            .GetDictionary()
-            .Values
-            .Where(location => location?.Base?.Id is not null)
-            .ToArray();
+        var locationValues = preload.Locations;
         var locationsById = QuestTemplateMapper.BuildLocationLookup(locationValues);
         var canonicalMapIdsByAlias = locationsById.ToDictionary(
             pair => pair.Key,
             pair => pair.Value.Base.Id,
             StringComparer.OrdinalIgnoreCase);
-        var questItemSpawnMapIds = QuestTemplateMapper.BuildQuestItemSpawnMapLookup(locationValues, items);
+        var questItemSpawnMapIds = preload.QuestItemSpawnMapIds;
         var mapAliases = QuestTemplateMapper.BuildMapAliases(locationValues);
         var edges = new List<QuestEdgeDto>();
         var nodes = new List<QuestNodeDto>(dbQuests.Length);
+        var snapshotMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
+        var slowestQuestId = string.Empty;
+        var slowestQuestMilliseconds = 0d;
+        var questStopwatch = new Stopwatch();
 
         foreach (var quest in dbQuests)
         {
+            questStopwatch.Restart();
             var questId = quest.Id.ToString();
             var metaInfo = metaInfoCatalog.Get(questId, locale);
             var startConditions = quest.Conditions?.AvailableForStart ?? [];
@@ -68,7 +73,7 @@ internal sealed class QuestTopologyBuilder(
                 .Cast<RequirementDto>()
                 .ToArray();
             var unknownConditions = startConditions
-                .Where(condition => condition.ConditionType is not ("Quest" or "Level" or "PrestigeLevel" or "TraderLoyalty" or "TraderStanding"))
+                .Where(condition => !IsSupportedStartConditionType(condition.ConditionType))
                 .Select(condition => new UnknownConditionDto(
                     "AvailableForStart",
                     condition.ConditionType,
@@ -152,33 +157,23 @@ internal sealed class QuestTopologyBuilder(
                 WikiUrl = metaInfo?.WikiUrl,
                 RelevantItems = metaInfo?.RelevantItems ?? [],
             });
-        }
-
-        nodes = QuestGraphRules.PropagateSeasonalEventTypes(nodes, edges);
-        var effective = nodes.ToDictionary(node => node.Id, node => node.DirectRequirements, StringComparer.Ordinal);
-        for (var pass = 0; pass < nodes.Count; pass++)
-        {
-            var changed = false;
-            foreach (var edge in edges)
+            questStopwatch.Stop();
+            if (questStopwatch.Elapsed.TotalMilliseconds > slowestQuestMilliseconds)
             {
-                if (!effective.TryGetValue(edge.SourceId, out var parent)
-                    || !effective.TryGetValue(edge.TargetId, out var child))
-                {
-                    continue;
-                }
-
-                var merged = QuestGraphRules.MergeRequirements(child.Concat(parent));
-                if (!merged.SequenceEqual(child))
-                {
-                    effective[edge.TargetId] = merged;
-                    changed = true;
-                }
+                slowestQuestId = questId;
+                slowestQuestMilliseconds = questStopwatch.Elapsed.TotalMilliseconds;
             }
-
-            if (!changed) break;
         }
 
+        var nodesMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
+        nodes = QuestGraphRules.PropagateSeasonalEventTypes(nodes, edges);
+        var seasonalMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
+        var effective = QuestGraphRules.PropagateEffectiveRequirements(nodes, edges);
         nodes = nodes.Select(node => node with { EffectiveRequirements = effective[node.Id] }).ToList();
+        var requirementsMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
         var questIds = nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
         var collectorPathQuestIds = QuestGraphRules.BuildPrerequisiteClosure(QuestMapQuestIds.Collector, edges, questIds);
         if (collectorPathQuestIds.Count == 0)
@@ -208,6 +203,16 @@ internal sealed class QuestTopologyBuilder(
             ))
             .ToArray();
 
+        var finalizeMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        totalStopwatch.Stop();
+        logger.Info(
+            "QUESTMAP_M08_SERVER_TOPOLOGY_BUILD " +
+            $"language={language}; quests={nodes.Count}; edges={edges.Count}; snapshotMs={snapshotMilliseconds:F2}; " +
+            $"nodesMs={nodesMilliseconds:F2}; seasonalMs={seasonalMilliseconds:F2}; " +
+            $"requirementsMs={requirementsMilliseconds:F2}; finalizeMs={finalizeMilliseconds:F2}; " +
+            $"slowestQuestId={slowestQuestId}; slowestQuestMs={slowestQuestMilliseconds:F2}; " +
+            $"totalMs={totalStopwatch.Elapsed.TotalMilliseconds:F2}");
+
         return new QuestTopologyDto(
             version,
             nodes,
@@ -217,6 +222,9 @@ internal sealed class QuestTopologyBuilder(
             lightkeeperPathQuestIds.Order(StringComparer.Ordinal).ToArray()
         ) { MapAliases = mapAliases };
     }
+
+    internal static bool IsSupportedStartConditionType(string? conditionType) => conditionType is
+        "Quest" or "Level" or "PrestigeLevel" or "TraderLoyalty" or "TraderStanding" or "Block";
 
     private string GetQuestFaction(MongoId questId)
     {

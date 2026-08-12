@@ -1079,6 +1079,42 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
+    public void NestedDisplayObjectivesDoNotDoubleCountAggregateQuestProgress()
+    {
+        var node = Node("wtt-quest", "Mechanic", "Any");
+        node.Objectives =
+        [
+            new QuestObjectivePayload { Id = "aggregate", Text = "Complete all tasks", RequiredValue = 1 },
+            new QuestObjectivePayload
+            {
+                Id = "salvage",
+                Text = "Salvage the board",
+                ParentId = "aggregate",
+                RequiredValue = 1,
+                ContributesToProgress = false,
+            },
+        ];
+        var topology = QuestTopologyNormalizer.Normalize(Feed([node], []));
+        var snapshot = new LiveProfileSnapshot("profile", "USEC", 20,
+            [new LiveQuestSnapshot("wtt-quest", "Started", true,
+            [
+                new QuestObjectiveProgress("aggregate", false, 0.5, 1, true),
+                new QuestObjectiveProgress("salvage", true, 1, 1, true),
+            ], null, false)],
+            []);
+
+        var overlay = QuestOverlayBuilder.Build(topology, snapshot);
+        var objectives = overlay.QuestsById["wtt-quest"].Objectives;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(topology.NodesById["wtt-quest"].Objectives[1].ContributesToProgress, Is.False);
+            Assert.That(objectives.Single(objective => objective.ObjectiveId == "salvage").ContributesToProgress, Is.False);
+            Assert.That(QuestGraphRules.CalculateObjectiveProgressPercent(objectives), Is.EqualTo(50));
+        });
+    }
+
+    [Test]
     public void LiveRaidState_OverridesStaleDynamicServerStateButRetainsServerGateAuthority()
     {
         var active = Node("active", "Prapor", "Any");

@@ -11,28 +11,102 @@ internal static class QuestGraphRules
         var seasons = nodes.ToDictionary(node => node.Id, node => node.EventSeason, StringComparer.Ordinal);
         var incoming = edges
             .GroupBy(edge => edge.TargetId)
-            .ToDictionary(group => group.Key, group => group.Select(edge => edge.SourceId).ToArray(), StringComparer.Ordinal);
-
-        for (var pass = 0; pass < nodes.Count; pass++)
+            .ToDictionary(group => group.Key, group => group.Select(edge => edge.SourceId).Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+        var outgoing = edges
+            .GroupBy(edge => edge.SourceId)
+            .ToDictionary(group => group.Key, group => group.Select(edge => edge.TargetId).Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+        var queue = new Queue<string>();
+        var queued = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var node in nodes.Where(node => node.EventSeason is null && incoming.ContainsKey(node.Id)))
         {
-            var changed = false;
-            foreach (var node in nodes.Where(node => seasons[node.Id] is null))
-            {
-                if (!incoming.TryGetValue(node.Id, out var parents)) continue;
-                var inherited = parents
-                    .Select(parent => seasons.GetValueOrDefault(parent))
-                    .Where(season => season is not null && season != nameof(SeasonalEventType.None))
-                    .Distinct(StringComparer.Ordinal)
-                    .ToArray();
-                if (inherited.Length != 1) continue;
-                seasons[node.Id] = inherited[0];
-                changed = true;
-            }
+            queue.Enqueue(node.Id);
+            queued.Add(node.Id);
+        }
 
-            if (!changed) break;
+        while (queue.Count > 0)
+        {
+            var nodeId = queue.Dequeue();
+            queued.Remove(nodeId);
+            if (seasons[nodeId] is not null || !incoming.TryGetValue(nodeId, out var parents)) continue;
+            var inherited = parents
+                .Select(parent => seasons.GetValueOrDefault(parent))
+                .Where(season => season is not null && season != nameof(SeasonalEventType.None))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (inherited.Length != 1) continue;
+
+            seasons[nodeId] = inherited[0];
+            if (!outgoing.TryGetValue(nodeId, out var children)) continue;
+            foreach (var childId in children)
+            {
+                if (seasons.GetValueOrDefault(childId) is null && queued.Add(childId)) queue.Enqueue(childId);
+            }
         }
 
         return nodes.Select(node => node with { EventSeason = seasons[node.Id] }).ToList();
+    }
+
+    internal static IReadOnlyDictionary<string, RequirementDto[]> PropagateEffectiveRequirements(
+        IReadOnlyList<QuestNodeDto> nodes,
+        IReadOnlyList<QuestEdgeDto> edges)
+    {
+        var effective = nodes.ToDictionary(node => node.Id, node => node.DirectRequirements, StringComparer.Ordinal);
+        var outgoing = edges
+            .Where(edge => effective.ContainsKey(edge.SourceId) && effective.ContainsKey(edge.TargetId))
+            .GroupBy(edge => edge.SourceId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(edge => edge.TargetId).Distinct(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+        var indegree = nodes.ToDictionary(node => node.Id, _ => 0, StringComparer.Ordinal);
+        foreach (var targets in outgoing.Values)
+        {
+            foreach (var targetId in targets) indegree[targetId]++;
+        }
+
+        var queue = new Queue<string>(nodes.Where(node => indegree[node.Id] == 0).Select(node => node.Id));
+        var processed = new HashSet<string>(StringComparer.Ordinal);
+
+        while (queue.Count > 0)
+        {
+            var sourceId = queue.Dequeue();
+            processed.Add(sourceId);
+            if (!outgoing.TryGetValue(sourceId, out var targets)) continue;
+            var parent = effective[sourceId];
+            foreach (var targetId in targets)
+            {
+                var child = effective[targetId];
+                var merged = MergeRequirements(child.Concat(parent));
+                if (!merged.SequenceEqual(child)) effective[targetId] = merged;
+                indegree[targetId]--;
+                if (indegree[targetId] == 0) queue.Enqueue(targetId);
+            }
+        }
+
+        if (processed.Count == nodes.Count) return effective;
+
+        // Modded data can contain cycles. Kahn's pass has already propagated every acyclic
+        // predecessor; converge only the unresolved cyclic region and its descendants.
+        var unresolved = nodes.Select(node => node.Id).Where(nodeId => !processed.Contains(nodeId)).ToArray();
+        queue = new Queue<string>(unresolved);
+        var queued = unresolved.ToHashSet(StringComparer.Ordinal);
+        while (queue.Count > 0)
+        {
+            var sourceId = queue.Dequeue();
+            queued.Remove(sourceId);
+            if (!outgoing.TryGetValue(sourceId, out var targets)) continue;
+            var parent = effective[sourceId];
+            foreach (var targetId in targets)
+            {
+                var child = effective[targetId];
+                var merged = MergeRequirements(child.Concat(parent));
+                if (merged.SequenceEqual(child)) continue;
+                effective[targetId] = merged;
+                if (queued.Add(targetId)) queue.Enqueue(targetId);
+            }
+        }
+
+        return effective;
     }
 
     internal static HashSet<string> BuildNoneEventExclusionSet(QuestTopologyDto topology)

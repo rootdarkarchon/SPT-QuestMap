@@ -213,6 +213,7 @@ public static class QuestTopologyNormalizer
             {
                 MapIds = objective.MapIds ?? [],
                 UnresolvedZoneIds = objective.UnresolvedZoneIds ?? [],
+                ContributesToProgress = objective.ContributesToProgress,
             }).ToArray(),
             (node.ExclusionRules ?? []).Select(rule => new QuestExclusionRule(
                 rule.CausedByQuestId,

@@ -1164,10 +1164,12 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             _overlay.QuestsById.TryGetValue(node.Id, out var liveQuest);
             var skipCandidate = _workspace.MutationsAllowed()
                 && liveQuest?.ExactStatus == nameof(EQuestStatus.Started)
-                && progress?.Complete != true;
+                && progress?.Complete != true
+                && definition.ContributesToProgress;
             var actionWidth = handoverCandidate ? 70f : 0f;
             var textRect = UnityUiFactory.CreateRect("Text", task);
-            UnityUiFactory.Stretch(textRect, 10 + actionWidth, 8, 0, percent.HasValue ? 9 : 0);
+            var nestedIndent = definition.ContributesToProgress ? 0f : 12f;
+            UnityUiFactory.Stretch(textRect, 10 + actionWidth + nestedIndent, 8, 0, percent.HasValue ? 9 : 0);
             var text = UnityUiFactory.AddText(textRect.gameObject, value + definition.Text + suffix, 11,
                 TextAlignmentOptions.MidlineLeft, progress?.Complete == true ? QuestGraphPalette.Completed : Color.white);
             text.enableWordWrapping = false;

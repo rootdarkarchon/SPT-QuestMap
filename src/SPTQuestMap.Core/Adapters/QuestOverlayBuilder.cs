@@ -84,6 +84,10 @@ public static class QuestOverlayBuilder
         return progress.Select(objective =>
         {
             definitions.TryGetValue(objective.ObjectiveId, out var definition);
+            objective = objective with
+            {
+                ContributesToProgress = definition?.ContributesToProgress ?? true,
+            };
             var compare = definition?.Compare ?? ">=";
             if (string.Equals(exactStatus, "Started", StringComparison.Ordinal)
                 && definition is { OneSessionOnly: true, DoNotResetIfCounterCompleted: false }

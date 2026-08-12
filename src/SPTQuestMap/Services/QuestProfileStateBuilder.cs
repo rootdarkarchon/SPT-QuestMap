@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using SPTarkov.Server.Core.Helpers;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
@@ -16,12 +17,11 @@ internal sealed class QuestProfileStateBuilder(
     SaveServer saveServer,
     QuestHelper questHelper,
     SeasonalEventService seasonalEventService,
+    QuestMapTopologyPreload preload,
     QuestZoneMapCatalog zoneMapCatalog,
     ISptLogger<QuestMapDataService> logger
 )
 {
-    private readonly object _availabilityLock = new();
-
     internal ProfileStateDto? Build(string rawProfileId, QuestTopologyDto topology, string language)
     {
         if (!MongoId.IsValidMongoId(rawProfileId)) return null;
@@ -32,6 +32,8 @@ internal sealed class QuestProfileStateBuilder(
         var pmc = saveServer.GetProfile(profileId).CharacterData?.PmcData;
         if (pmc?.Info is null) return null;
 
+        var totalStopwatch = Stopwatch.StartNew();
+        var stageStopwatch = Stopwatch.StartNew();
         var generatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var profileQuests = BuildProfileQuestLookup(
             pmc.Quests ?? [],
@@ -50,26 +52,33 @@ internal sealed class QuestProfileStateBuilder(
             StringComparer.Ordinal
         );
         var traderAvailability = new TraderAvailabilityEvaluator(pmc.TradersInfo, profileQuestStatuses);
-        Dictionary<string, QuestStatusEnum?> authoritative;
-        lock (_availabilityLock)
-        {
-            authoritative = new Dictionary<string, QuestStatusEnum?>(StringComparer.Ordinal);
-            foreach (var quest in questHelper.GetClientQuests(profileId))
-            {
-                var questId = quest.Id.ToString();
-                if (!authoritative.TryAdd(questId, quest.SptStatus))
-                {
-                    logger.Warning($"SPT-QuestMap: SPT returned quest {questId} more than once for profile {profileId}; keeping the first authoritative result.");
-                }
-            }
-        }
+        var authoritative = QuestAvailabilityProjection.Build(
+            databaseService.GetQuests().Values,
+            pmc.Quests ?? [],
+            profileQuests,
+            pmc.Info.Side ?? string.Empty,
+            pmc.Info.Level ?? 0,
+            pmc.TradersInfo.Keys,
+            questHelper.QuestIsForOtherSide,
+            questHelper.ShowEventQuestToPlayer,
+            questHelper.DoesPlayerLevelFulfilCondition,
+            condition => questHelper.TraderLoyaltyLevelRequirementCheck(condition, pmc),
+            condition => questHelper.TraderStandingRequirementCheck(condition, pmc)
+        );
+        var availabilityMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
 
         var noneExcluded = QuestGraphRules.BuildNoneEventExclusionSet(topology);
+        var incomingEdges = topology.Edges
+            .GroupBy(edge => edge.TargetId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => (IReadOnlyCollection<QuestEdgeDto>)group.ToArray(), StringComparer.Ordinal);
         var applicable = topology.Quests
             .Where(quest => IsApplicable(quest, pmc.Info.Side ?? string.Empty, noneExcluded))
             .Select(quest => quest.Id)
             .ToHashSet(StringComparer.Ordinal);
         var states = new List<QuestStateDto>(applicable.Count);
+        var applicabilityMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
 
         foreach (var quest in topology.Quests.Where(quest => applicable.Contains(quest.Id)))
         {
@@ -82,7 +91,7 @@ internal sealed class QuestProfileStateBuilder(
                 pmc.Info.PrestigeLevel ?? 0,
                 pmc.TradersInfo,
                 profileQuests,
-                topology.Edges,
+                incomingEdges.GetValueOrDefault(quest.Id) ?? [],
                 traderAvailability
             );
             var exactStatus = profileQuest?.Status ?? authoritativeStatus;
@@ -99,11 +108,15 @@ internal sealed class QuestProfileStateBuilder(
                     QuestProgressRules.CapCurrent(counter?.Value, objective.RequiredValue),
                     objective.RequiredValue,
                     counter is not null || conditionRecorded
-                );
+                )
+                {
+                    ContributesToProgress = objective.ContributesToProgress,
+                };
             }).ToArray();
+            var progressOwners = objectives.Where(objective => objective.ContributesToProgress).ToArray();
             var progressPercent = displayState == "InProgress"
                 ? QuestProgressRules.CalculateObjectiveProgressPercent(
-                    objectives,
+                    progressOwners,
                     objective => objective.Complete,
                     objective => objective.Current,
                     objective => objective.Required)
@@ -122,6 +135,8 @@ internal sealed class QuestProfileStateBuilder(
                 progressPercent
             ));
         }
+        var statesMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
 
         var graphApplicable = states
             .Where(QuestProfileRules.ShouldShowInDefaultGraph)
@@ -137,6 +152,8 @@ internal sealed class QuestProfileStateBuilder(
             .Select(state => state.QuestId)
             .ToHashSet(StringComparer.Ordinal);
         var defaultVisible = QuestGraphRules.BuildDefaultVisible(known, futureBoundary, topology.Edges, graphApplicable);
+        var frontierMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        stageStopwatch.Restart();
 
         var traders = databaseService.GetTraders().Select(pair =>
         {
@@ -154,6 +171,15 @@ internal sealed class QuestProfileStateBuilder(
             topology.Quests.Select(quest => quest.Id),
             (entry, collision) => logger.Warning($"SPT-QuestMap: repeatable quest '{entry.Node.Name}' ({entry.Node.Id}) from trader '{entry.Node.TraderName}' ({entry.Node.TraderId}) collides with {collision}; keeping the earlier canonical entry.")
         );
+
+        var finalizeMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+        totalStopwatch.Stop();
+        logger.Info(
+            "QUESTMAP_M08_SERVER_PROFILE_BUILD " +
+            $"quests={states.Count}; available={authoritative.Count}; availabilityMs={availabilityMilliseconds:F2}; " +
+            $"applicabilityMs={applicabilityMilliseconds:F2}; statesMs={statesMilliseconds:F2}; " +
+            $"frontierMs={frontierMilliseconds:F2}; finalizeMs={finalizeMilliseconds:F2}; " +
+            $"totalMs={totalStopwatch.Elapsed.TotalMilliseconds:F2}");
 
         return new ProfileStateDto(
             profileId.ToString(),
@@ -230,7 +256,7 @@ internal sealed class QuestProfileStateBuilder(
     {
         var locale = localeService.GetLocaleDb(language);
         var traders = databaseService.GetTraders();
-        var items = databaseService.GetItems();
+        var items = preload.Items;
         var locationValues = databaseService
             .GetLocations()
             .GetDictionary()
@@ -296,16 +322,18 @@ internal sealed class QuestProfileStateBuilder(
                 locale,
                 duplicateId => logger.Warning($"SPT-QuestMap: duplicate objective condition ID '{duplicateId}' on repeatable quest {questId}; keeping its first definition.")
             ), zoneMapCatalog)
-            .Select(objective => objective with
-            {
-                Text = RepeatableObjectiveText(
-                    finishConditions.First(condition => condition.Id.ToString() == objective.Id),
-                    typeName,
-                    location,
-                    locale,
-                    items
-                ),
-            })
+            .Select(objective => !objective.ContributesToProgress
+                ? objective
+                : objective with
+                {
+                    Text = RepeatableObjectiveText(
+                        finishConditions.First(condition => condition.Id.ToString() == objective.Id),
+                        typeName,
+                        location,
+                        locale,
+                        items
+                    ),
+                })
             .ToArray();
         var actualMaps = QuestTemplateMapper.BuildActualMaps(location, objectives, locale, locationsById);
         var rewards = QuestTemplateMapper.BuildRewards(
@@ -351,8 +379,12 @@ internal sealed class QuestProfileStateBuilder(
                 QuestProgressRules.CapCurrent(counter?.Value, objective.RequiredValue),
                 objective.RequiredValue,
                 counter is not null || conditionRecorded
-            );
+            )
+            {
+                ContributesToProgress = objective.ContributesToProgress,
+            };
         }).ToArray();
+        var repeatableProgressOwners = objectiveProgress.Where(objective => objective.ContributesToProgress).ToArray();
         var state = new QuestStateDto(
             questId,
             exactStatus.ToString(),
@@ -365,7 +397,7 @@ internal sealed class QuestProfileStateBuilder(
             objectiveProgress,
             displayState == "InProgress"
                 ? QuestProgressRules.CalculateObjectiveProgressPercent(
-                    objectiveProgress,
+                    repeatableProgressOwners,
                     objective => objective.Complete,
                     objective => objective.Current,
                     objective => objective.Required)

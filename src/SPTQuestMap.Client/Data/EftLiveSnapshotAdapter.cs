@@ -44,6 +44,7 @@ internal static class EftLiveSnapshotAdapter
         var objectiveProgress = (quest.Conditions.TryGetValue(EQuestStatus.AvailableForFinish, out var finishConditions)
                 ? finishConditions
                 : Enumerable.Empty<Condition>())
+            .SelectMany(ExpandWttCommonLibObjectives)
             .GroupBy(condition => condition.id.ToString(), StringComparer.Ordinal)
             .Select(group => group.First())
             .OrderBy(condition => condition.index)
@@ -71,4 +72,25 @@ internal static class EftLiveSnapshotAdapter
             expiration,
             quest.QuestStatus == EQuestStatus.AvailableForFinish);
     }
+
+    private static IEnumerable<Condition> ExpandWttCommonLibObjectives(Condition condition)
+    {
+        yield return condition;
+        if (condition is not ConditionCounterCreator counter
+            || counter.ChildConditions is null
+            || !counter.ChildConditions.Any(IsWttSalvageCondition))
+        {
+            yield break;
+        }
+
+        foreach (var child in counter.ChildConditions.Where(child =>
+                     child is not null
+                     && (IsWttSalvageCondition(child) || child is ConditionLeaveItemAtLocation)))
+        {
+            yield return child;
+        }
+    }
+
+    private static bool IsWttSalvageCondition(Condition condition) =>
+        string.Equals(condition.GetType().Name, "ConditionSalvage", StringComparison.Ordinal);
 }

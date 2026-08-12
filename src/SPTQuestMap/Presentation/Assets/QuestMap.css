@@ -283,6 +283,7 @@ h1 { margin: 0; font: 700 1.55rem/1 Georgia, serif; letter-spacing: -.02em; }
 .objectives { display: grid; gap: .55rem; margin: 0; padding: 0; list-style: none; }
 .objectives li { display: grid; grid-template-columns: 20px 1fr; gap: .42rem; color: #d0d0c6; }
 .objectives li.complete { color: #86b590; }
+.objectives li.nested-objective { margin-left: 1rem; }
 .objective-marker { padding-top: .05rem; font-size: 1rem; }
 .objective-description, .objectives small { display: block; }
 .objective-description { font-size: .78rem; font-weight: 700; line-height: 1.35; }
