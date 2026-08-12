@@ -104,7 +104,10 @@ internal sealed class RaidQuestRuntime : IDisposable
             _questController = raid.QuestController;
             _locationId = raid.LocationId;
             _currentMapIds.Clear();
-            _currentMapIds.UnionWith(raid.TrackingLocationIds());
+            var currentMapIds = _adapter.Topology is null
+                ? new[] { raid.LocationId }
+                : QuestObjectiveMapRules.ExpandMapIds([raid.LocationId], _adapter.Topology.MapAliases);
+            _currentMapIds.UnionWith(currentMapIds);
             _tracking.BeginRaid(_currentMapIds);
             if (_adapter.Overlay is not null) _tracking.ReloadFavorites(_adapter.Overlay.ProfileId);
             _progressMonitor = new RaidQuestProgressMonitor(
@@ -257,7 +260,7 @@ internal sealed class RaidQuestRuntime : IDisposable
             topology,
             overlay,
             trackedQuestIds,
-            raid.TrackingLocationIds(),
+            [raid.LocationId],
             _configuration.SmartInRaidTracking.Value);
     }
 

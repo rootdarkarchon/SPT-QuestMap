@@ -4,7 +4,6 @@ using SPTarkov.Server.Core.Extensions;
 using SPTarkov.Server.Core.Helpers;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Enums;
-using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Services;
 
@@ -15,7 +14,6 @@ internal sealed class QuestTopologyBuilder(
     LocaleService localeService,
     QuestHelper questHelper,
     SeasonalEventService seasonalEventService,
-    QuestConfig questConfig,
     QuestSummaryCatalog summaryCatalog,
     QuestMetaInfoCatalog metaInfoCatalog,
     QuestZoneMapCatalog zoneMapCatalog,
@@ -48,12 +46,13 @@ internal sealed class QuestTopologyBuilder(
             .Values
             .Where(location => location?.Base?.Id is not null)
             .ToArray();
-        var locationsById = QuestTemplateMapper.BuildLocationLookup(locationValues, questConfig.LocationIdMap);
+        var locationsById = QuestTemplateMapper.BuildLocationLookup(locationValues);
         var canonicalMapIdsByAlias = locationsById.ToDictionary(
             pair => pair.Key,
             pair => pair.Value.Base.Id,
             StringComparer.OrdinalIgnoreCase);
         var questItemSpawnMapIds = QuestTemplateMapper.BuildQuestItemSpawnMapLookup(locationValues, items);
+        var mapAliases = QuestTemplateMapper.BuildMapAliases(locationValues);
         var edges = new List<QuestEdgeDto>();
         var nodes = new List<QuestNodeDto>(dbQuests.Length);
 
@@ -196,7 +195,9 @@ internal sealed class QuestTopologyBuilder(
         var canonical = string.Join('\n', nodes.Select(node => $"{node.Id}:{node.ActualMapsComplete}:{string.Join(',', node.ActualMaps.Select(map => map.Id))}:{string.Join(';', node.Objectives.Select(objective => $"{objective.Id}={string.Join(',', objective.MapIds)}!{string.Join(',', objective.UnresolvedZoneIds)}"))}").Concat(edges
             .OrderBy(edge => edge.SourceId)
             .ThenBy(edge => edge.TargetId)
-            .Select(edge => $"{edge.SourceId}>{edge.TargetId}:{string.Join(',', edge.RequiredStatuses)}")));
+            .Select(edge => $"{edge.SourceId}>{edge.TargetId}:{string.Join(',', edge.RequiredStatuses)}"))
+            .Concat(mapAliases.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(pair => $"map:{pair.Key}={string.Join(',', pair.Value)}")));
         var version = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)))[..16].ToLowerInvariant();
         var traderCatalog = traders
             .OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal)
@@ -214,7 +215,7 @@ internal sealed class QuestTopologyBuilder(
             traderCatalog,
             collectorPathQuestIds.Order(StringComparer.Ordinal).ToArray(),
             lightkeeperPathQuestIds.Order(StringComparer.Ordinal).ToArray()
-        );
+        ) { MapAliases = mapAliases };
     }
 
     private string GetQuestFaction(MongoId questId)

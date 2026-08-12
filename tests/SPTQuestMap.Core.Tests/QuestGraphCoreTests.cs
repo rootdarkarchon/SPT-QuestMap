@@ -1349,10 +1349,11 @@ public sealed class QuestGraphCoreTests
             new QuestObjectivePayload { Id = "other-only", Text = "Other only", ConditionType = "VisitPlace", MapIds = ["woods"] },
         ];
         var specific = Node("specific", "Prapor", "Any");
-        specific.Location = new QuestLocationPayload { Id = "customs", Name = "Customs" };
+        specific.Location = new QuestLocationPayload { Id = "customs-mongo", Name = "Customs" };
         specific.Objectives =
         [
-            new QuestObjectivePayload { Id = "specific-zone", Text = "Specific", ConditionType = "CounterCreator" },
+            new QuestObjectivePayload { Id = "specific-zone", Text = "Specific", ConditionType = "CounterCreator", MapIds = ["customs"] },
+            new QuestObjectivePayload { Id = "specific-handover", Text = "Handover", ConditionType = "HandoverItem" },
         ];
         var transition = Node("transition", "Prapor", "Any");
         transition.Location = new QuestLocationPayload { Id = "marathon", Name = "Transition" };
@@ -1363,6 +1364,11 @@ public sealed class QuestGraphCoreTests
         ];
         var nodes = new[] { mixedAny, otherOnlyAny, specific, transition };
         var feed = Feed(nodes, []);
+        feed.Topology.MapAliases = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["customs"] = ["customs", "customs-mongo"],
+            ["woods"] = ["woods", "woods-mongo"],
+        };
         feed.DefaultVisibleQuestIds = nodes.Select(node => node.Id).ToArray();
         feed.AllApplicableQuestIds = nodes.Select(node => node.Id).ToArray();
         var topology = QuestTopologyNormalizer.Normalize(feed);
@@ -1379,7 +1385,7 @@ public sealed class QuestGraphCoreTests
             topology,
             overlay,
             nodes.Select(node => node.Id).ToArray(),
-            ["customs"],
+            ["customs-mongo"],
             smartTracking: true);
         var quests = projection.Groups.SelectMany(group => group.Quests)
             .ToDictionary(entry => entry.Quest.Id, StringComparer.Ordinal);
@@ -1394,6 +1400,19 @@ public sealed class QuestGraphCoreTests
             Assert.That(quests["transition"].Objectives.Select(entry => entry.Definition.Id),
                 Is.EqualTo(new[] { "transition-matching" }));
         });
+    }
+
+    [Test]
+    public void MapAliasExpansion_BridgesNativeMongoAndInternalTaskMapIds()
+    {
+        var aliases = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Woods"] = new[] { "Woods", "5704e3c2d2720bac5b8b4567" },
+        };
+
+        Assert.That(
+            QuestObjectiveMapRules.ExpandMapIds(["5704e3c2d2720bac5b8b4567"], aliases),
+            Is.EquivalentTo(new[] { "Woods", "5704e3c2d2720bac5b8b4567" }));
     }
 
     [Test]

@@ -83,14 +83,18 @@ public sealed class QuestMapDataServiceTests
     public void BuildLocationLookup_MapsQuestMongoIdToInternalLocation()
     {
         const string questLocationId = "56f40101d2720b2a4d8b45d6";
-        var customs = new SPTarkov.Server.Core.Models.Eft.Common.Location { Base = new LocationBase { Id = "bigmap" } };
+        var customs = new SPTarkov.Server.Core.Models.Eft.Common.Location
+        {
+            Base = new LocationBase { Id = "bigmap", IdField = new MongoId(questLocationId) },
+        };
 
-        var result = QuestTemplateMapper.BuildLocationLookup(
-            [customs],
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["bigmap"] = questLocationId }
-        );
+        var result = QuestTemplateMapper.BuildLocationLookup([customs]);
 
-        Assert.That(result[questLocationId], Is.SameAs(customs));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result["bigmap"], Is.SameAs(customs));
+            Assert.That(result[questLocationId], Is.SameAs(customs));
+        });
     }
 
     [Test]

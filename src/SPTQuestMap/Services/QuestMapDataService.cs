@@ -1,7 +1,6 @@
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Helpers;
-using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Services;
@@ -18,17 +17,14 @@ public sealed class QuestMapDataService : IOnLoad
     private readonly QuestProfileStateBuilder _profiles;
     private readonly SaveServer _saveServer;
 
-#pragma warning disable CS0618 // SPT 4.0.13 provides ConfigServer; direct config DI starts in 4.1.
     public QuestMapDataService(
         DatabaseService databaseService,
         LocaleService localeService,
         SaveServer saveServer,
         QuestHelper questHelper,
         SeasonalEventService seasonalEventService,
-        ConfigServer configServer,
         ISptLogger<QuestMapDataService> logger
     )
-#pragma warning restore CS0618
     {
         _databaseService = databaseService;
         _saveServer = saveServer;
@@ -41,9 +37,6 @@ public sealed class QuestMapDataService : IOnLoad
             localeService,
             questHelper,
             seasonalEventService,
-#pragma warning disable CS0618 // SPT 4.0.13 exposes config instances through ConfigServer.
-            configServer.GetConfig<QuestConfig>(),
-#pragma warning restore CS0618
             new QuestSummaryCatalog(warning: message => logger.Warning(message)),
             _metaInfoCatalog,
             zoneMapCatalog,
@@ -55,9 +48,6 @@ public sealed class QuestMapDataService : IOnLoad
             saveServer,
             questHelper,
             seasonalEventService,
-#pragma warning disable CS0618 // SPT 4.0.13 exposes config instances through ConfigServer.
-            configServer.GetConfig<QuestConfig>(),
-#pragma warning restore CS0618
             zoneMapCatalog,
             logger
         );

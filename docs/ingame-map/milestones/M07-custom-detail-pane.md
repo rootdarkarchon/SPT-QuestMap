@@ -10,7 +10,9 @@ Milestone 6 global and trader graph screens must be stable. M06 was user-accepte
 
 ## Status
 
-Feature-complete; final polish active as of 2026-08-09. The reusable pane is implemented on both the global Tasks workspace and the trader-scoped replacement. Trader Tasks/Quest Map composition uses the same table, graph, selection, detail, tracking, asset-cache, and native-action components as the global screen. A fresh-profile runtime pass accepted multiple quest accept, fulfillment, handover, turn-in, successor-unlock, and presentation transitions. Workspace bounds, filters, grouping, shared selection/detail synchronization, pinning, notification opacity, and trader objective expansion are also accepted. Milestone 8 remains deferred until this release-facing polish is accepted.
+The original M07 implementation checkpoint was user-accepted on 2026-08-09. The reusable pane is implemented on both the global Tasks workspace and the trader-scoped replacement. Trader Tasks/Quest Map composition uses the same table, graph, selection, detail, tracking, asset-cache, and native-action components as the global screen. That checkpoint covered multiple quest accept, fulfillment, handover, turn-in, successor-unlock, and presentation transitions together with workspace bounds, filters, grouping, shared selection/detail synchronization, pinning, notification opacity, and trader objective expansion.
+
+That acceptance is historical evidence for the reviewed build, not final acceptance of the current 2.0 candidate. Substantial planned 2.0 work followed it, including changes that cross M07's detail, action, reconciliation, and presentation boundaries. Feature scope is now frozen at the completed multi-map integration boundary. Current-build regression correction, performance work, validation, and any narrowly necessary corrective additions are owned by active Milestone 8 rather than reopening M07 as an ongoing feature milestone.
 
 ### Release-facing UI polish
 
@@ -253,3 +255,5 @@ Milestone 7 is complete when:
 - the browser/in-game parity audit has no unexplained functional or presentation gaps.
 
 When complete, proceed to `M08-packaging-release-hardening.md`.
+
+The 2026-08-09 checkpoint satisfied this gate for its then-current build. Because later frozen-scope 2.0 work changed several integrated paths, the final current-build acceptance is intentionally repeated under M08's stabilization and release gate.

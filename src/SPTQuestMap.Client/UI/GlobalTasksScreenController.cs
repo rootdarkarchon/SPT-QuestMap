@@ -674,7 +674,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     {
         _traderId = null;
         _inProgressLocationIds.Clear();
-        _inProgressLocationIds.UnionWith(context.DefaultLocationIds());
+        _inProgressLocationIds.UnionWith(context.DefaultLocationIds(_topology!.MapAliases));
         _inProgressLocationsInitialized = true;
         QuestMapDebugLog.Info(Log,
             "QUESTMAP_M06_RAID_FILTERS " +

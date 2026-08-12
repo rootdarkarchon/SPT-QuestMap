@@ -66,6 +66,8 @@ public sealed class QuestTopologyPayload
     public string[] CollectorPathQuestIds { get; set; } = [];
 
     public string[] LightkeeperPathQuestIds { get; set; } = [];
+
+    public Dictionary<string, string[]> MapAliases { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public sealed class QuestTraderPayload

@@ -51,6 +51,7 @@ public static class QuestTopologyNormalizer
             KnownIds(feed.AllApplicableQuestIds, nodeIds),
             current.CollectorPathQuestIds,
             current.LightkeeperPathQuestIds,
+            current.MapAliases,
             diagnostics);
     }
 
@@ -113,6 +114,17 @@ public static class QuestTopologyNormalizer
             missingPredecessors,
             missingTargets,
             nodes.Sum(node => node.UnknownConditions.Count));
+        var mapAliases = (feed.Topology.MapAliases ?? new Dictionary<string, string[]>())
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Key))
+            .ToDictionary(
+                pair => pair.Key,
+                pair => (IReadOnlyCollection<string>)(pair.Value ?? [])
+                    .Append(pair.Key)
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                StringComparer.OrdinalIgnoreCase);
 
         var defaultVisible = KnownIds(feed.DefaultVisibleQuestIds, nodeIds);
         var applicable = KnownIds(feed.AllApplicableQuestIds, nodeIds);
@@ -131,6 +143,7 @@ public static class QuestTopologyNormalizer
             applicable,
             KnownIds(feed.Topology.CollectorPathQuestIds, nodeIds),
             KnownIds(feed.Topology.LightkeeperPathQuestIds, nodeIds),
+            mapAliases,
             diagnostics);
     }
 

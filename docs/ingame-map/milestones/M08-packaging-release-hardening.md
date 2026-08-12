@@ -1,14 +1,20 @@
-# Milestone 8 — Packaging and Release Hardening
+# Milestone 8 — 2.0 Stabilization and Release Validation
 
 ## Objective
 
-Prepare the server/client pair for reliable SPT 4.0.13 distribution.
+Stabilize and validate the feature-complete 2.0 server/client pair, then prepare it for reliable SPT 4.0.13 distribution.
 
 ## Prerequisite
 
-Milestone 7 must be complete or deliberately deferred with native detail fallback chosen as the release behavior.
+Milestone 7's original implementation checkpoint was accepted on 2026-08-09. Substantial planned 2.0 work followed that checkpoint and crossed its integrated detail, action, tracking, transport, and presentation paths, so the final current-build acceptance belongs to this milestone.
 
-Milestone 8 validates and hardens the visual and functional work from Milestones 6 and 7. It may fix regression and consistency defects, but it is not the milestone in which the primary visual system or full-pane trader layout is first designed.
+Feature scope is frozen at the completed multi-map integration boundary. Milestone 8 validates and hardens the complete visual and functional work from Milestones 6 and 7 plus the subsequent planned 2.0 additions. It owns regression fixes, performance corrections, automated and live validation, compatibility/fallback verification, documentation, packaging, and release evidence.
+
+M08 does not accept discretionary feature expansion. A regression may expose a missing capability or unsafe assumption that cannot be corrected adequately with a narrow fix. In that case, an unforeseen feature addition is allowed only when it is necessary to restore frozen behavior or safely satisfy an already-frozen requirement. Record the discovered regression, why an ordinary fix is insufficient, the smallest added capability, and its validation. Unrelated improvements and newly desired capabilities remain post-2.0 backlog work.
+
+## Status
+
+**Active.** Implementation scope is frozen and stabilization is ongoing. A prior M07 runtime pass remains useful evidence, but it does not substitute for current-build validation after the later action, refresh, performance, tracking, localization, metadata, and multi-map changes.
 
 ## Compatibility handling
 

@@ -20,8 +20,8 @@ Cover pure state and graph logic with small fixtures:
 - repeatable search, trader, and finished filtering, default-on persisted calendar visibility, plus selection/details without focused-chain activation;
 - hide-finished behavior;
 - objective dependency ordering;
-- task-zone map resolution, shared triggers spanning multiple maps, canonical Factory/Ground Zero variant IDs, unknown-zone `Any` fallback, and server-to-client actual-map transport;
-- objective-aware native map-filter membership/row visibility, explicit identification of objectives omitted by inactive map filters for the partial-quest summary row, native-location sorting, server-map-driven raid tracked-list projection, and smart in-raid objective-type filtering;
+- task-zone map resolution, shared triggers spanning multiple maps, canonical Factory/Ground Zero variant IDs, unknown-zone `Any` fallback, server-to-client actual-map transport, and loaded-location internal/Mongo alias transport;
+- objective-aware native map-filter membership/row visibility, explicit identification of objectives omitted by inactive map filters for the partial-quest summary row, native-location sorting, Mongo-to-internal alias expansion in the server-map-driven raid tracked-list projection, and smart in-raid objective-type filtering;
 - objective rich-text parsing through the same allowlisted sanitizer as descriptions and rewards;
 - task counter mapping, including capped exposed progress without changing raw comparator semantics;
 - focused-chain closure: recursive predecessors plus direct successors only.

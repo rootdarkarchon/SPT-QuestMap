@@ -3,7 +3,6 @@ using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Enums;
-using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Services;
@@ -17,7 +16,6 @@ internal sealed class QuestProfileStateBuilder(
     SaveServer saveServer,
     QuestHelper questHelper,
     SeasonalEventService seasonalEventService,
-    QuestConfig questConfig,
     QuestZoneMapCatalog zoneMapCatalog,
     ISptLogger<QuestMapDataService> logger
 )
@@ -238,7 +236,7 @@ internal sealed class QuestProfileStateBuilder(
             .GetDictionary()
             .Values
             .Where(location => location?.Base?.Id is not null);
-        var locationsById = QuestTemplateMapper.BuildLocationLookup(locationValues, questConfig.LocationIdMap);
+        var locationsById = QuestTemplateMapper.BuildLocationLookup(locationValues);
 
         return (pmc.RepeatableQuests ?? [])
             .Where(group => RepeatableQuestRules.ShouldIncludeGroup(group.Name))

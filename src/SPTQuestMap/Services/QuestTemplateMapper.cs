@@ -29,18 +29,12 @@ internal static class QuestTemplateMapper
         );
     }
 
-    internal static Dictionary<string, Location> BuildLocationLookup(
-        IEnumerable<Location> locations,
-        IReadOnlyDictionary<string, string> locationIdMap
-    )
+    internal static Dictionary<string, Location> BuildLocationLookup(IEnumerable<Location> locations)
     {
-        var byInternalId = locations
-            .GroupBy(location => location.Base.Id, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-        var result = new Dictionary<string, Location>(byInternalId, StringComparer.OrdinalIgnoreCase);
-        foreach (var (internalId, questLocationId) in locationIdMap)
+        var result = new Dictionary<string, Location>(StringComparer.OrdinalIgnoreCase);
+        foreach (var location in locations)
         {
-            if (byInternalId.TryGetValue(internalId, out var location)) result[questLocationId] = location;
+            foreach (var id in GetLocationIdentityIds(location)) result[id] = location;
         }
 
         return result;
@@ -277,6 +271,35 @@ internal static class QuestTemplateMapper
         if (string.Equals(mapId, "factory4_night", StringComparison.OrdinalIgnoreCase)) return "factory4_day";
         if (string.Equals(mapId, "Sandbox_high", StringComparison.OrdinalIgnoreCase)) return "Sandbox";
         return mapId;
+    }
+
+    internal static IReadOnlyDictionary<string, string[]> BuildMapAliases(
+        IEnumerable<Location> locations)
+    {
+        var aliases = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var location in locations.Where(location => !string.IsNullOrWhiteSpace(location.Base?.Id)))
+        {
+            var internalId = location.Base.Id;
+            var canonical = CanonicalizeVariantMapId(internalId);
+            if (!aliases.TryGetValue(canonical, out var values))
+            {
+                values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                aliases[canonical] = values;
+            }
+            values.Add(canonical);
+            values.UnionWith(GetLocationIdentityIds(location));
+        }
+        return aliases.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray(),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<string> GetLocationIdentityIds(Location location)
+    {
+        if (!string.IsNullOrWhiteSpace(location.Base?.Id)) yield return location.Base.Id;
+        var mongoId = location.Base?.IdField.ToString();
+        if (!string.IsNullOrWhiteSpace(mongoId)) yield return mongoId;
     }
 
     internal static QuestRewardDto[] BuildRewards(

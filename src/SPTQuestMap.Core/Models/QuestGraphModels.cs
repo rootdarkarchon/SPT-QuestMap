@@ -167,6 +167,7 @@ public sealed class QuestGraphTopology
         IReadOnlyCollection<string> applicableQuestIds,
         IReadOnlyCollection<string> collectorPathQuestIds,
         IReadOnlyCollection<string> lightkeeperPathQuestIds,
+        IReadOnlyDictionary<string, IReadOnlyCollection<string>> mapAliases,
         QuestTopologyDiagnostics diagnostics)
     {
         Version = version;
@@ -177,6 +178,7 @@ public sealed class QuestGraphTopology
         ApplicableQuestIds = applicableQuestIds;
         CollectorPathQuestIds = collectorPathQuestIds;
         LightkeeperPathQuestIds = lightkeeperPathQuestIds;
+        MapAliases = mapAliases;
         Diagnostics = diagnostics;
 
         NodesById = new ReadOnlyDictionary<string, QuestGraphNode>(
@@ -202,6 +204,8 @@ public sealed class QuestGraphTopology
     public IReadOnlyCollection<string> CollectorPathQuestIds { get; }
 
     public IReadOnlyCollection<string> LightkeeperPathQuestIds { get; }
+
+    public IReadOnlyDictionary<string, IReadOnlyCollection<string>> MapAliases { get; }
 
     public IReadOnlyDictionary<string, QuestGraphNode> NodesById { get; }
 

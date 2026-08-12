@@ -3,6 +3,7 @@ using System.Linq;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using SPTQuestMap.Client.Data;
+using SPTQuestMap.Client.Input;
 using SPTQuestMap.Core.Layout;
 using SPTQuestMap.Core.Models;
 using SPTQuestMap.Client.Localization;
@@ -133,7 +134,7 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
     private void Update()
     {
         var inRaid = InRaidQuestContext.TryCapture(out _);
-        if (_hotkey is not null && inRaid && IsPressed(_hotkey()))
+        if (_hotkey is not null && inRaid && QuestMapKeyboardShortcut.IsDown(_hotkey()))
         {
             if (_shown) BeginFadeOut();
             else Show();
@@ -339,8 +340,5 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
 
     private static double CappedCurrent(QuestObjectiveProgress progress) =>
         QuestProgressRules.CapCurrent(progress.Current, progress.Required).GetValueOrDefault();
-
-    private static bool IsPressed(KeyboardShortcut shortcut)
-        => shortcut.MainKey != KeyCode.None && shortcut.IsDown();
 
 }

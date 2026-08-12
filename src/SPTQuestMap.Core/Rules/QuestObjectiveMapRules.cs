@@ -4,6 +4,18 @@ namespace SPTQuestMap.Core.Rules;
 
 public static class QuestObjectiveMapRules
 {
+    public static IReadOnlyCollection<string> ExpandMapIds(
+        IReadOnlyCollection<string> mapIds,
+        IReadOnlyDictionary<string, IReadOnlyCollection<string>> mapAliases)
+    {
+        var expanded = mapIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var aliases in mapAliases.Values)
+        {
+            if (aliases.Any(expanded.Contains)) expanded.UnionWith(aliases);
+        }
+        return expanded;
+    }
+
     public static bool IsActualMapPlaceholder(QuestLocation location) =>
         location.Any
         || location.Id.Contains("transit", StringComparison.OrdinalIgnoreCase)

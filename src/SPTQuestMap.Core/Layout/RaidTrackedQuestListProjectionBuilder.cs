@@ -12,6 +12,7 @@ public static class RaidTrackedQuestListProjectionBuilder
         IReadOnlyCollection<string> currentMapIds,
         bool smartTracking = false)
     {
+        currentMapIds = QuestObjectiveMapRules.ExpandMapIds(currentMapIds, topology.MapAliases);
         var tracked = trackedQuestIds.ToHashSet(StringComparer.Ordinal);
         var applicableSource = overlay.AuthoritativeDisplayStates.Count > 0
             ? overlay.ApplicableQuestIds

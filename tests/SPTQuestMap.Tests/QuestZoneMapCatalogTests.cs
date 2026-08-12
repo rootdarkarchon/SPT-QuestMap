@@ -80,6 +80,45 @@ public sealed class QuestZoneMapCatalogTests
     }
 
     [Test]
+    public void MapAliasesBridgeQuestMongoIdsToCanonicalInternalMapIds()
+    {
+        var aliases = QuestTemplateMapper.BuildMapAliases(
+        [
+            Location("Woods", "5704e3c2d2720bac5b8b4567"),
+            Location("factory4_day", "55f2d3fd4bdc2d5f408b4567"),
+            Location("factory4_night", "59fc81d786f774390775787e"),
+            Location("Sandbox", "653e6760052c01c1c805532f"),
+            Location("Sandbox_high", "65e5a9d6e41e5f0d19b17a5f"),
+        ]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(aliases["Woods"], Is.EquivalentTo(new[] { "Woods", "5704e3c2d2720bac5b8b4567" }));
+            Assert.That(aliases["factory4_day"], Is.EquivalentTo(new[]
+            {
+                "factory4_day",
+                "factory4_night",
+                "55f2d3fd4bdc2d5f408b4567",
+                "59fc81d786f774390775787e",
+            }));
+            Assert.That(aliases.Keys, Does.Not.Contain("factory4_night"));
+            Assert.That(aliases["Sandbox"], Is.EquivalentTo(new[]
+            {
+                "Sandbox",
+                "Sandbox_high",
+                "653e6760052c01c1c805532f",
+                "65e5a9d6e41e5f0d19b17a5f",
+            }));
+            Assert.That(aliases.Keys, Does.Not.Contain("Sandbox_high"));
+        });
+    }
+
+    private static Location Location(string internalId, string mongoId) => new()
+    {
+        Base = new LocationBase { Id = internalId, IdField = new MongoId(mongoId) },
+    };
+
+    [Test]
     public void ExplicitLocationsAndForcedQuestItemSpawnsSupplementObjectiveMaps()
     {
         using var fixture = new CatalogFixture(new Dictionary<string, string[]>());

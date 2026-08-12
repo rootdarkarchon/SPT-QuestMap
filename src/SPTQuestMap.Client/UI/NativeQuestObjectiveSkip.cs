@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using BepInEx.Configuration;
+using SPTQuestMap.Client.Input;
 using BepInEx.Logging;
 using SPTQuestMap.Client.Localization;
 using EFT;
@@ -207,7 +208,7 @@ internal sealed class QuestObjectiveSkipVisibility : MonoBehaviour
 
     private void Update()
     {
-        var next = _enabled?.Invoke() == true && _hotkey is not null && _hotkey().IsPressed();
+        var next = _enabled?.Invoke() == true && _hotkey is not null && QuestMapKeyboardShortcut.IsPressed(_hotkey());
         if (next != _showSkip)
         {
             _showSkip = next;
@@ -221,7 +222,7 @@ internal sealed class QuestObjectiveSkipVisibility : MonoBehaviour
 
     private void RefreshVisibility()
     {
-        _showSkip = _enabled?.Invoke() == true && _hotkey is not null && _hotkey().IsPressed();
+        _showSkip = _enabled?.Invoke() == true && _hotkey is not null && QuestMapKeyboardShortcut.IsPressed(_hotkey());
         ApplyAll();
     }
 

@@ -9,7 +9,11 @@ public sealed record QuestTopologyDto(
     IReadOnlyList<QuestTraderDto> Traders,
     string[] CollectorPathQuestIds,
     string[] LightkeeperPathQuestIds
-);
+)
+{
+    public IReadOnlyDictionary<string, string[]> MapAliases { get; init; } =
+        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+}
 
 public sealed record QuestTraderDto(string Id, string Name, string? ImageUrl);
 
