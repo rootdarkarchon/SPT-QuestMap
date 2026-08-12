@@ -20,6 +20,8 @@ internal sealed class QuestMapDataRuntime : IDisposable
     private readonly RaidQuestRuntime _raid;
     private readonly QuestRefreshCoordinator _refresh;
     private Coroutine? _loadCoroutine;
+    private bool _loadRequestedForScreen;
+    private int? _liveQuestCountBeforeLoad;
     private bool _disposed;
 
     public QuestMapDataRuntime(
@@ -67,6 +69,15 @@ internal sealed class QuestMapDataRuntime : IDisposable
 
     public void UpdateRaidMonitor() => _raid.Update();
 
+    public void WarmTopology()
+    {
+        if (_disposed || _adapter.Topology is not null || _loadCoroutine is not null) return;
+
+        QuestMapDebugLog.Info(_log,
+            "QUESTMAP_M02_PRELOAD started=True; trigger=main-menu; blocking=False");
+        _loadCoroutine = _coroutineOwner.StartCoroutine(LoadAndOverlay(backgroundWarmup: true));
+    }
+
     public void ObserveQuestController(AbstractQuestControllerClass questController) =>
         ObserveQuestController(questController, !_raid.Active);
 
@@ -111,11 +122,13 @@ internal sealed class QuestMapDataRuntime : IDisposable
             return;
         }
 
+        _loadRequestedForScreen = true;
+        _liveQuestCountBeforeLoad ??= questController.Quests.Count;
         if (_loadCoroutine is null)
-            _loadCoroutine = _coroutineOwner.StartCoroutine(LoadAndOverlay(questController.Quests.Count));
+            _loadCoroutine = _coroutineOwner.StartCoroutine(LoadAndOverlay(backgroundWarmup: false));
     }
 
-    private IEnumerator LoadAndOverlay(int liveQuestCountBefore)
+    private IEnumerator LoadAndOverlay(bool backgroundWarmup)
     {
         Task loadTask;
         try
@@ -124,8 +137,8 @@ internal sealed class QuestMapDataRuntime : IDisposable
         }
         catch (Exception exception)
         {
-            LogFailure(exception);
             _loadCoroutine = null;
+            HandleLoadFailure(exception, backgroundWarmup);
             yield break;
         }
 
@@ -134,20 +147,37 @@ internal sealed class QuestMapDataRuntime : IDisposable
         if (_disposed) yield break;
         if (loadTask.IsFaulted)
         {
-            LogFailure(loadTask.Exception?.GetBaseException()
-                ?? new InvalidOperationException("Unknown topology load failure."));
+            HandleLoadFailure(
+                loadTask.Exception?.GetBaseException()
+                    ?? new InvalidOperationException("Unknown topology load failure."),
+                backgroundWarmup);
             yield break;
+        }
+
+        if (backgroundWarmup)
+        {
+            QuestMapDebugLog.Info(_log,
+                "QUESTMAP_M02_PRELOAD completed=True; trigger=main-menu; blocking=False; " +
+                $"screenWaiting={_loadRequestedForScreen}; topologyVersion={_adapter.Topology?.Version}; " +
+                $"layoutNodes={_adapter.Layout?.NodesById.Count ?? 0}");
         }
 
         var controller = _refresh.CurrentController;
         if (controller is null)
         {
-            _log.LogWarning("QUESTMAP_M02_STATE active=False; safelyDisabled=True; reason=quest controller disappeared during topology load");
+            if (_loadRequestedForScreen)
+                _log.LogWarning("QUESTMAP_M02_STATE active=False; safelyDisabled=True; reason=quest controller disappeared during topology load");
+            ResetLoadRequest();
             yield break;
         }
 
+        var liveQuestCountBefore = _liveQuestCountBeforeLoad ?? controller.Quests.Count;
         var liveQuestCountAfter = controller.Quests.Count;
-        if (!_refresh.RefreshOverlay(controller, false)) yield break;
+        if (!_refresh.RefreshOverlay(controller, false))
+        {
+            ResetLoadRequest();
+            yield break;
+        }
         QuestMapDebugLog.Info(_log,
             "QUESTMAP_M02_BOOK " +
             $"before={liveQuestCountBefore}; after={liveQuestCountAfter}; unchanged={liveQuestCountBefore == liveQuestCountAfter}; " +
@@ -156,6 +186,28 @@ internal sealed class QuestMapDataRuntime : IDisposable
             "QUESTMAP_M02_STATE active=True; safelyDisabled=False; " +
             $"topologyVersion={_adapter.Topology?.Version}; layoutNodes={_adapter.Layout?.NodesById.Count ?? 0}");
         _screens.TryMountPending(controller);
+        ResetLoadRequest();
+    }
+
+    private void HandleLoadFailure(Exception exception, bool backgroundWarmup)
+    {
+        if (backgroundWarmup && !_loadRequestedForScreen)
+        {
+            _log.LogWarning(
+                $"QUESTMAP_M02_PRELOAD completed=False; trigger=main-menu; blocking=False; " +
+                $"retryOnScreen=True; error={exception.GetType().Name}: {exception.Message}");
+            ResetLoadRequest();
+            return;
+        }
+
+        LogFailure(exception);
+        ResetLoadRequest();
+    }
+
+    private void ResetLoadRequest()
+    {
+        _loadRequestedForScreen = false;
+        _liveQuestCountBeforeLoad = null;
     }
 
     private void LogFailure(Exception exception)

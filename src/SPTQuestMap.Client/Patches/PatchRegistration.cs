@@ -32,10 +32,25 @@ internal sealed class PatchRegistration : IDisposable
 
         _harmony = new Harmony(_harmonyId);
         QuestDataLifecyclePatch.Configure(dataRuntime.ObserveQuestController);
+        MainMenuTopologyWarmupPatch.Configure(
+            configuration.EnableTraderQuestGraph.Value || configuration.EnableGlobalTasksGraph.Value
+                ? dataRuntime.WarmTopology
+                : null);
         TraderGraphLifecyclePatch.Configure(dataRuntime);
         GlobalTasksLifecyclePatch.Configure(dataRuntime);
         foreach (var target in compatibility.PatchTargets.ResolvedMethods)
         {
+            if (target.DeclaringType == typeof(MainMenuControllerClass) && target.Name == "ShowScreen")
+            {
+                _harmony.Patch(
+                    target,
+                    postfix: new HarmonyMethod(
+                        typeof(MainMenuTopologyWarmupPatch),
+                        nameof(MainMenuTopologyWarmupPatch.ShowScreenPostfix)));
+                InstalledPatchCount++;
+                continue;
+            }
+
             if (target.DeclaringType == typeof(QuestsScreen) && target.Name == nameof(QuestsScreen.Show))
             {
                 _harmony.Patch(
@@ -86,6 +101,7 @@ internal sealed class PatchRegistration : IDisposable
     public void Dispose()
     {
         QuestDataLifecyclePatch.Configure(null);
+        MainMenuTopologyWarmupPatch.Configure(null);
         TraderGraphLifecyclePatch.Configure(null);
         GlobalTasksLifecyclePatch.Configure(null);
         _harmony?.UnpatchSelf();

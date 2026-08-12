@@ -10,6 +10,7 @@ internal static class PatchTargetCatalog
 {
     private static readonly string[] Names =
     {
+        "MainMenuControllerClass.ShowScreen",
         "EFT.UI.QuestsScreen.Show",
         "EFT.UI.QuestsScreen.Close",
         "EFT.UI.TasksScreen.Show",
@@ -22,6 +23,7 @@ internal static class PatchTargetCatalog
     {
         var specifications = new[]
         {
+            new TargetSpec(typeof(MainMenuControllerClass), "ShowScreen", 2),
             new TargetSpec(typeof(QuestsScreen), nameof(QuestsScreen.Show), 4),
             new TargetSpec(typeof(QuestsScreen), nameof(QuestsScreen.Close), 0),
             new TargetSpec(typeof(TasksScreen), nameof(TasksScreen.Show), 5),
