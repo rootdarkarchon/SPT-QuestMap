@@ -1452,6 +1452,33 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
+    public void TransitionPresentation_PrependsNativeLabelOnlyForMultipleDerivedMaps()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                QuestObjectiveMapRules.ShouldPrependTransitionLabel(
+                    "marathon", "Transition", false, 2),
+                Is.True);
+            Assert.That(
+                QuestObjectiveMapRules.ShouldPrependTransitionLabel(
+                    "marathon", "Transition", false, 1),
+                Is.False,
+                "A single derived map is not a multi-map quest.");
+            Assert.That(
+                QuestObjectiveMapRules.ShouldPrependTransitionLabel(
+                    "any", "Any", true, 2),
+                Is.False,
+                "Native Any quests must continue to show only their derived maps.");
+            Assert.That(
+                QuestObjectiveMapRules.ShouldPrependTransitionLabel(
+                    "bigmap", "Customs", false, 2),
+                Is.False,
+                "Ordinary map quests must not gain a Transition label.");
+        });
+    }
+
+    [Test]
     public void InProgressLocationFilter_UsesTaskMapsButPreservesNativeAnySelection()
     {
         var any = Node("mapped-any", "Prapor", "Any");

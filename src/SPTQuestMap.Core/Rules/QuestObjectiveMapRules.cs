@@ -18,9 +18,24 @@ public static class QuestObjectiveMapRules
 
     public static bool IsActualMapPlaceholder(QuestLocation location) =>
         location.Any
-        || location.Id.Contains("transit", StringComparison.OrdinalIgnoreCase)
-        || location.Id.Contains("marathon", StringComparison.OrdinalIgnoreCase)
-        || (location.Name?.Contains("transition", StringComparison.OrdinalIgnoreCase) ?? false);
+        || IsTransitionLocation(location.Id, location.Name, location.Any);
+
+    public static bool IsTransitionLocation(
+        string locationId,
+        string? locationName,
+        bool any) =>
+        !any
+        && (locationId.Contains("transit", StringComparison.OrdinalIgnoreCase)
+            || locationId.Contains("marathon", StringComparison.OrdinalIgnoreCase)
+            || (locationName?.Contains("transition", StringComparison.OrdinalIgnoreCase) ?? false));
+
+    public static bool ShouldPrependTransitionLabel(
+        string locationId,
+        string? locationName,
+        bool any,
+        int derivedMapCount) =>
+        derivedMapCount > 1
+        && IsTransitionLocation(locationId, locationName, any);
 
     public static bool UsesActualMaps(QuestGraphNode quest) =>
         IsActualMapPlaceholder(quest.Location)

@@ -1032,7 +1032,10 @@ internal sealed class GlobalTasksScreenController : IDisposable
         return changed;
     }
 
-    private bool UpdateInProgressPresentation(bool projectionChanged, bool rebuildChrome)
+    private bool UpdateInProgressPresentation(
+        bool projectionChanged,
+        bool rebuildChrome,
+        bool rebuildTraderStrip = false)
     {
         if (_disposed || _mode != GlobalQuestGraphMode.InProgress
             || _graphView is not InProgressQuestTableView table) return false;
@@ -1050,6 +1053,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
         table.UpdatePresentation(_projection, _hideCompletedInProgressTasks, _inProgressLocationIds);
         if (rebuildChrome) RebuildInProgressChrome();
+        else if (rebuildTraderStrip) RebuildInProgressTraderStrip();
         UpdateSelectionDetails();
         PersistCurrentState();
         stopwatch.Stop();
@@ -1072,6 +1076,19 @@ internal sealed class GlobalTasksScreenController : IDisposable
         BuildGlobalChrome();
     }
 
+    private void RebuildInProgressTraderStrip()
+    {
+        if (_graphView?.Root.Find("Header") is not RectTransform header) return;
+        foreach (var traderRoot in header.Cast<Transform>()
+                     .Where(child => child.name.StartsWith("Trader-", StringComparison.Ordinal))
+                     .ToArray())
+        {
+            traderRoot.gameObject.SetActive(false);
+            UnityEngine.Object.Destroy(traderRoot.gameObject);
+        }
+        BuildTraderStrip(header);
+    }
+
     private void ToggleInProgressLocation(string? locationId)
     {
         if (locationId is null) return;
@@ -1083,7 +1100,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             else _inProgressLocationIds.Add(alias);
         }
         RefreshInProgressMapVisuals();
-        if (!UpdateInProgressPresentation(true, false)) RebuildGraph(true);
+        if (!UpdateInProgressPresentation(true, false, true)) RebuildGraph(true);
     }
 
     private void SelectOnlyInProgressLocation(string? locationId)
@@ -1101,7 +1118,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         _inProgressLocationIds.Clear();
         _inProgressLocationIds.UnionWith(nextIds);
         RefreshInProgressMapVisuals();
-        if (!UpdateInProgressPresentation(true, false)) RebuildGraph(true);
+        if (!UpdateInProgressPresentation(true, false, true)) RebuildGraph(true);
     }
 
     private string InProgressLocationTooltip(string? locationId, string label)

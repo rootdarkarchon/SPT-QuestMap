@@ -4,6 +4,7 @@ using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Utils.Json;
+using SPTQuestMap.Presentation;
 using SPTQuestMap.Services;
 
 namespace SPTQuestMap.Tests;
@@ -58,6 +59,46 @@ public sealed class QuestZoneMapCatalogTests
             Assert.That(transition.Complete, Is.True,
                 "Transition quests must expose the server-computed objective maps while retaining their native location.");
             Assert.That(transition.Maps.Select(map => map.Id), Is.EqualTo(new[] { "bigmap" }));
+        });
+    }
+
+    [Test]
+    public void WebPresentation_PutsTransitionBeforeDerivedMapsOnlyForMultiMapTransitionQuest()
+    {
+        var transition = new QuestNodeDto(
+            "transition", "Transition quest", "", "trader", "Trader", null, "", "Any",
+            new QuestLocationDto("marathon", "Transition", false, null), null, false,
+            [], [], [], [], [])
+        {
+            ActualMapsComplete = true,
+            ActualMaps =
+            [
+                new QuestMapReferenceDto("bigmap", "Customs", "/customs.jpg"),
+                new QuestMapReferenceDto("Woods", "Woods", "/woods.jpg"),
+            ],
+        };
+        var any = transition with
+        {
+            Id = "any",
+            Location = new QuestLocationDto("any", null, true, null),
+        };
+        var singleMap = transition with
+        {
+            Id = "single",
+            ActualMaps = [new QuestMapReferenceDto("bigmap", "Customs", "/customs.jpg")],
+        };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                QuestMapLocationPresentation.DisplayMaps(transition, "Any").Select(map => map.Name),
+                Is.EqualTo(new[] { "Transition", "Customs", "Woods" }));
+            Assert.That(
+                QuestMapLocationPresentation.DisplayMaps(any, "Any").Select(map => map.Name),
+                Is.EqualTo(new[] { "Customs", "Woods" }));
+            Assert.That(
+                QuestMapLocationPresentation.DisplayMaps(singleMap, "Any").Select(map => map.Name),
+                Is.EqualTo(new[] { "Customs" }));
         });
     }
 

@@ -145,20 +145,8 @@
     private string StateLabel(string value) => Localizer[$"state.{value}"];
     private string QuestName(string? id) => id is null ? Localizer["common.unknownQuest"] : State.GetNode(id)?.Name ?? id;
     private string TraderName(string? id) => id is null ? Localizer["common.trader"] : State.Topology?.Traders.FirstOrDefault(trader => trader.Id == id)?.Name ?? id;
-    private QuestMapReferenceDto[] DisplayMaps(QuestNodeDto node)
-    {
-        if (UsesActualMaps(node.Location) && node.ActualMapsComplete && node.ActualMaps.Length > 0) return node.ActualMaps;
-        return
-        [
-            new QuestMapReferenceDto(
-                node.Location.Id,
-                node.Location.Any ? Localizer["location.any"] : node.Location.Name ?? node.Location.Id,
-                node.Location.BannerImageUrl),
-        ];
-    }
-
-    private static bool UsesActualMaps(QuestLocationDto location) =>
-        location.Any || string.Equals(location.Id, "marathon", StringComparison.OrdinalIgnoreCase);
+    private QuestMapReferenceDto[] DisplayMaps(QuestNodeDto node) =>
+        QuestMapLocationPresentation.DisplayMaps(node, Localizer["location.any"]);
 
     private string TraderSummary(QuestNodeDto node, TraderStateDto? traderState) => traderState is null
         ? Localizer.Format("trader.noState", ("trader", node.TraderName))

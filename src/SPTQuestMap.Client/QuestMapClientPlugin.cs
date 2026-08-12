@@ -1,11 +1,15 @@
+using System.Collections;
 using System.Reflection;
 using BepInEx;
+using EFT.UI;
+using EFT.UI.Screens;
 using SPTQuestMap.Client.Compatibility;
 using SPTQuestMap.Client.Configuration;
 using SPTQuestMap.Client.Diagnostics;
 using SPTQuestMap.Client.Data;
 using SPTQuestMap.Client.Patches;
 using SPTQuestMap.Client.UI;
+using UnityEngine;
 
 namespace SPTQuestMap.Client;
 
@@ -18,6 +22,7 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
 
     private PatchRegistration? _patchRegistration;
     private QuestMapDataRuntime? _dataRuntime;
+    private Coroutine? _topologyWarmupCoroutine;
 
     private void Awake()
     {
@@ -29,6 +34,12 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
         _dataRuntime = new QuestMapDataRuntime(this, Logger, configuration);
         _patchRegistration = new PatchRegistration(PluginGuid);
         var registration = _patchRegistration.Register(compatibility, configuration, _dataRuntime);
+        if (registration.Active
+            && (configuration.EnableTraderQuestGraph.Value || configuration.EnableGlobalTasksGraph.Value))
+        {
+            _topologyWarmupCoroutine = StartCoroutine(WarmTopologyAfterMainMenuReady());
+        }
+
         var assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? PluginVersion;
 
         StartupDiagnostics.Log(Logger, assemblyVersion, configuration, compatibility, registration);
@@ -36,8 +47,33 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
 
     private void Update() => _dataRuntime?.UpdateRaidMonitor();
 
+    private IEnumerator WarmTopologyAfterMainMenuReady()
+    {
+        while (_dataRuntime is not null)
+        {
+            if (CurrentScreenSingletonClass.Instance?.CheckCurrentScreen(EEftScreenType.MainMenu) == true)
+            {
+                // Let the completed main-menu transition settle before beginning
+                // the non-blocking request without patching its shared ShowScreen path.
+                yield return null;
+                _dataRuntime?.WarmTopology();
+                break;
+            }
+
+            yield return new WaitForSeconds(0.5f);
+        }
+
+        _topologyWarmupCoroutine = null;
+    }
+
     private void OnDestroy()
     {
+        if (_topologyWarmupCoroutine is not null)
+        {
+            StopCoroutine(_topologyWarmupCoroutine);
+            _topologyWarmupCoroutine = null;
+        }
+
         _patchRegistration?.Dispose();
         _patchRegistration = null;
         _dataRuntime?.Dispose();

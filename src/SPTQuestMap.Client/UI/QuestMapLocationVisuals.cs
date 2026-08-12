@@ -17,14 +17,36 @@ internal static class QuestMapLocationVisuals
         QuestGraphNode node,
         string fallbackBannerUrl)
     {
-        if (QuestObjectiveMapRules.UsesActualMaps(node)) return node.ActualMaps;
+        if (QuestObjectiveMapRules.UsesActualMaps(node))
+        {
+            if (QuestObjectiveMapRules.ShouldPrependTransitionLabel(
+                    node.Location.Id,
+                    node.Location.Name,
+                    node.Location.Any,
+                    node.ActualMaps.Count))
+            {
+                return
+                [
+                    NativeLocation(node, fallbackBannerUrl),
+                    .. node.ActualMaps,
+                ];
+            }
+
+            return node.ActualMaps;
+        }
+
+        return [NativeLocation(node, fallbackBannerUrl)];
+    }
+
+    private static QuestMapReference NativeLocation(QuestGraphNode node, string fallbackBannerUrl)
+    {
         var name = node.Location.Any
             ? ClientLocale.Text("common.any")
             : node.Location.Name ?? node.Location.Id;
         var banner = QuestObjectiveMapRules.IsActualMapPlaceholder(node.Location)
             ? fallbackBannerUrl
             : node.Location.BannerImageUrl ?? fallbackBannerUrl;
-        return [new QuestMapReference(node.Location.Id, name, banner)];
+        return new QuestMapReference(node.Location.Id, name, banner);
     }
 
     public static TMP_Text AddCompactMapText(
