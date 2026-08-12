@@ -90,6 +90,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private string _search = string.Empty;
     private readonly HashSet<string> _inProgressLocationIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, MapFilterVisual> _inProgressMapVisuals = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string[]> _inProgressMapAliases = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<QuestTableSortCriterion> _inProgressSortCriteria = [];
     private readonly HashSet<string> _expandedInProgressQuestIds = new(StringComparer.Ordinal);
     private bool _hideCompletedInProgressTasks;
@@ -550,8 +551,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
                  _favoriteQuestService ?? throw new InvalidOperationException("Native favorite-quest service is unavailable."),
                  _tracking,
                  _workspace,
-                 _requestQuestRefresh,
-                 initialViewport)
+                  _requestQuestRefresh,
+                  initialViewport,
+                  locationIds: _inProgressLocationIds)
             : QuestGraphView.Create(
                 mountRect,
                 BuildTitle(),
@@ -645,7 +647,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     {
         if (_inProgressLocationsInitialized || _topology is null || _layout is null || _overlay is null) return;
         foreach (var node in BuildProjection(applyLocationFilter: false, membershipOnly: true).Nodes)
-            _inProgressLocationIds.Add(node.Location.Any ? "any" : node.Location.Id);
+            AddNodeLocationFilters(_inProgressLocationIds, node);
         _inProgressLocationsInitialized = true;
     }
 
@@ -658,7 +660,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             var before = QuestGraphRules.ClassifyProfileDisplayState(_topology, node, previous);
             var after = QuestGraphRules.ClassifyProfileDisplayState(_topology, node, current);
             if (IsTaskLocationTrigger(before) || !IsTaskLocationTrigger(after)) continue;
-            changed |= _inProgressLocationIds.Add(node.Location.Any ? "any" : node.Location.Id);
+            changed |= AddNodeLocationFilters(_inProgressLocationIds, node);
         }
         if (changed) RefreshInProgressMapVisuals();
         return changed;
@@ -901,13 +903,24 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private void BuildInProgressMapStrip(RectTransform header)
     {
         if (_graphView is null) return;
+        _inProgressMapAliases.Clear();
         var relevantNodes = BuildProjection(false).Nodes;
         var locations = relevantNodes
-            .Select(node => node.Location)
-            .Where(location => !location.Any && !string.IsNullOrWhiteSpace(location.Id))
-            .GroupBy(location => location.Id, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
-            .OrderBy(location => location.Name ?? location.Id, StringComparer.OrdinalIgnoreCase)
+            .SelectMany(FilterMapChoices)
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Map.Id))
+            .GroupBy(candidate => candidate.Map.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+                var canonical = group.FirstOrDefault(candidate => candidate.Actual) ?? group.First();
+                return new MapFilterChoice(
+                    canonical.Map.Id,
+                    canonical.Map.Name,
+                    canonical.Map.BannerImageUrl,
+                    group.Select(candidate => candidate.Map.Id)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToArray());
+            })
+            .OrderBy(location => location.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(location => location.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
@@ -920,17 +933,17 @@ internal sealed class GlobalTasksScreenController : IDisposable
         var nextIndex = 0;
         if (hasAny)
         {
-            AddMapChoice(ClientLocale.Text("common.any"), "any", FallbackLocationBannerUrl, nextIndex, _inProgressLocationIds.Contains("any"));
+            AddMapChoice(ClientLocale.Text("common.any"), "any", FallbackLocationBannerUrl, ["any"], nextIndex, _inProgressLocationIds.Contains("any"));
             nextIndex++;
         }
         for (var index = 0; index < locations.Length; index++)
         {
             var location = locations[index];
-            AddMapChoice(location.Name ?? location.Id, location.Id, location.BannerImageUrl ?? FallbackLocationBannerUrl, nextIndex + index,
-                _inProgressLocationIds.Contains(location.Id));
+            AddMapChoice(location.Name, location.Id, location.BannerImageUrl ?? FallbackLocationBannerUrl, location.Aliases, nextIndex + index,
+                location.Aliases.Any(_inProgressLocationIds.Contains));
         }
 
-        void AddMapChoice(string label, string? id, string? bannerUrl, int index, bool selected)
+        void AddMapChoice(string label, string? id, string? bannerUrl, string[] aliases, int index, bool selected)
         {
             var root = UnityUiFactory.CreateRect($"Map-{id}", header);
             root.anchorMin = root.anchorMax = root.pivot = new Vector2(0, 1);
@@ -976,11 +989,12 @@ internal sealed class GlobalTasksScreenController : IDisposable
             outline.effectColor = selected ? QuestGraphPalette.Selected : QuestGraphPalette.Border;
             outline.effectDistance = selected ? new Vector2(2, -2) : Vector2.one;
             if (id is not null)
+            {
                 _inProgressMapVisuals[id] = new MapFilterVisual(background, banner, shadeImage, outline);
+                _inProgressMapAliases[id] = aliases;
+            }
             button.onClick.AddListener(() => ToggleInProgressLocation(id));
-            QuestMapNativeTooltips.Bind(root.gameObject, () => ClientLocale.Format(
-                selected ? "tooltip.clearLocation" : "tooltip.selectLocation",
-                ClientLocale.Arg("location", label)));
+            QuestMapNativeTooltips.Bind(root.gameObject, () => InProgressLocationTooltip(id, label));
 
             var pointerClicks = root.gameObject.AddComponent<EventTrigger>();
             var pointerClick = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
@@ -991,6 +1005,31 @@ internal sealed class GlobalTasksScreenController : IDisposable
             });
             pointerClicks.triggers.Add(pointerClick);
         }
+    }
+
+    private static IEnumerable<MapChoiceCandidate> FilterMapChoices(QuestGraphNode node)
+    {
+        if (!node.Location.Any)
+        {
+            yield return new MapChoiceCandidate(
+                new QuestMapReference(
+                    node.Location.Id,
+                    node.Location.Name ?? node.Location.Id,
+                    QuestObjectiveMapRules.IsActualMapPlaceholder(node.Location)
+                        ? FallbackLocationBannerUrl
+                        : node.Location.BannerImageUrl ?? FallbackLocationBannerUrl),
+                false);
+        }
+        if (!QuestObjectiveMapRules.IsActualMapPlaceholder(node.Location)) yield break;
+        foreach (var map in node.ActualMaps) yield return new MapChoiceCandidate(map, true);
+    }
+
+    private static bool AddNodeLocationFilters(HashSet<string> target, QuestGraphNode node)
+    {
+        var changed = target.Add(QuestObjectiveMapRules.NativeFilterId(node));
+        if (!QuestObjectiveMapRules.IsActualMapPlaceholder(node.Location)) return changed;
+        foreach (var map in node.ActualMaps) changed |= target.Add(map.Id);
+        return changed;
     }
 
     private bool UpdateInProgressPresentation(bool projectionChanged, bool rebuildChrome)
@@ -1009,7 +1048,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             CloseQuestDetails();
         }
 
-        table.UpdatePresentation(_projection, _hideCompletedInProgressTasks);
+        table.UpdatePresentation(_projection, _hideCompletedInProgressTasks, _inProgressLocationIds);
         if (rebuildChrome) RebuildInProgressChrome();
         UpdateSelectionDetails();
         PersistCurrentState();
@@ -1036,26 +1075,55 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private void ToggleInProgressLocation(string? locationId)
     {
         if (locationId is null) return;
-        if (!_inProgressLocationIds.Add(locationId)) _inProgressLocationIds.Remove(locationId);
+        var aliases = LocationAliases(locationId);
+        var selected = aliases.Any(_inProgressLocationIds.Contains);
+        foreach (var alias in aliases)
+        {
+            if (selected) _inProgressLocationIds.Remove(alias);
+            else _inProgressLocationIds.Add(alias);
+        }
         RefreshInProgressMapVisuals();
         if (!UpdateInProgressPresentation(true, false)) RebuildGraph(true);
     }
 
     private void SelectOnlyInProgressLocation(string? locationId)
     {
-        if (locationId is null
-            || (_inProgressLocationIds.Count == 1 && _inProgressLocationIds.Contains(locationId))) return;
+        if (locationId is null) return;
+        var aliases = LocationAliases(locationId);
+        var selectedChoices = _inProgressMapAliases.Values.Count(choiceAliases =>
+            choiceAliases.Any(_inProgressLocationIds.Contains));
+        var restoreAll = selectedChoices == 1 && aliases.Any(_inProgressLocationIds.Contains);
+        var next = restoreAll
+            ? _inProgressMapAliases.Values.SelectMany(choiceAliases => choiceAliases)
+            : aliases.AsEnumerable();
+        var nextIds = next.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (nextIds.SetEquals(_inProgressLocationIds)) return;
         _inProgressLocationIds.Clear();
-        _inProgressLocationIds.Add(locationId);
+        _inProgressLocationIds.UnionWith(nextIds);
         RefreshInProgressMapVisuals();
         if (!UpdateInProgressPresentation(true, false)) RebuildGraph(true);
+    }
+
+    private string InProgressLocationTooltip(string? locationId, string label)
+    {
+        if (locationId is null) return string.Empty;
+        var aliases = LocationAliases(locationId);
+        var selected = aliases.Any(_inProgressLocationIds.Contains);
+        var selectedChoices = _inProgressMapAliases.Values.Count(choiceAliases =>
+            choiceAliases.Any(_inProgressLocationIds.Contains));
+        var key = selected && selectedChoices == 1
+            ? "tooltip.clearLocationRestoreAll"
+            : selected
+                ? "tooltip.clearLocation"
+                : "tooltip.selectLocation";
+        return ClientLocale.Format(key, ClientLocale.Arg("location", label));
     }
 
     private void RefreshInProgressMapVisuals()
     {
         foreach (var pair in _inProgressMapVisuals)
         {
-            var selected = _inProgressLocationIds.Contains(pair.Key);
+            var selected = LocationAliases(pair.Key).Any(_inProgressLocationIds.Contains);
             pair.Value.Background.color = selected
                 ? QuestGraphPalette.ControlActive
                 : new Color(0.08f, 0.09f, 0.09f, 1);
@@ -1070,6 +1138,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
             pair.Value.Outline.effectDistance = selected ? new Vector2(2, -2) : Vector2.one;
         }
     }
+
+    private string[] LocationAliases(string locationId) =>
+        _inProgressMapAliases.GetValueOrDefault(locationId) ?? [locationId];
 
     private void ToggleInProgressSort(QuestTableSortColumn column)
     {
@@ -1873,6 +1944,34 @@ internal sealed class GlobalTasksScreenController : IDisposable
         QuestDescription,
         Notes,
         QuestItems,
+    }
+
+    private sealed class MapChoiceCandidate
+    {
+        public MapChoiceCandidate(QuestMapReference map, bool actual)
+        {
+            Map = map;
+            Actual = actual;
+        }
+
+        public QuestMapReference Map { get; }
+        public bool Actual { get; }
+    }
+
+    private sealed class MapFilterChoice
+    {
+        public MapFilterChoice(string id, string name, string? bannerImageUrl, string[] aliases)
+        {
+            Id = id;
+            Name = name;
+            BannerImageUrl = bannerImageUrl;
+            Aliases = aliases;
+        }
+
+        public string Id { get; }
+        public string Name { get; }
+        public string? BannerImageUrl { get; }
+        public string[] Aliases { get; }
     }
 
     private sealed class MapFilterVisual

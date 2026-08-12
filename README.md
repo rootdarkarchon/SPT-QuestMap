@@ -18,6 +18,7 @@ SPT-QuestMap is an independent community project. It is not affiliated with or e
 - Explains effective blockers such as player level, trader availability, loyalty level, standing, and prior quests.
 - Displays ordered objectives and known progress, including partial counter progress.
 - Shows quest descriptions, locations, rewards, prerequisites, and direct successors.
+- Resolves zone-bound tasks to their actual maps, replacing misleading `Any` labels when every spatial trigger is known and showing equal-share multi-map banner treatments on web and in-game. Native task-table map filters operate per objective while sorting retains Tarkov's original location, and the tracked raid list uses server assignments without scanning scene triggers.
 - Adds Description/Summary tabs when a static localized summary exists, with the preferred tab remembered across quests and reloads.
 - Adds authoritative quest Wiki links and resolved relevant-item lists; the in-game pane can open Tarkov's native Filter by item search for eligible items outside raids.
 - Marks Collector and Lightkeeper routes.

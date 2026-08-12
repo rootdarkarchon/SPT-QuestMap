@@ -196,7 +196,11 @@ public static class QuestTopologyNormalizer
                 objective.DependsOn ?? [],
                 objective.ZoneIds ?? [],
                 objective.OneSessionOnly,
-                objective.DoNotResetIfCounterCompleted)).ToArray(),
+                objective.DoNotResetIfCounterCompleted)
+            {
+                MapIds = objective.MapIds ?? [],
+                UnresolvedZoneIds = objective.UnresolvedZoneIds ?? [],
+            }).ToArray(),
             (node.ExclusionRules ?? []).Select(rule => new QuestExclusionRule(
                 rule.CausedByQuestId,
                 rule.RequiredStatuses ?? [])).ToArray(),
@@ -218,6 +222,11 @@ public static class QuestTopologyNormalizer
             profileGenerated,
             repeatableKind)
         {
+            ActualMaps = (node.ActualMaps ?? [])
+                .Where(map => !string.IsNullOrWhiteSpace(map.Id))
+                .Select(map => new QuestMapReference(map.Id, map.Name, map.BannerImageUrl))
+                .ToArray(),
+            ActualMapsComplete = node.ActualMapsComplete,
             Summary = string.IsNullOrWhiteSpace(summary) ? null : summary.Trim(),
             WikiUrl = string.IsNullOrWhiteSpace(metaInfo?.WikiUrl) ? null : metaInfo.WikiUrl.Trim(),
             RelevantItems = (metaInfo?.RelevantItems ?? [])

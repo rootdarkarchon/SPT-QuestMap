@@ -49,4 +49,13 @@ public sealed class QuestAutoTrackingRulesTests
     {
         Assert.That(QuestAutoTrackingRules.ShouldAutoTrackNewQuest(false, ["HandoverItem"]), Is.True);
     }
+
+    [TestCase("CounterCreator", true)]
+    [TestCase("FindItem", true)]
+    [TestCase("HandoverItem", false)]
+    [TestCase("WeaponAssembly", false)]
+    public void SmartInRaidTracking_UsesSharedObjectiveDefinitions(string objectiveType, bool expected)
+    {
+        Assert.That(QuestAutoTrackingRules.IsInRaidObjectiveType(objectiveType), Is.EqualTo(expected));
+    }
 }

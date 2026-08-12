@@ -51,6 +51,7 @@ $clientOutput = Join-Path $root 'dist/client'
 $dll = Join-Path $serverOutput 'SPTQuestMap.dll'
 $serverCoreDll = Join-Path $serverOutput 'SPTQuestMap.Core.dll'
 $metaInfo = Join-Path $serverOutput 'Data/metainfo.json'
+$triggerIds = Join-Path $serverOutput 'Data/triggerIds.json'
 $clientDll = Join-Path $clientOutput 'SPTQuestMap.Client.dll'
 $clientCoreDll = Join-Path $clientOutput 'SPTQuestMap.Core.dll'
 
@@ -62,6 +63,9 @@ if ($serverRequested -and -not (Test-Path -LiteralPath $serverCoreDll -PathType 
 }
 if ($serverRequested -and -not (Test-Path -LiteralPath $metaInfo -PathType Leaf)) {
     throw "Staged quest metadata was not found: $metaInfo"
+}
+if ($serverRequested -and -not (Test-Path -LiteralPath $triggerIds -PathType Leaf)) {
+    throw "Staged zone-to-map catalog was not found: $triggerIds"
 }
 if ($clientRequested -and -not (Test-Path -LiteralPath $clientDll -PathType Leaf)) {
     throw "Staged client DLL was not found: $clientDll. Run scripts/build.ps1 -Target Client first."
@@ -88,6 +92,7 @@ if ($serverRequested) {
     $dataDirectory = Join-Path $modDirectory 'Data'
     New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
     Copy-Item -LiteralPath $metaInfo -Destination $dataDirectory
+    Copy-Item -LiteralPath $triggerIds -Destination $dataDirectory
 
     $pdb = Join-Path $serverOutput 'SPTQuestMap.pdb'
     if (Test-Path -LiteralPath $pdb -PathType Leaf) {
@@ -133,6 +138,7 @@ try {
         $requiredEntries += 'SPT/user/mods/SPT-QuestMap/SPTQuestMap.dll'
         $requiredEntries += 'SPT/user/mods/SPT-QuestMap/SPTQuestMap.Core.dll'
         $requiredEntries += 'SPT/user/mods/SPT-QuestMap/Data/metainfo.json'
+        $requiredEntries += 'SPT/user/mods/SPT-QuestMap/Data/triggerIds.json'
     }
     if ($clientRequested) {
         $requiredEntries += 'BepInEx/plugins/SPTQuestMap/SPTQuestMap.Client.dll'

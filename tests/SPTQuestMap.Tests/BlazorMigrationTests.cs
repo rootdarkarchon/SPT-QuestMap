@@ -76,6 +76,20 @@ public sealed class BlazorMigrationTests
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("comparisonStateById"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("comparisonById"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("comparisonReason"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("displayMapReferences"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("usesActualMaps"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("'marathon'"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("drawAngledMapSlices"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("mapLeft=preserveQuestArtwork?layer.width*.6:0"),
+                "Quest artwork must remain visible while map banners occupy angled slices in only the right 40 percent of a card.");
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("ctx.moveTo(leftTop,0)"),
+                "Card slice boundaries must run from bottom-left to top-right.");
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("rightTop=index===maps.length-1?outerRight"),
+                "The final map slice must meet the card's full right edge without exposing the quest artwork in either corner.");
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Not.Contain("fadeOverQuest"),
+                "A single inferred map must use an explicit right-side slice rather than an unreliable soft fade.");
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".location-detail-images"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("--location-map-count"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("dimmed?dimAlpha"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Not.Contain("drawDifferenceMarker"));
             Assert.That(QuestMapEmbeddedAssets.RendererModuleDataUrl, Does.StartWith("data:text/javascript;base64,"));

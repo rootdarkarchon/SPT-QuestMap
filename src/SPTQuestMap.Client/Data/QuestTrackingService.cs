@@ -53,8 +53,7 @@ internal sealed class QuestTrackingService : IDisposable
             && favoriteIds.Contains(node.Id);
         var map = _configuration.AutoTrackMapRelatedQuests.Value
             && _raidLocationIds.Count > 0
-            && !node.Location.Any
-            && _raidLocationIds.Contains(node.Location.Id);
+            && QuestObjectiveMapRules.IsMapRelated(node, _raidLocationIds);
         return new QuestTrackingState(manual, favorite, map);
     }
 

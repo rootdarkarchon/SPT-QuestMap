@@ -1,0 +1,202 @@
+using System.Text.Json;
+using NUnit.Framework;
+using SPTarkov.Server.Core.Models.Common;
+using SPTarkov.Server.Core.Models.Eft.Common;
+using SPTarkov.Server.Core.Models.Eft.Common.Tables;
+using SPTarkov.Server.Core.Utils.Json;
+using SPTQuestMap.Services;
+
+namespace SPTQuestMap.Tests;
+
+public sealed class QuestZoneMapCatalogTests
+{
+    [Test]
+    public void CatalogResolvesSharedZonesToEveryMapAndDeduplicatesEntries()
+    {
+        using var fixture = new CatalogFixture(new Dictionary<string, string[]>
+        {
+            ["bigmap"] = ["zone-customs", "zone-shared", "zone-shared"],
+            ["Woods"] = ["zone-shared"],
+        });
+        var catalog = new QuestZoneMapCatalog(fixture.Path);
+
+        var result = catalog.Resolve(["zone-shared", "zone-missing", "zone-shared"]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.MapIds, Is.EqualTo(new[] { "Woods", "bigmap" }));
+            Assert.That(result.UnresolvedZoneIds, Is.EqualTo(new[] { "zone-missing" }));
+        });
+    }
+
+    [Test]
+    public void ActualMapsIgnoreNonSpatialTasksButRemainAnyForUnknownSpatialZones()
+    {
+        var nativeAny = new QuestLocationDto("any", null, true, null);
+        ObjectiveDefinitionDto mapped = Objective("mapped", ["zone-customs"]) with
+        {
+            MapIds = ["bigmap"],
+        };
+        var nonSpatial = Objective("handover", []);
+        ObjectiveDefinitionDto unknown = Objective("unknown", ["zone-unknown"]) with
+        {
+            UnresolvedZoneIds = ["zone-unknown"],
+        };
+
+        var locations = new Dictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location>(StringComparer.Ordinal);
+        var complete = QuestTemplateMapper.BuildActualMaps(nativeAny, [mapped, nonSpatial], [], locations);
+        var incomplete = QuestTemplateMapper.BuildActualMaps(nativeAny, [mapped, unknown], [], locations);
+        var nativeTransition = new QuestLocationDto("marathon", "Transition", false, null);
+        var transition = QuestTemplateMapper.BuildActualMaps(nativeTransition, [mapped, nonSpatial], [], locations);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(complete.Complete, Is.True);
+            Assert.That(complete.Maps.Select(map => map.Id), Is.EqualTo(new[] { "bigmap" }));
+            Assert.That(incomplete.Complete, Is.False);
+            Assert.That(incomplete.Maps.Select(map => map.Id), Is.EqualTo(new[] { "bigmap" }));
+            Assert.That(transition.Complete, Is.True,
+                "Transition quests must expose the server-computed objective maps while retaining their native location.");
+            Assert.That(transition.Maps.Select(map => map.Id), Is.EqualTo(new[] { "bigmap" }));
+        });
+    }
+
+    [Test]
+    public void ShippedCatalogIsCopiedAndUsesCanonicalVariantMapIds()
+    {
+        var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Data", "triggerIds.json");
+        var source = JsonSerializer.Deserialize<Dictionary<string, string[]>>(File.ReadAllText(path))!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source.Keys, Does.Contain("factory4_day"));
+            Assert.That(source.Keys, Does.Not.Contain("factory4_night"));
+            Assert.That(source.Keys, Does.Contain("Sandbox"));
+            Assert.That(source.Keys, Does.Not.Contain("Sandbox_high"));
+            Assert.That(new QuestZoneMapCatalog(path).Resolve(["catwalk01"]).MapIds, Does.Contain("factory4_day"));
+            Assert.That(QuestTemplateMapper.CanonicalizeVariantMapId("factory4_night"), Is.EqualTo("factory4_day"));
+            Assert.That(QuestTemplateMapper.CanonicalizeVariantMapId("Sandbox_high"), Is.EqualTo("Sandbox"));
+        });
+    }
+
+    [Test]
+    public void ExplicitLocationsAndForcedQuestItemSpawnsSupplementObjectiveMaps()
+    {
+        using var fixture = new CatalogFixture(new Dictionary<string, string[]>());
+        var catalog = new QuestZoneMapCatalog(fixture.Path);
+        var findQuestItem = Condition("000000000000000000000031", "FindItem") with
+        {
+            Target = new ListOrT<string>(null, "quest-item"),
+        };
+        var streets = Condition("000000000000000000000032", "CounterCreator") with
+        {
+            Counter = new QuestConditionCounter
+            {
+                Conditions =
+                [
+                    new QuestConditionCounterCondition
+                    {
+                        ConditionType = "Location",
+                        Target = new ListOrT<string>(null, "TarkovStreets"),
+                    },
+                ],
+            },
+        };
+        var source = new[] { findQuestItem, streets };
+        var definitions = QuestTemplateMapper.OrderObjectives(source, []);
+        var resolved = QuestTemplateMapper.ResolveObjectiveMaps(
+            definitions,
+            catalog,
+            source.ToDictionary(condition => condition.Id.ToString(), StringComparer.Ordinal),
+            new Dictionary<string, string[]>(StringComparer.Ordinal) { ["quest-item"] = ["bigmap"] },
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["TarkovStreets"] = "TarkovStreets" });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(resolved.Single(objective => objective.Id == findQuestItem.Id.ToString()).MapIds,
+                Is.EqualTo(new[] { "bigmap" }));
+            Assert.That(resolved.Single(objective => objective.Id == streets.Id.ToString()).MapIds,
+                Is.EqualTo(new[] { "TarkovStreets" }));
+            var actual = QuestTemplateMapper.BuildActualMaps(
+                new QuestLocationDto("marathon", "Transition", false, null),
+                resolved,
+                [],
+                new Dictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location>());
+            Assert.That(actual.Complete, Is.True);
+            Assert.That(actual.Maps.Select(map => map.Id), Is.EquivalentTo(new[] { "bigmap", "TarkovStreets" }));
+        });
+    }
+
+    [Test]
+    public void ForcedQuestItemSpawnMapsUseCanonicalVariantIds()
+    {
+        var questItemId = new MongoId("000000000000000000000041");
+        var locations = new[]
+        {
+            ForcedSpawnLocation("factory4_night", questItemId, "000000000000000000000042"),
+            ForcedSpawnLocation("Sandbox_high", questItemId, "000000000000000000000043"),
+        };
+        var items = new Dictionary<MongoId, TemplateItem>
+        {
+            [questItemId] = new TemplateItem
+            {
+                Id = questItemId,
+                Properties = new TemplateItemProperties { QuestItem = true },
+            },
+        };
+
+        var lookup = QuestTemplateMapper.BuildQuestItemSpawnMapLookup(locations, items);
+
+        Assert.That(lookup[questItemId.ToString()], Is.EqualTo(new[] { "Sandbox", "factory4_day" }));
+    }
+
+    [Test]
+    public void MissingCatalogFailsFast()
+    {
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N"), "triggerIds.json");
+        Assert.Throws<FileNotFoundException>(() => new QuestZoneMapCatalog(path));
+    }
+
+    private static ObjectiveDefinitionDto Objective(string id, string[] zoneIds) => new(
+        id, id, "CounterCreator", 0, null, 1, ">=", [], zoneIds);
+
+    private static QuestCondition Condition(string id, string type) => new()
+    {
+        Id = new MongoId(id),
+        DynamicLocale = false,
+        ConditionType = type,
+    };
+
+    private static Location ForcedSpawnLocation(string mapId, MongoId itemTemplate, string itemId) => new()
+    {
+        Base = new LocationBase { Id = mapId },
+        LooseLoot = new LazyLoad<LooseLoot>(() => new LooseLoot
+        {
+            SpawnpointsForced =
+            [
+                new Spawnpoint
+                {
+                    Template = new SpawnpointTemplate
+                    {
+                        Items = [new SptLootItem { Id = new MongoId(itemId), Template = itemTemplate }],
+                    },
+                },
+            ],
+        }),
+    };
+
+    private sealed class CatalogFixture : IDisposable
+    {
+        private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("spt-questmap-zones-");
+
+        public CatalogFixture(IReadOnlyDictionary<string, string[]> entries)
+        {
+            Path = System.IO.Path.Combine(_directory.FullName, "triggerIds.json");
+            File.WriteAllText(Path, JsonSerializer.Serialize(entries));
+        }
+
+        public string Path { get; }
+
+        public void Dispose() => _directory.Delete(true);
+    }
+}

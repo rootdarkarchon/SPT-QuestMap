@@ -16,6 +16,7 @@ internal sealed class QuestMapClientConfiguration
         ConfigEntry<bool> autoTrackNewQuests,
         ConfigEntry<bool> trackFavoriteQuests,
         ConfigEntry<bool> autoTrackMapRelatedQuests,
+        ConfigEntry<bool> smartInRaidTracking,
         ConfigEntry<float> raidNotificationOpacity,
         ConfigEntry<bool> raidNotificationMinimal,
         ConfigEntry<float> raidOverlayFadeDurationSeconds,
@@ -50,6 +51,7 @@ internal sealed class QuestMapClientConfiguration
         AutoTrackNewQuests = autoTrackNewQuests;
         TrackFavoriteQuests = trackFavoriteQuests;
         AutoTrackMapRelatedQuests = autoTrackMapRelatedQuests;
+        SmartInRaidTracking = smartInRaidTracking;
         RaidNotificationOpacity = raidNotificationOpacity;
         RaidNotificationMinimal = raidNotificationMinimal;
         RaidOverlayFadeDurationSeconds = raidOverlayFadeDurationSeconds;
@@ -94,6 +96,8 @@ internal sealed class QuestMapClientConfiguration
     public ConfigEntry<bool> TrackFavoriteQuests { get; }
 
     public ConfigEntry<bool> AutoTrackMapRelatedQuests { get; }
+
+    public ConfigEntry<bool> SmartInRaidTracking { get; }
 
     public ConfigEntry<float> RaidNotificationOpacity { get; }
 
@@ -189,7 +193,12 @@ internal sealed class QuestMapClientConfiguration
                 "Quest tracking",
                 "Track quests for current map",
                 true,
-                "Implicitly track active quests assigned to the current raid map. Any and transit quests are not included."),
+                "Implicitly track active quests assigned to the current raid map, including server-resolved Any and Transition quest tasks. Genuinely Any quests are not included by this policy."),
+            config.Bind(
+                "Quest tracking",
+                "Smart in-raid tracking",
+                true,
+                "Only show tracked objectives in the in-raid quest list when their objective type is useful during a raid. Trader hand-ins, weapon assembly, loyalty, standing, skill, hideout, and other menu-only objectives are omitted."),
             config.Bind(
                 "Raid overlays",
                 "Background opacity",

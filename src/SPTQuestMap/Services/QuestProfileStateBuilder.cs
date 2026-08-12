@@ -18,6 +18,7 @@ internal sealed class QuestProfileStateBuilder(
     QuestHelper questHelper,
     SeasonalEventService seasonalEventService,
     QuestConfig questConfig,
+    QuestZoneMapCatalog zoneMapCatalog,
     ISptLogger<QuestMapDataService> logger
 )
 {
@@ -292,11 +293,11 @@ internal sealed class QuestProfileStateBuilder(
         var location = QuestTemplateMapper.BuildLocation(quest.Location, locale, locationsById);
         var typeName = QuestTemplateMapper.Localize(locale, $"DailyQuestName/{quest.Type}", quest.Type.ToString());
         var finishConditions = quest.Conditions?.AvailableForFinish ?? [];
-        var objectives = QuestTemplateMapper.OrderObjectives(
+        var objectives = QuestTemplateMapper.ResolveObjectiveMaps(QuestTemplateMapper.OrderObjectives(
                 finishConditions,
                 locale,
                 duplicateId => logger.Warning($"SPT-QuestMap: duplicate objective condition ID '{duplicateId}' on repeatable quest {questId}; keeping its first definition.")
-            )
+            ), zoneMapCatalog)
             .Select(objective => objective with
             {
                 Text = RepeatableObjectiveText(
@@ -308,6 +309,7 @@ internal sealed class QuestProfileStateBuilder(
                 ),
             })
             .ToArray();
+        var actualMaps = QuestTemplateMapper.BuildActualMaps(location, objectives, locale, locationsById);
         var rewards = QuestTemplateMapper.BuildRewards(
             quest.Rewards?.GetValueOrDefault("Success") ?? [],
             locale,
@@ -333,6 +335,8 @@ internal sealed class QuestProfileStateBuilder(
             rewards
         )
         {
+            ActualMaps = actualMaps.Maps,
+            ActualMapsComplete = actualMaps.Complete,
             ScavRepeatable = scav,
         };
 

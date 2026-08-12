@@ -1,6 +1,7 @@
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
+using SPTarkov.Server.Core.Extensions;
 
 namespace SPTQuestMap.Services;
 
@@ -43,6 +44,127 @@ internal static class QuestTemplateMapper
         }
 
         return result;
+    }
+
+    internal static QuestMapReferenceDto[] BuildMapReferences(
+        IEnumerable<string> mapIds,
+        Dictionary<string, string> locale,
+        IReadOnlyDictionary<string, Location> locationsById
+    ) => mapIds
+        .Distinct(StringComparer.Ordinal)
+        .Select(mapId =>
+        {
+            locationsById.TryGetValue(mapId, out var location);
+            var fallback = location?.Base?.Name;
+            var localeId = location?.Base?.IdField.ToString();
+            var name = string.IsNullOrWhiteSpace(localeId)
+                ? (string.IsNullOrWhiteSpace(fallback) ? mapId : fallback)
+                : Localize(locale, $"{localeId} Name", string.IsNullOrWhiteSpace(fallback) ? mapId : fallback);
+            return new QuestMapReferenceDto(
+                mapId,
+                name,
+                ToFileUrl(location?.Base?.Banners?.FirstOrDefault()?.Picture?.Path));
+        })
+        .OrderBy(map => map.Name, StringComparer.CurrentCultureIgnoreCase)
+        .ThenBy(map => map.Id, StringComparer.Ordinal)
+        .ToArray();
+
+    internal static ObjectiveDefinitionDto[] ResolveObjectiveMaps(
+        IEnumerable<ObjectiveDefinitionDto> objectives,
+        QuestZoneMapCatalog zoneMapCatalog,
+        IReadOnlyDictionary<string, QuestCondition>? sourceConditionsById = null,
+        IReadOnlyDictionary<string, string[]>? questItemSpawnMapIds = null,
+        IReadOnlyDictionary<string, string>? canonicalMapIdsByAlias = null
+    ) => objectives
+        .Select(objective =>
+        {
+            var resolution = zoneMapCatalog.Resolve(objective.ZoneIds ?? []);
+            var mapIds = resolution.MapIds.ToHashSet(StringComparer.Ordinal);
+            if (sourceConditionsById?.TryGetValue(objective.Id, out var sourceCondition) == true)
+            {
+                foreach (var mapId in GetExplicitObjectiveMapIds(sourceCondition, canonicalMapIdsByAlias))
+                {
+                    mapIds.Add(CanonicalizeVariantMapId(mapId));
+                }
+
+                if (string.Equals(sourceCondition.ConditionType, "FindItem", StringComparison.Ordinal)
+                    && questItemSpawnMapIds is not null)
+                {
+                    foreach (var targetId in GetTargets(sourceCondition))
+                    {
+                        if (!questItemSpawnMapIds.TryGetValue(targetId, out var spawnMapIds)) continue;
+                        mapIds.UnionWith(spawnMapIds);
+                    }
+                }
+            }
+
+            return objective with
+            {
+                MapIds = mapIds.Order(StringComparer.Ordinal).ToArray(),
+                UnresolvedZoneIds = resolution.UnresolvedZoneIds,
+            };
+        })
+        .ToArray();
+
+    internal static IReadOnlyDictionary<string, string[]> BuildQuestItemSpawnMapLookup(
+        IEnumerable<Location> locations,
+        IReadOnlyDictionary<MongoId, TemplateItem> items)
+    {
+        var questItemIds = items
+            .Where(pair => pair.Value.IsQuestItem())
+            .Select(pair => pair.Key.ToString())
+            .ToHashSet(StringComparer.Ordinal);
+        var mapIdsByItem = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var location in locations)
+        {
+            var mapId = location.Base?.Id;
+            if (string.IsNullOrWhiteSpace(mapId)) continue;
+            foreach (var spawnPoint in location.LooseLoot?.Value?.SpawnpointsForced ?? [])
+            {
+                foreach (var item in spawnPoint.Template?.Items ?? [])
+                {
+                    var itemId = item.Template.ToString();
+                    if (!questItemIds.Contains(itemId)) continue;
+                    if (!mapIdsByItem.TryGetValue(itemId, out var mapIds))
+                    {
+                        mapIds = new HashSet<string>(StringComparer.Ordinal);
+                        mapIdsByItem[itemId] = mapIds;
+                    }
+
+                    mapIds.Add(CanonicalizeVariantMapId(mapId));
+                }
+            }
+        }
+
+        return mapIdsByItem.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Order(StringComparer.Ordinal).ToArray(),
+            StringComparer.Ordinal);
+    }
+
+    internal static (QuestMapReferenceDto[] Maps, bool Complete) BuildActualMaps(
+        QuestLocationDto nativeLocation,
+        IReadOnlyCollection<ObjectiveDefinitionDto> objectives,
+        Dictionary<string, string> locale,
+        IReadOnlyDictionary<string, Location> locationsById
+    )
+    {
+        if (!nativeLocation.Any
+            && !string.Equals(nativeLocation.Id, "marathon", StringComparison.OrdinalIgnoreCase))
+        {
+            return ([], false);
+        }
+        var spatialObjectives = objectives
+            .Where(objective => (objective.ZoneIds?.Length ?? 0) > 0 || objective.MapIds.Length > 0)
+            .ToArray();
+        var mapIds = spatialObjectives
+            .SelectMany(objective => objective.MapIds)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var complete = spatialObjectives.Length > 0
+            && mapIds.Length > 0
+            && spatialObjectives.All(objective => objective.UnresolvedZoneIds.Length == 0);
+        return (BuildMapReferences(mapIds, locale, locationsById), complete);
     }
 
     internal static string? ToFileUrl(string? assetPath)
@@ -129,6 +251,32 @@ internal static class QuestTemplateMapper
         }
 
         return zoneIds.OrderBy(zoneId => zoneId, StringComparer.Ordinal).ToArray();
+    }
+
+    private static IEnumerable<string> GetExplicitObjectiveMapIds(
+        QuestCondition condition,
+        IReadOnlyDictionary<string, string>? canonicalMapIdsByAlias)
+    {
+        if (canonicalMapIdsByAlias is null) yield break;
+        var candidates = string.Equals(condition.ConditionType, "Location", StringComparison.Ordinal)
+            ? GetTargets(condition)
+            : (condition.Counter?.Conditions ?? [])
+                .Where(child => string.Equals(child.ConditionType, "Location", StringComparison.Ordinal))
+                .SelectMany(child => GetTargets(child.Target));
+        foreach (var candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (canonicalMapIdsByAlias.TryGetValue(candidate, out var canonicalMapId))
+            {
+                yield return CanonicalizeVariantMapId(canonicalMapId);
+            }
+        }
+    }
+
+    internal static string CanonicalizeVariantMapId(string mapId)
+    {
+        if (string.Equals(mapId, "factory4_night", StringComparison.OrdinalIgnoreCase)) return "factory4_day";
+        if (string.Equals(mapId, "Sandbox_high", StringComparison.OrdinalIgnoreCase)) return "Sandbox";
+        return mapId;
     }
 
     internal static QuestRewardDto[] BuildRewards(

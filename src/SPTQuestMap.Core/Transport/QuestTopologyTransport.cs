@@ -97,6 +97,8 @@ public sealed class QuestNodePayload
     public QuestExclusionPayload[] ExclusionRules { get; set; } = [];
     public QuestRewardPayload[] Rewards { get; set; } = [];
     public QuestUnknownConditionPayload[] UnknownConditions { get; set; } = [];
+    public QuestMapReferencePayload[] ActualMaps { get; set; } = [];
+    public bool ActualMapsComplete { get; set; }
 }
 
 public sealed class QuestLocationPayload
@@ -104,6 +106,13 @@ public sealed class QuestLocationPayload
     public string Id { get; set; } = string.Empty;
     public string? Name { get; set; }
     public bool Any { get; set; }
+    public string? BannerImageUrl { get; set; }
+}
+
+public sealed class QuestMapReferencePayload
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
     public string? BannerImageUrl { get; set; }
 }
 
@@ -134,6 +143,8 @@ public sealed class QuestObjectivePayload
     public string? Compare { get; set; }
     public string[] DependsOn { get; set; } = [];
     public string[] ZoneIds { get; set; } = [];
+    public string[] MapIds { get; set; } = [];
+    public string[] UnresolvedZoneIds { get; set; } = [];
     public bool OneSessionOnly { get; set; }
     public bool DoNotResetIfCounterCompleted { get; set; }
 }

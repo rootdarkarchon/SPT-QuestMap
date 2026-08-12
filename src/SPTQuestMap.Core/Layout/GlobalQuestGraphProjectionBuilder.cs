@@ -148,10 +148,8 @@ public static class GlobalQuestGraphProjectionBuilder
 
         if (options.Mode == GlobalQuestGraphMode.InProgress && options.LocationIds is not null)
         {
-            var locationIds = options.LocationIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
             visible.RemoveWhere(id => !topology.NodesById.TryGetValue(id, out var node)
-                || (node.Location.Any && !locationIds.Contains("any"))
-                || (!node.Location.Any && !locationIds.Contains(node.Location.Id)));
+                || !QuestObjectiveMapRules.MatchesTableLocationFilter(node, options.LocationIds));
         }
 
         // Focus is a chain projection, not another filter. Match the browser by

@@ -35,6 +35,7 @@ public sealed class QuestMapDataService : IOnLoad
         _localization = new QuestMapLocalizationService(databaseService, localeService);
         _metaInfoCatalog = new QuestMetaInfoCatalog(
             warning: message => logger.Warning(message));
+        var zoneMapCatalog = new QuestZoneMapCatalog();
         _topology = new QuestTopologyBuilder(
             databaseService,
             localeService,
@@ -45,6 +46,7 @@ public sealed class QuestMapDataService : IOnLoad
 #pragma warning restore CS0618
             new QuestSummaryCatalog(warning: message => logger.Warning(message)),
             _metaInfoCatalog,
+            zoneMapCatalog,
             logger
         );
         _profiles = new QuestProfileStateBuilder(
@@ -56,6 +58,7 @@ public sealed class QuestMapDataService : IOnLoad
 #pragma warning disable CS0618 // SPT 4.0.13 exposes config instances through ConfigServer.
             configServer.GetConfig<QuestConfig>(),
 #pragma warning restore CS0618
+            zoneMapCatalog,
             logger
         );
     }

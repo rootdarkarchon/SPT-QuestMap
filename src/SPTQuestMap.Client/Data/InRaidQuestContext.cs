@@ -47,14 +47,23 @@ internal readonly struct InRaidQuestContext
         };
         if (string.Equals(LocationId, FactoryNight, StringComparison.OrdinalIgnoreCase)) locations.Add(FactoryDay);
         if (string.Equals(LocationId, GroundZeroHigh, StringComparison.OrdinalIgnoreCase)) locations.Add(GroundZero);
+        locations.UnionWith(TrackingLocationIds());
         return locations;
     }
 
     public IReadOnlyCollection<string> TrackingLocationIds()
     {
         var locations = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { LocationId };
-        if (string.Equals(LocationId, FactoryNight, StringComparison.OrdinalIgnoreCase)) locations.Add(FactoryDay);
-        if (string.Equals(LocationId, GroundZeroHigh, StringComparison.OrdinalIgnoreCase)) locations.Add(GroundZero);
+        if (string.Equals(LocationId, FactoryDay, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(LocationId, FactoryNight, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(LocationId, "factory4_day", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(LocationId, "factory4_night", StringComparison.OrdinalIgnoreCase))
+            locations.Add("factory4_day");
+        if (string.Equals(LocationId, GroundZero, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(LocationId, GroundZeroHigh, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(LocationId, "Sandbox", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(LocationId, "Sandbox_high", StringComparison.OrdinalIgnoreCase))
+            locations.Add("Sandbox");
         return locations;
     }
 }

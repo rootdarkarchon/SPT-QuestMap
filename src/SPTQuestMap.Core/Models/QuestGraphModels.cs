@@ -72,7 +72,12 @@ public sealed record QuestObjectiveDefinition(
     IReadOnlyList<string> DependsOn,
     IReadOnlyList<string> ZoneIds,
     bool OneSessionOnly = false,
-    bool DoNotResetIfCounterCompleted = false);
+    bool DoNotResetIfCounterCompleted = false)
+{
+    public IReadOnlyList<string> MapIds { get; init; } = [];
+
+    public IReadOnlyList<string> UnresolvedZoneIds { get; init; } = [];
+}
 
 public sealed record QuestUnknownCondition(string Stage, string ConditionType, string? ConditionId);
 
@@ -95,6 +100,8 @@ public sealed record QuestReward(
     IReadOnlyList<QuestRewardItem> Items);
 
 public sealed record QuestLocation(string Id, string? Name, bool Any, string? BannerImageUrl);
+
+public sealed record QuestMapReference(string Id, string Name, string? BannerImageUrl);
 
 public sealed record QuestTrader(string Id, string Name, string? ImageUrl);
 
@@ -119,6 +126,10 @@ public sealed record QuestGraphNode(
     bool ProfileGenerated,
     string? RepeatableKind)
 {
+    public IReadOnlyList<QuestMapReference> ActualMaps { get; init; } = [];
+
+    public bool ActualMapsComplete { get; init; }
+
     public string? Summary { get; init; }
 
     public string? WikiUrl { get; init; }

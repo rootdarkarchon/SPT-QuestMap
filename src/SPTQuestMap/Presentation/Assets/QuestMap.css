@@ -254,8 +254,12 @@ h1 { margin: 0; font: 700 1.55rem/1 Georgia, serif; letter-spacing: -.02em; }
 .detail-section p { margin: 0; color: #c8c9bf; font-size: .79rem; line-height: 1.45; }
 .location-detail { position: relative; z-index: 2; display: grid; min-height: 102px; margin-top: -36px; place-items: center; overflow: hidden; isolation: isolate; }
 .location-detail::after { position: absolute; z-index: -1; inset: 0; content: ''; background: linear-gradient(to bottom, transparent 0%, rgba(23,27,25,.08) 30%, rgba(23,27,25,.12) 68%, #171b19 100%); }
-.location-detail img { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .82; -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 28%, #000 70%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, #000 28%, #000 70%, transparent 100%); }
-.location-detail strong { padding: .4rem .65rem; color: #f1eee4; font-size: .88rem; letter-spacing: .04em; text-align: center; text-shadow: 0 2px 7px #000, 0 1px 2px #000; }
+.location-detail-images { position: absolute; z-index: -2; inset: 0; display: grid; grid-template-columns: repeat(var(--location-map-count), minmax(0, 1fr)); opacity: .82; -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 28%, #000 70%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, #000 28%, #000 70%, transparent 100%); }
+.location-detail-images span { min-width: 0; overflow: hidden; border-left: 1px solid rgba(227,218,188,.25); }
+.location-detail-images span:first-child { border-left: 0; }
+.location-detail-images img { width: 100%; height: 100%; object-fit: cover; }
+.location-detail-labels { display: grid; width: calc(100% - 1.2rem); grid-template-columns: repeat(auto-fit, minmax(min(5.25rem, 100%), 1fr)); gap: .25rem; align-items: center; }
+.location-detail-labels strong { min-width: 0; padding: .25rem .35rem; border: 1px solid rgba(221,210,171,.2); border-radius: 3px; background: rgba(15,18,16,.42); color: #f1eee4; font-size: clamp(.56rem, 1.7vw, .82rem); line-height: 1.15; letter-spacing: .025em; text-align: center; text-shadow: 0 2px 7px #000, 0 1px 2px #000; overflow-wrap: anywhere; }
 .muted { color: #858b82 !important; }
 .plain-list { display: grid; gap: .38rem; margin: 0; padding-left: 1rem; color: #c8c9bf; font-size: .78rem; line-height: 1.4; }
 .trader-detail { display: flex; align-items: center; gap: .65rem; }

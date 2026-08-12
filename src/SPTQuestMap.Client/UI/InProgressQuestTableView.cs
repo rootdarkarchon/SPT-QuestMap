@@ -25,6 +25,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private const float MinimumRowHeight = NonTaskContentHeight + 4f;
     private const float TaskRowHeight = 30f;
     private const float CompactTaskRowHeight = 20f;
+    private const float FilteredTaskSummaryHeight = 20f;
     private static readonly Color RowUnderlay = new(0.035f, 0.041f, 0.044f, 0.52f);
     private static readonly Color CellSurface = new(0.09f, 0.102f, 0.108f, 0.96f);
     private const int CollapsedTaskCount = 4;
@@ -51,6 +52,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private readonly Action<string, QuestDetailsActionKind> _onQuestMutated;
     private readonly QuestTableSectionMode _sectionMode;
     private readonly string? _contextTraderId;
+    private IReadOnlyCollection<string>? _locationIds;
     private readonly ManualLogSource _log;
     private readonly Dictionary<string, QuestTableRowBackgroundVisual> _rowBackgrounds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, QuestTableRow> _rows = new(StringComparer.Ordinal);
@@ -84,7 +86,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         NativeQuestWorkspaceContext workspace,
         Action<string, QuestDetailsActionKind> onQuestMutated,
         QuestTableSectionMode sectionMode,
-        string? contextTraderId)
+        string? contextTraderId,
+        IReadOnlyCollection<string>? locationIds)
     {
         Root = root;
         _viewport = viewport;
@@ -112,6 +115,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         _onQuestMutated = onQuestMutated;
         _sectionMode = sectionMode;
         _contextTraderId = contextTraderId;
+        _locationIds = CopyLocationIds(locationIds);
         _tracking.RefreshFavoriteSnapshot(_overlay.ProfileId, _topology.Nodes, IsFavorite, false);
         if (_favoriteQuestService is not null)
             _favoriteQuestService.OnFavoriteQuestAddedOrRemoved += OnFavoriteQuestAddedOrRemoved;
@@ -149,7 +153,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         GraphViewportState? initialViewport = null,
         float headerHeight = GlobalHeaderHeight,
         QuestTableSectionMode sectionMode = QuestTableSectionMode.Global,
-        string? contextTraderId = null)
+        string? contextTraderId = null,
+        IReadOnlyCollection<string>? locationIds = null)
     {
         var stopwatch = Stopwatch.StartNew();
         var root = UnityUiFactory.CreateRect("QuestMapGraph", mountRect.parent);
@@ -211,7 +216,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             projection, overlay, sortCriteria, hideCompletedTasks, expandedQuestIds, onSelected, onBackgroundClick, onSortChanged,
             onExpansionChanged, log, assetCache, favoriteQuestService, tracking, workspace,
             onQuestMutated, sectionMode,
-            contextTraderId);
+            contextTraderId, locationIds);
         view.BuildHeader(tableHeader);
         view.RebuildAllRows(cacheNodes);
         Canvas.ForceUpdateCanvases();
@@ -352,14 +357,19 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             $"elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}; fullRebuild=False");
     }
 
-    public void UpdatePresentation(GlobalQuestGraphProjection projection, bool hideCompletedTasks)
+    public void UpdatePresentation(
+        GlobalQuestGraphProjection projection,
+        bool hideCompletedTasks,
+        IReadOnlyCollection<string>? locationIds = null)
     {
         if (_disposed) return;
         var stopwatch = Stopwatch.StartNew();
         var viewport = CaptureViewportState();
-        var taskVisibilityChanged = _hideCompletedTasks != hideCompletedTasks;
+        var taskVisibilityChanged = _hideCompletedTasks != hideCompletedTasks
+            || !SameLocationIds(_locationIds, locationIds);
         _projection = projection;
         _hideCompletedTasks = hideCompletedTasks;
+        _locationIds = CopyLocationIds(locationIds);
 
         _content.gameObject.SetActive(false);
         try
@@ -724,6 +734,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     {
         _overlay.QuestsById.TryGetValue(node.Id, out var live);
         var visibleObjectives = VisibleObjectives(node, live);
+        var filteredObjectives = LocationFilteredObjectives(node, live);
         var expanded = ForceExpandedTasks || _expandedQuestIds.Contains(node.Id);
         var displayedObjectives = expanded
             ? visibleObjectives
@@ -733,6 +744,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var displayedTasksHeight = displayedObjectives.Count == 0
             ? CompactTaskRowHeight
             : displayedObjectives.Sum(definition => TaskVisualHeight(progressById.GetValueOrDefault(definition.Id)));
+        if (HasFilteredTaskSummary(node, filteredObjectives)) displayedTasksHeight += FilteredTaskSummaryHeight;
         var taskAreaHeight = 18 + displayedTasksHeight + (hasExpander ? 28 : 0);
         var height = Mathf.Max(MinimumRowHeight, taskAreaHeight);
         var row = UnityUiFactory.CreateRect($"Row-{node.Id}", _content);
@@ -759,7 +771,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             phase = "progress";
             BuildProgressCell(row, node, live);
             phase = "tasks";
-            BuildTasksCell(row, node, visibleObjectives, expanded, progressById, nativeActions);
+            BuildTasksCell(row, node, visibleObjectives, filteredObjectives, expanded, progressById, nativeActions);
             PinVisual? pinVisual = null;
             if (ShowFavoriteColumn)
             {
@@ -781,6 +793,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     {
         _overlay.QuestsById.TryGetValue(row.Node.Id, out var live);
         var visibleObjectives = VisibleObjectives(row.Node, live);
+        var filteredObjectives = LocationFilteredObjectives(row.Node, live);
         var expanded = ForceExpandedTasks || _expandedQuestIds.Contains(row.Node.Id);
         var displayedObjectives = expanded
             ? visibleObjectives
@@ -790,6 +803,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var displayedTasksHeight = displayedObjectives.Count == 0
             ? CompactTaskRowHeight
             : displayedObjectives.Sum(definition => TaskVisualHeight(progressById.GetValueOrDefault(definition.Id)));
+        if (HasFilteredTaskSummary(row.Node, filteredObjectives)) displayedTasksHeight += FilteredTaskSummaryHeight;
         var taskAreaHeight = 18 + displayedTasksHeight + (hasExpander ? 28 : 0);
         row.Height = Mathf.Max(MinimumRowHeight, taskAreaHeight);
         row.Root.sizeDelta = new Vector2(0, row.Height);
@@ -801,7 +815,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             UnityEngine.Object.Destroy(oldTasks.gameObject);
         }
         row.DisposeNativeActions();
-        BuildTasksCell(row.Root, row.Node, visibleObjectives, expanded, progressById, row.NativeActions);
+        BuildTasksCell(row.Root, row.Node, visibleObjectives, filteredObjectives, expanded, progressById, row.NativeActions);
     }
 
     private void RefreshSortHeaders()
@@ -1009,17 +1023,15 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     {
         var cell = CreateAnchoredCell("Location", row, 0.27f, 0.39f, 2, 2);
         var content = CreateTopContentFrame(cell, "LocationContent");
-        AddWidthFittedImage(content, "LocationArt", node.Location.BannerImageUrl ?? FallbackLocationBannerUrl, 0.5f,
-            new Color(0, 0, 0, 0.48f));
+        var maps = QuestMapLocationVisuals.DisplayMaps(node, FallbackLocationBannerUrl);
+        QuestMapLocationVisuals.AddArtworkSlices(
+            content, maps, FallbackLocationBannerUrl,
+            new Color(0.02f, 0.025f, 0.028f, 1f), 0.48f, AssetCache);
         var labelLayer = UnityUiFactory.CreateRect("LocationLabel", content);
         UnityUiFactory.Stretch(labelLayer);
         labelLayer.SetAsLastSibling();
-        var label = UnityUiFactory.AddText(labelLayer.gameObject, node.Location.Any ? ClientLocale.Text("common.any") : node.Location.Name ?? node.Location.Id,
-            14, TextAlignmentOptions.Center, Color.white);
-        label.fontStyle = FontStyles.Bold;
-        label.alpha = 1f;
-        label.faceColor = new Color32(255, 255, 255, 255);
-        AddTextBorder(label.gameObject);
+        QuestMapLocationVisuals.AddCompactMapText(
+            labelLayer, maps, 4, 13, TextAlignmentOptions.Center, Color.white);
         AddTopRightBorder(cell);
     }
 
@@ -1096,6 +1108,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         RectTransform row,
         QuestGraphNode node,
         IReadOnlyList<QuestObjectiveDefinition> visibleObjectives,
+        IReadOnlyList<QuestObjectiveDefinition> filteredObjectives,
         bool expanded,
         IReadOnlyDictionary<string, QuestObjectiveProgress> progressById,
         List<NativeQuestHandoverAction> nativeActions)
@@ -1110,7 +1123,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             return;
         }
 
-        if (visibleObjectives.Count == 0)
+        var hasFilteredTaskSummary = HasFilteredTaskSummary(node, filteredObjectives);
+        if (visibleObjectives.Count == 0 && !hasFilteredTaskSummary)
         {
             UnityUiFactory.AddText(cell.gameObject, ClientLocale.Text("label.allTasksCompleted"), 12, TextAlignmentOptions.Center,
                 QuestGraphPalette.Completed);
@@ -1121,6 +1135,12 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             ? visibleObjectives
             : visibleObjectives.Take(CollapsedTaskCount).ToArray();
         var taskOffset = 8f;
+        if (visibleObjectives.Count == 0)
+        {
+            AddCompactTaskLine(cell, "FilteredTasksComplete", ClientLocale.Text("label.allTasksCompleted"),
+                taskOffset, QuestGraphPalette.Completed);
+            taskOffset += CompactTaskRowHeight;
+        }
         for (var index = 0; index < displayedObjectives.Count; index++)
         {
             var definition = displayedObjectives[index];
@@ -1239,6 +1259,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             taskOffset += taskHeight;
         }
 
+        if (hasFilteredTaskSummary)
+            AddFilteredTaskSummary(cell, node, filteredObjectives, ref taskOffset);
+
         if (!ForceExpandedTasks && visibleObjectives.Count > CollapsedTaskCount)
         {
             var expander = UnityUiFactory.CreateRect("TaskExpander", cell);
@@ -1295,12 +1318,88 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
 
     private IReadOnlyList<QuestObjectiveDefinition> VisibleObjectives(QuestGraphNode node, QuestLiveState? live)
     {
-        if (!_hideCompletedTasks || live is null) return node.Objectives;
+        var mapFiltered = QuestObjectiveMapRules.FilterTableObjectives(node, _locationIds);
+        return ApplyCompletedTaskFilter(mapFiltered, live);
+    }
+
+    private IReadOnlyList<QuestObjectiveDefinition> LocationFilteredObjectives(QuestGraphNode node, QuestLiveState? live)
+    {
+        var filtered = QuestObjectiveMapRules.TableObjectivesExcludedByLocationFilter(node, _locationIds)
+            .Where(objective => objective.MapIds.Count > 0)
+            .ToArray();
+        return ApplyCompletedTaskFilter(filtered, live);
+    }
+
+    private IReadOnlyList<QuestObjectiveDefinition> ApplyCompletedTaskFilter(
+        IReadOnlyList<QuestObjectiveDefinition> objectives,
+        QuestLiveState? live)
+    {
+        if (!_hideCompletedTasks || live is null) return objectives;
         var progressById = live.Objectives.GroupBy(objective => objective.ObjectiveId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        return node.Objectives
+        return objectives
             .Where(definition => !progressById.TryGetValue(definition.Id, out var progress) || !progress.Complete)
             .ToArray();
+    }
+
+    private static bool HasFilteredTaskSummary(
+        QuestGraphNode node,
+        IReadOnlyList<QuestObjectiveDefinition> filteredObjectives) =>
+        node.ActualMaps.Count > 1
+        && filteredObjectives.Count > 0;
+
+    private static void AddFilteredTaskSummary(
+        RectTransform cell,
+        QuestGraphNode node,
+        IReadOnlyList<QuestObjectiveDefinition> filteredObjectives,
+        ref float taskOffset)
+    {
+        var mapNames = QuestMapLocationVisuals.MapNames(node, filteredObjectives.SelectMany(objective => objective.MapIds));
+        if (mapNames.Count == 0) return;
+        var maps = string.Join(ClientLocale.Text("common.listSeparator"), mapNames);
+        var key = filteredObjectives.Count == 1
+            ? "label.filteredTaskSummaryOne"
+            : "label.filteredTaskSummaryMany";
+        var summaryText = ClientLocale.Format(key,
+            ClientLocale.Arg("count", filteredObjectives.Count),
+            ClientLocale.Arg("maps", maps));
+        var summary = AddCompactTaskLine(cell, "FilteredTaskSummary", summaryText, taskOffset,
+            new Color(0.77f, 0.73f, 0.61f, 1f));
+        summary.fontStyle = FontStyles.Italic;
+        summary.overflowMode = TextOverflowModes.Ellipsis;
+        summary.raycastTarget = true;
+        QuestMapNativeTooltips.Bind(summary.gameObject, () => summaryText);
+        taskOffset += FilteredTaskSummaryHeight;
+    }
+
+    private static TMP_Text AddCompactTaskLine(
+        RectTransform cell,
+        string name,
+        string value,
+        float offset,
+        Color color)
+    {
+        var line = UnityUiFactory.CreateRect(name, cell);
+        line.anchorMin = new Vector2(0, 1);
+        line.anchorMax = new Vector2(1, 1);
+        line.pivot = new Vector2(0.5f, 1);
+        line.anchoredPosition = new Vector2(0, -offset);
+        line.sizeDelta = new Vector2(0, CompactTaskRowHeight);
+        var text = UnityUiFactory.AddText(line.gameObject, value, 11, TextAlignmentOptions.MidlineLeft, color);
+        text.margin = new Vector4(10, 0, 8, 0);
+        text.enableWordWrapping = false;
+        return text;
+    }
+
+    private static IReadOnlyCollection<string>? CopyLocationIds(IReadOnlyCollection<string>? locationIds) =>
+        locationIds?.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static bool SameLocationIds(
+        IReadOnlyCollection<string>? left,
+        IReadOnlyCollection<string>? right)
+    {
+        if (left is null || right is null) return left is null && right is null;
+        return left.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(right);
     }
 
     private static IReadOnlyDictionary<string, QuestObjectiveProgress> ObjectiveProgressById(QuestLiveState? live) =>

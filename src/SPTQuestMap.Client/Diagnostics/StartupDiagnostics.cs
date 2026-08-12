@@ -49,6 +49,7 @@ internal static class StartupDiagnostics
             $"autoTrackNew={configuration.AutoTrackNewQuests.Value}; " +
             $"trackFavorites={configuration.TrackFavoriteQuests.Value}; " +
             $"autoTrackMap={configuration.AutoTrackMapRelatedQuests.Value}; " +
+            $"smartInRaidTracking={configuration.SmartInRaidTracking.Value}; " +
             $"raidNotificationBackgroundOpacity={configuration.RaidNotificationOpacity.Value:0.##}; " +
             $"raidNotificationMinimal={configuration.RaidNotificationMinimal.Value}; " +
             $"raidOverlayFadeSeconds={configuration.RaidOverlayFadeDurationSeconds.Value:0.##}; " +

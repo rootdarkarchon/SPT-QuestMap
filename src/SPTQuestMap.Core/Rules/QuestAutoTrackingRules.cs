@@ -14,6 +14,9 @@ public static class QuestAutoTrackingRules
     public static bool ShouldAutoTrackNewQuest(bool anyLocation, IEnumerable<string> objectiveTypes)
     {
         if (!anyLocation) return true;
-        return objectiveTypes.Any(AnyLocationInRaidObjectiveTypes.Contains);
+        return objectiveTypes.Any(IsInRaidObjectiveType);
     }
+
+    public static bool IsInRaidObjectiveType(string objectiveType) =>
+        AnyLocationInRaidObjectiveTypes.Contains(objectiveType);
 }

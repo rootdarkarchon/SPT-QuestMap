@@ -298,8 +298,10 @@ internal sealed class QuestDetailsPane : IDisposable
         var questBanner = FractionRect("QuestBanner", header, 0f, 0.67f);
         var locationBanner = FractionRect("LocationBanner", header, 0.67f, 1f);
         AddArtwork(questBanner, node.ImageUrl, new Color(0.02f, 0.025f, 0.028f, 1f), 0.42f);
-        AddArtwork(locationBanner, LocationBannerUrl(node.Location),
-            new Color(0.02f, 0.025f, 0.028f, 1f), 0.48f);
+        var maps = QuestMapLocationVisuals.DisplayMaps(node, FallbackLocationBannerUrl);
+        QuestMapLocationVisuals.AddArtworkSlices(
+            locationBanner, maps, FallbackLocationBannerUrl,
+            new Color(0.02f, 0.025f, 0.028f, 1f), 0.48f, _assetCache);
 
         if (!string.Equals(_contextTraderId, node.TraderId, StringComparison.Ordinal))
         {
@@ -324,11 +326,13 @@ internal sealed class QuestDetailsPane : IDisposable
         if (!string.IsNullOrWhiteSpace(node.WikiUrl)) AddWikiButton(questBanner, node.WikiUrl);
         if (node.ScavRepeatable) AddScavBadge(questBanner, string.IsNullOrWhiteSpace(node.WikiUrl) ? 10f : 46f);
 
-        var locationName = node.Location.Any ? ClientLocale.Text("common.any") : node.Location.Name ?? node.Location.Id;
-        var location = UnityUiFactory.AddText(locationBanner.gameObject, locationName, 16,
-            TextAlignmentOptions.Center, Color.white);
-        location.fontStyle = FontStyles.Bold;
-        AddTextShadow(location);
+        QuestMapLocationVisuals.AddCompactMapText(
+            locationBanner,
+            maps,
+            _contextTraderId is null ? 9 : 5,
+            15,
+            TextAlignmentOptions.Center,
+            Color.white);
     }
 
     private void BuildActions(
@@ -1219,13 +1223,6 @@ internal sealed class QuestDetailsPane : IDisposable
     }
 
     private static bool IsRaidOnlyTrader(string traderId) => NativeQuestTableActions.IsRaidOnlyTrader(traderId);
-
-    private static string LocationBannerUrl(QuestLocation location) =>
-        location.Any
-        || location.Id.Contains("transit", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(location.Name, "Transition", StringComparison.OrdinalIgnoreCase)
-            ? FallbackLocationBannerUrl
-            : location.BannerImageUrl ?? FallbackLocationBannerUrl;
 
     private string SelectedQuestName() =>
         _selectedQuestId is not null && _topology?.NodesById.TryGetValue(_selectedQuestId, out var node) == true

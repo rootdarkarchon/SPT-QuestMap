@@ -307,6 +307,39 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
+    public void NormalizeRetainsAuthoritativeQuestAndObjectiveMapAssignments()
+    {
+        var node = Node("mapped", "Prapor", "Any");
+        node.ActualMaps =
+        [
+            new QuestMapReferencePayload { Id = "bigmap", Name = "Customs", BannerImageUrl = "/files/banners/customs.png" },
+            new QuestMapReferencePayload { Id = "Woods", Name = "Woods", BannerImageUrl = "/files/banners/woods.png" },
+        ];
+        node.ActualMapsComplete = true;
+        node.Objectives =
+        [
+            new QuestObjectivePayload
+            {
+                Id = "task",
+                ZoneIds = ["zone-customs", "zone-unknown"],
+                MapIds = ["bigmap"],
+                UnresolvedZoneIds = ["zone-unknown"],
+            },
+        ];
+
+        var mapped = QuestTopologyNormalizer.Normalize(Feed([node], [])).NodesById["mapped"];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mapped.Location.Any, Is.True, "The native Tarkov location must remain Any.");
+            Assert.That(mapped.ActualMapsComplete, Is.True);
+            Assert.That(mapped.ActualMaps.Select(map => map.Id), Is.EqualTo(new[] { "bigmap", "Woods" }));
+            Assert.That(mapped.Objectives.Single().MapIds, Is.EqualTo(new[] { "bigmap" }));
+            Assert.That(mapped.Objectives.Single().UnresolvedZoneIds, Is.EqualTo(new[] { "zone-unknown" }));
+        });
+    }
+
+    [Test]
     public void Normalize_PreservesPrestigeRequirementForNativeClientClassification()
     {
         var node = Node("new-beginning-p3", "Ref", "Any");
@@ -1238,6 +1271,16 @@ public sealed class QuestGraphCoreTests
         var transitAlpha = Node("transit-alpha", "Prapor", "Any");
         transitAlpha.Name = "Alpha";
         transitAlpha.Location = new QuestLocationPayload { Id = "marathon", Name = "Transition" };
+        transitAlpha.Objectives =
+        [
+            new QuestObjectivePayload
+            {
+                Id = "transit-customs",
+                Text = "Transit Customs",
+                ConditionType = "VisitPlace",
+                MapIds = ["customs"],
+            },
+        ];
         var anyBravo = Node("any-bravo", "Therapist", "Any");
         anyBravo.Name = "Bravo";
         var otherMap = Node("other-map", "Prapor", "Any");
@@ -1290,27 +1333,35 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
-    public void RaidTrackedList_FiltersAnyQuestObjectivesByCurrentMapZones()
+    public void RaidTrackedList_UsesServerTaskMapsAndOptionalSmartObjectiveTypes()
     {
         var mixedAny = Node("mixed-any", "Prapor", "Any");
         mixedAny.Objectives =
         [
-            new QuestObjectivePayload { Id = "global", Text = "Global" },
-            new QuestObjectivePayload { Id = "matching", Text = "Matching", ZoneIds = ["zone-customs"] },
-            new QuestObjectivePayload { Id = "other", Text = "Other", ZoneIds = ["zone-woods"] },
+            new QuestObjectivePayload { Id = "global", Text = "Global", ConditionType = "FindItem" },
+            new QuestObjectivePayload { Id = "matching", Text = "Matching", ConditionType = "VisitPlace", MapIds = ["customs"] },
+            new QuestObjectivePayload { Id = "other", Text = "Other", ConditionType = "VisitPlace", MapIds = ["woods"] },
+            new QuestObjectivePayload { Id = "handover", Text = "Handover", ConditionType = "HandoverItem" },
         ];
         var otherOnlyAny = Node("other-only-any", "Prapor", "Any");
         otherOnlyAny.Objectives =
         [
-            new QuestObjectivePayload { Id = "other-only", Text = "Other only", ZoneIds = ["zone-woods"] },
+            new QuestObjectivePayload { Id = "other-only", Text = "Other only", ConditionType = "VisitPlace", MapIds = ["woods"] },
         ];
         var specific = Node("specific", "Prapor", "Any");
         specific.Location = new QuestLocationPayload { Id = "customs", Name = "Customs" };
         specific.Objectives =
         [
-            new QuestObjectivePayload { Id = "specific-zone", Text = "Specific", ZoneIds = ["zone-woods"] },
+            new QuestObjectivePayload { Id = "specific-zone", Text = "Specific", ConditionType = "CounterCreator" },
         ];
-        var nodes = new[] { mixedAny, otherOnlyAny, specific };
+        var transition = Node("transition", "Prapor", "Any");
+        transition.Location = new QuestLocationPayload { Id = "marathon", Name = "Transition" };
+        transition.Objectives =
+        [
+            new QuestObjectivePayload { Id = "transition-matching", Text = "Matching", ConditionType = "VisitPlace", MapIds = ["customs"] },
+            new QuestObjectivePayload { Id = "transition-other", Text = "Other", ConditionType = "VisitPlace", MapIds = ["woods"] },
+        ];
+        var nodes = new[] { mixedAny, otherOnlyAny, specific, transition };
         var feed = Feed(nodes, []);
         feed.DefaultVisibleQuestIds = nodes.Select(node => node.Id).ToArray();
         feed.AllApplicableQuestIds = nodes.Select(node => node.Id).ToArray();
@@ -1318,7 +1369,8 @@ public sealed class QuestGraphCoreTests
         var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
             Quest("mixed-any", "Started"),
             Quest("other-only-any", "Started"),
-            Quest("specific", "Started"))) with
+            Quest("specific", "Started"),
+            Quest("transition", "Started"))) with
         {
             ApplicableQuestIds = nodes.Select(node => node.Id).ToArray(),
         };
@@ -1327,18 +1379,75 @@ public sealed class QuestGraphCoreTests
             topology,
             overlay,
             nodes.Select(node => node.Id).ToArray(),
-            ["any", "customs"],
-            ["zone-customs"]);
+            ["customs"],
+            smartTracking: true);
         var quests = projection.Groups.SelectMany(group => group.Quests)
             .ToDictionary(entry => entry.Quest.Id, StringComparer.Ordinal);
 
         Assert.Multiple(() =>
         {
-            Assert.That(quests.Keys, Is.EquivalentTo(new[] { "mixed-any", "specific" }));
+            Assert.That(quests.Keys, Is.EquivalentTo(new[] { "mixed-any", "specific", "transition" }));
             Assert.That(quests["mixed-any"].Objectives.Select(entry => entry.Definition.Id),
                 Is.EqualTo(new[] { "global", "matching" }));
             Assert.That(quests["specific"].Objectives.Select(entry => entry.Definition.Id),
                 Is.EqualTo(new[] { "specific-zone" }));
+            Assert.That(quests["transition"].Objectives.Select(entry => entry.Definition.Id),
+                Is.EqualTo(new[] { "transition-matching" }));
+        });
+    }
+
+    [Test]
+    public void InProgressLocationFilter_UsesTaskMapsButPreservesNativeAnySelection()
+    {
+        var any = Node("mapped-any", "Prapor", "Any");
+        any.ActualMaps =
+        [
+            new QuestMapReferencePayload { Id = "customs", Name = "Customs" },
+            new QuestMapReferencePayload { Id = "factory4_day", Name = "Factory" },
+        ];
+        any.ActualMapsComplete = true;
+        any.Objectives =
+        [
+            new QuestObjectivePayload { Id = "customs-task", Text = "Customs", MapIds = ["customs"] },
+            new QuestObjectivePayload { Id = "factory-task", Text = "Factory", MapIds = ["factory4_day"] },
+            new QuestObjectivePayload { Id = "any-task", Text = "Any" },
+        ];
+        var topology = QuestTopologyNormalizer.Normalize(Feed([any], []));
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(Quest(any.Id, "Started"))) with
+        {
+            ApplicableQuestIds = [any.Id],
+            DefaultVisibleQuestIds = [any.Id],
+        };
+        var layout = DeterministicGraphLayout.Build(topology);
+        var node = topology.NodesById[any.Id];
+
+        var factory = GlobalQuestGraphProjectionBuilder.BuildMembershipOnly(
+            topology, layout, overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false,
+                null, null, null, null, QuestRouteFilter.None, LocationIds: ["factory4_day"]));
+        var woods = GlobalQuestGraphProjectionBuilder.BuildMembershipOnly(
+            topology, layout, overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false,
+                null, null, null, null, QuestRouteFilter.None, LocationIds: ["woods"]));
+        var nativeAny = GlobalQuestGraphProjectionBuilder.BuildMembershipOnly(
+            topology, layout, overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false,
+                null, null, null, null, QuestRouteFilter.None, LocationIds: ["any"]));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(factory.Nodes.Select(value => value.Id), Is.EqualTo(new[] { any.Id }));
+            Assert.That(woods.Nodes, Is.Empty);
+            Assert.That(nativeAny.Nodes, Is.Empty,
+                "A fully resolved actual-map quest is filtered by its task maps, while retaining native Any only for sorting.");
+            Assert.That(QuestObjectiveMapRules.FilterTableObjectives(node, ["factory4_day"])
+                .Select(objective => objective.Id), Is.EquivalentTo(new[] { "factory-task", "any-task" }));
+            Assert.That(QuestObjectiveMapRules.FilterTableObjectives(node, ["any"])
+                .Select(objective => objective.Id), Is.EqualTo(new[] { "any-task" }));
+            Assert.That(QuestObjectiveMapRules.TableObjectivesExcludedByLocationFilter(node, ["factory4_day"])
+                .Select(objective => objective.Id), Is.EqualTo(new[] { "customs-task" }));
+            Assert.That(QuestObjectiveMapRules.TableObjectivesExcludedByLocationFilter(node, ["customs", "factory4_day"]),
+                Is.Empty);
         });
     }
 

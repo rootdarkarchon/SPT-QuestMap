@@ -32,6 +32,10 @@ public sealed record QuestNodeDto(
     QuestRewardDto[] Rewards
 )
 {
+    public QuestMapReferenceDto[] ActualMaps { get; init; } = [];
+
+    public bool ActualMapsComplete { get; init; }
+
     public UnknownConditionDto[] UnknownConditions { get; init; } = [];
 
     public bool ScavRepeatable { get; init; }
@@ -52,6 +56,8 @@ public sealed record QuestMetaInfoDto(string WikiUrl, QuestRelevantItemDto[] Rel
 
 public sealed record QuestLocationDto(string Id, string? Name, bool Any, string? BannerImageUrl);
 
+public sealed record QuestMapReferenceDto(string Id, string Name, string? BannerImageUrl);
+
 public sealed record QuestEdgeDto(string SourceId, string TargetId, string[] RequiredStatuses, int AvailableAfterSeconds)
 {
     public string RequirementKind => QuestGraphRules.ClassifyEdgeRequirement(RequiredStatuses);
@@ -69,7 +75,12 @@ public sealed record ObjectiveDefinitionDto(
     string[] DependsOn,
     string[]? ZoneIds = null,
     bool OneSessionOnly = false,
-    bool DoNotResetIfCounterCompleted = false);
+    bool DoNotResetIfCounterCompleted = false)
+{
+    public string[] MapIds { get; init; } = [];
+
+    public string[] UnresolvedZoneIds { get; init; } = [];
+}
 public sealed record QuestRewardDto(string Id, string Type, string? TargetId, string? TargetName, double? Value, int? LoyaltyLevel, string? TraderName, bool Unknown, bool Hidden, QuestRewardItemDto[] Items);
 public sealed record QuestRewardItemDto(string TemplateId, string Name, double Count);
 public sealed record QuestExclusionRuleDto(string CausedByQuestId, string[] RequiredStatuses);
