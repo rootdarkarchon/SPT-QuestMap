@@ -1,6 +1,8 @@
 # SPT-QuestMap
 
-SPT-QuestMap is a profile-aware quest map for **SPT 4.0.13**. Its browser/server surface is read-only; its exact-version in-game client also offers a separately gated, default-off objective-skip action. It runs inside the existing SPT server and turns the game's quest data and your selected profile into an interactive dependency graph at `/questmap`.
+SPT-QuestMap 2.0 is a **full in-game questing replacement** for **SPT 4.0.13**. It replaces both the global **Character → Tasks** screen and every trader's **Tasks** tab with a complete quest workspace for browsing, filtering, accepting, progressing, tracking, handing in, and planning quests without leaving EFT.
+
+This is not just a quest-map overlay or an extra details panel. The native client provides its own full task table, dependency graph, quest details, native quest actions, tracking system, and in-raid overlays. A read-only browser companion at `/questmap` adds large-screen planning and profile comparison.
 
 > [!WARNING]
 > ## This project is AI-coded
@@ -13,36 +15,26 @@ SPT-QuestMap is an independent community project. It is not affiliated with or e
 
 ## At a glance
 
-| Surface | Where | Best for | Profile writes |
-| --- | --- | --- | --- |
-| Browser map | `/questmap` on the SPT server | Full dependency exploration, profile comparison, and planning | None |
-| Native client | **Character → Tasks** and trader **Tasks** tabs | Playing, quest actions, tracking, and raid overlays | EFT's native quest actions; optional task skipping is separate and default-off |
+| Surface | Role | Main features |
+| --- | --- | --- |
+| Native client | The primary, full-featured questing replacement inside EFT | Quest table, dependency map, complete details, native quest actions, tracking, raid progress notifications, and tracked-quest list |
+| Browser companion | A read-only planning and comparison view at `/questmap` | Large interactive graph, profile selection and comparison, progression analysis, search, filters, and quest details |
 
-The combined 2.0 release installs both surfaces. The server component supplies the browser page and sanitized topology data; the BepInEx component supplies the in-game interface. Both use the same shared quest-state, progress, visibility, and graph rules.
+The combined release installs both parts. They share the same understanding of quest state, progress, blockers, dependencies, routes, repeatables, and locations, so the in-game workspace and browser planner remain consistent.
 
-## What it does
+## Feature overview
 
-- Reads the quests and profiles already loaded by your SPT server.
-- Shows completed, active, ready-to-finish, available, failed, excluded, pending, and gated quests.
-- Explains effective blockers such as player level, trader availability, loyalty level, standing, and prior quests.
-- Displays ordered objectives and known progress, including partial counter progress.
-- Shows quest descriptions, locations, rewards, prerequisites, and direct successors.
-- Resolves zone-bound tasks to their actual maps, replacing misleading `Any` labels when every spatial trigger is known and showing equal-share multi-map banner treatments on web and in-game. Native task-table map filters operate per objective while sorting retains Tarkov's original location, and the tracked raid list uses server assignments without scanning scene triggers.
-- Adds Description/Summary tabs when a static localized summary exists, with the preferred tab remembered across quests and reloads.
-- Adds authoritative quest Wiki links and resolved relevant-item lists; the in-game pane can open Tarkov's native Filter by item search for eligible items outside raids.
-- Marks Collector and Lightkeeper routes.
-- Uses the quest, trader, item, and location artwork already served by SPT; no game artwork is copied into the mod.
-- Filters automatically for faction and active seasonal/event applicability.
-- Keeps the default graph focused on known quests plus the immediate future tier, with an option to reveal all future quests.
-- Provides search, trader, level-eligibility, and finished-quest filters.
-- Includes a persistent **Quests In Progress** drawer grouped by trader.
-- Places profile-generated Daily, Scav Daily, and Weekly operational quests in labeled horizontal bands above the dependency graph, including live remaining time and expired-state display.
-- Preserves profile choice, language, filters, selection, focus state, pan, and zoom in the browser.
-- Compares two profiles on one shared graph with explicit change categories, readable A/B transitions, objective deltas, profile-exclusive quests and category filters.
-- Uses a Canvas renderer so the full graph remains practical to pan and zoom.
-- Refreshes only when you ask it to. It does not poll or modify the profile.
-- Optionally lets the exact-version in-game client mark one active objective complete after a confirmation, without handing in items or completing the whole quest; this action defaults off.
-- Keeps QuestMap-owned runtime UI text in an embedded fallback catalog—while preserving invariant BepInEx configuration keys—and gives every custom pointer control a brief delayed EFT-native tooltip, including state-aware toggle guidance.
+- **A complete in-game quest workspace.** Browse every relevant quest from the global or trader Tasks screens, sort and filter the list, inspect progress, and switch directly to a visual quest map. Your selected view, filters, sorting, quest, and graph position are retained as you move through the menus.
+- **The full quest lifecycle.** Accept available quests, restart eligible failures, hand over items and currency, turn in completed quests, and replace repeatables using EFT's familiar confirmations and reward screens. Changes appear throughout the workspace immediately.
+- **Quest progression you can understand.** See what is available now, what is active or ready to turn in, what failed or became excluded, and exactly what blocks future quests—including level, trader, loyalty, reputation, prerequisite, and wait-time requirements.
+- **A real dependency map, not a flat list.** Explore prerequisite chains, future unlocks, mutually exclusive branches, cross-trader progression, Collector and Lightkeeper routes, and end-of-line quests. Focus on one chain or reveal the complete future graph when planning ahead.
+- **Detailed quest guidance.** View ordered objectives and live progress, descriptions and localized summaries, rewards and penalties, actual objective locations, Wiki links, and relevant quest items such as required keys and Gunsmith equipment.
+- **Built for active play.** Manually track quests, inherit tracking from favorites or the current raid map, receive in-raid objective progress notifications, and press a configurable hotkey for a compact tracked-quest list grouped by trader.
+- **Daily, Weekly, and Scav Daily support.** Repeatables have their own sections and map bands, timers, status presentation, localized generated objectives, replacement actions, and explicit Scav identification.
+- **Powerful search and filtering.** Narrow quests by name, trader, status, location, level eligibility, repeatable type, completion state, or route without losing the selected quest's progression context.
+- **A browser companion for deeper planning.** Open the same quest graph on a larger screen, inspect any loaded profile without modifying it, or compare two profiles to see status, objective, branch, wait-time, and profile-exclusive differences.
+- **A polished replacement rather than a disposable overlay.** QuestMap uses EFT's artwork and interface language, provides native-style feedback and tooltips, remembers where you left off, and lets you independently restore either vanilla Tasks surface from F12.
+- **Optional task skipping, kept separate and safe by default.** Objective-only skipping requires explicit opt-in, a held modifier, and confirmation; it is unavailable in raid and never turns in the quest or hands over items.
 
 ## Compatibility
 
@@ -81,7 +73,9 @@ Your browser may warn about SPT's local TLS certificate until you trust that cer
 
 ## Using QuestMap in EFT
 
-The two replacement toggles are enabled by default and can be changed independently in the F12 configuration manager:
+When enabled, QuestMap owns the complete questing experience on these screens: the quest list, map, details, actions, filtering, sorting, selection, and navigation all belong to one integrated workspace. EFT's native Notes and Quest Items views remain available alongside it.
+
+The two replacement surfaces are enabled by default and can be changed independently in the F12 configuration manager:
 
 - **Replace global Tasks screen** changes the quest portion of **Character → Tasks** while retaining EFT's native Notes and Quest Items views.
 - **Replace trader task screens** changes each trader's Tasks tab.
