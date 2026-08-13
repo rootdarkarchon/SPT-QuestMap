@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using SPTarkov.Server.Core.Helpers;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
@@ -406,7 +407,7 @@ internal sealed class QuestProfileStateBuilder(
         return new RepeatableQuestEntryDto(node, state);
     }
 
-    private static string RepeatableObjectiveText(
+    internal static string RepeatableObjectiveText(
         QuestCondition condition,
         string typeName,
         QuestLocationDto location,
@@ -429,19 +430,133 @@ internal sealed class QuestProfileStateBuilder(
         }
 
         var counterConditions = condition.Counter?.Conditions ?? [];
-        var killTarget = counterConditions
-            .FirstOrDefault(counter => counter.ConditionType == "Kills")?
-            .Target;
-        var target = killTarget is null
-            ? null
-            : killTarget.IsList ? killTarget.List?.FirstOrDefault() : killTarget.Item;
-        if (!string.IsNullOrWhiteSpace(target))
-        {
-            return $"{typeName}: {QuestTemplateMapper.Localize(locale, $"QuestCondition/Elimination/Kill/Target/{target}", target)}";
-        }
+        var kill = counterConditions.FirstOrDefault(counter => counter.ConditionType == "Kills");
+        if (kill is not null) return RepeatableEliminationText(condition, kill, typeName, locale, items);
 
         if (!location.Any && !string.IsNullOrWhiteSpace(location.Name)) return $"{typeName}: {location.Name}";
         return typeName;
+    }
+
+    private static string RepeatableEliminationText(
+        QuestCondition objective,
+        QuestConditionCounterCondition kill,
+        string typeName,
+        Dictionary<string, string> locale,
+        IReadOnlyDictionary<MongoId, TemplateItem> items)
+    {
+        var roles = (kill.SavageRole ?? [])
+            .Where(role => !string.IsNullOrWhiteSpace(role))
+            .Select(role => QuestTemplateMapper.Localize(
+                locale,
+                $"QuestCondition/Elimination/Kill/BotRole/{role}",
+                role))
+            .ToArray();
+        var botRole = roles.Length == 0
+            ? string.Empty
+            : FormatLocale(
+                QuestTemplateMapper.Localize(locale, "QuestCondition/Elimination/Kill/BotRole", "the target: {0}"),
+                string.Join(", ", roles));
+
+        var target = roles.Length > 0
+            ? string.Empty
+            : string.Join(", ", QuestTemplateMapper.GetTargets(kill)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value =>
+                {
+                    var localeTarget = string.Equals(value, "AnyPmc", StringComparison.OrdinalIgnoreCase)
+                        ? "AnyPMC"
+                        : value;
+                    return QuestTemplateMapper.Localize(
+                        locale,
+                        $"QuestCondition/Elimination/Kill/Target/{localeTarget}",
+                        value);
+                }));
+
+        var bodyParts = (kill.BodyPart ?? [])
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .Select(part => QuestTemplateMapper.Localize(
+                locale,
+                $"QuestCondition/Elimination/Kill/BodyPart/{part}",
+                part))
+            .ToArray();
+        var bodyPart = bodyParts.Length == 0
+            ? string.Empty
+            : FormatLocale(
+                QuestTemplateMapper.Localize(locale, "QuestCondition/Elimination/Kill/BodyPart", " with a {0} shot"),
+                string.Join(", ", bodyParts));
+
+        var distance = kill.Distance is null
+            ? string.Empty
+            : FormatLocale(
+                QuestTemplateMapper.Localize(locale, "QuestCondition/Elimination/Kill/Distance", " from a distance of{0} {1}m"),
+                kill.Distance.CompareMethod ?? string.Empty,
+                kill.Distance.Value?.ToString(CultureInfo.InvariantCulture) ?? string.Empty);
+
+        var weaponNames = (kill.Weapon ?? [])
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id =>
+            {
+                var fallback = id;
+                if (MongoId.IsValidMongoId(id) && items.TryGetValue(new MongoId(id), out var item))
+                    fallback = item.Name ?? id;
+                return QuestTemplateMapper.Localize(locale, $"{id} Name", fallback);
+            })
+            .ToArray();
+        var weapon = weaponNames.Length == 0
+            ? string.Empty
+            : FormatLocale(
+                QuestTemplateMapper.Localize(locale, "QuestCondition/Elimination/Kill/Weapon", " while using {0}"),
+                string.Join(", ", weaponNames));
+        var oneSession = objective.OneSessionOnly == true
+            ? QuestTemplateMapper.Localize(locale, "QuestCondition/Elimination/Kill/OneSession", " in a single raid")
+            : string.Empty;
+
+        var killTemplate = QuestTemplateMapper.Localize(
+            locale,
+            "QuestCondition/Elimination/Kill",
+            " {target}{botrole}{bodypart}{distance}{weapon}{weapontype}{onesession}");
+        var killText = ReplaceTokens(killTemplate, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["target"] = target,
+            ["botrole"] = botRole,
+            ["bodypart"] = bodyPart,
+            ["distance"] = distance,
+            ["weapon"] = weapon,
+            ["weapontype"] = string.Empty,
+            ["onesession"] = oneSession,
+        });
+
+        if (!locale.TryGetValue("QuestCondition/Elimination", out var eliminationTemplate)
+            || string.IsNullOrWhiteSpace(eliminationTemplate))
+            return $"{typeName}: {killText.Trim()}";
+        return ReplaceTokens(eliminationTemplate, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["kill"] = killText,
+            ["zone"] = string.Empty,
+            ["enemyPreset"] = string.Empty,
+            ["playerPreset"] = string.Empty,
+            ["resetOnSessionEnd"] = string.Empty,
+        }).Trim();
+    }
+
+    private static string ReplaceTokens(string template, IReadOnlyDictionary<string, string> values)
+    {
+        foreach (var pair in values) template = template.Replace($"{{{pair.Key}}}", pair.Value, StringComparison.Ordinal);
+        return template;
+    }
+
+    private static string FormatLocale(string template, params object[] values)
+    {
+        try
+        {
+            return string.Format(CultureInfo.InvariantCulture, template, values);
+        }
+        catch (FormatException)
+        {
+            for (var index = 0; index < values.Length; index++)
+                template = template.Replace($"{{{index}}}", values[index]?.ToString() ?? string.Empty, StringComparison.Ordinal);
+            return template;
+        }
     }
 
     private bool IsApplicable(QuestNodeDto quest, string side, HashSet<string> noneExcluded)

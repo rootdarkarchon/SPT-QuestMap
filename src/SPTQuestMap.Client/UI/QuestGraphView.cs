@@ -546,7 +546,8 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         rect.sizeDelta = new Vector2(width, 30);
         var button = UnityUiFactory.AddButton(rect.gameObject, active ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control);
         button.interactable = enabled;
-        UnityUiFactory.AddText(rect.gameObject, label, 12, TextAlignmentOptions.Center, Color.white);
+        var text = UnityUiFactory.AddText(rect.gameObject, label, 12, TextAlignmentOptions.Center, Color.white);
+        UnityUiFactory.FitSingleLine(text, 8f, 4f);
         button.onClick.AddListener(() => action());
         if (tooltip is not null) QuestMapNativeTooltips.Bind(rect.gameObject, tooltip);
         return button;
@@ -586,7 +587,8 @@ internal sealed class QuestGraphView : IGlobalTasksContentView
         rect.sizeDelta = new Vector2(width, 30);
         var button = UnityUiFactory.AddButton(rect.gameObject, color ?? new Color(0.22f, 0.24f, 0.25f, 1));
         button.interactable = enabled;
-        UnityUiFactory.AddText(rect.gameObject, label, 13, TextAlignmentOptions.Center, Color.white);
+        var text = UnityUiFactory.AddText(rect.gameObject, label, 13, TextAlignmentOptions.Center, Color.white);
+        UnityUiFactory.FitSingleLine(text, 8f, 4f);
         button.onClick.AddListener(() => action());
         if (tooltip is not null) QuestMapNativeTooltips.Bind(rect.gameObject, tooltip);
         return button;

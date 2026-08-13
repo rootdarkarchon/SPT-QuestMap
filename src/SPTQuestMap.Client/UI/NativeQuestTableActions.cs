@@ -339,6 +339,13 @@ internal sealed class NativeQuestHandoverAction : IDisposable
         DisposeHost();
     }
 
+    public void Abandon()
+    {
+        if (_retained || _host is null) return;
+        UnityEngine.Object.Destroy(_host.gameObject);
+        _host = null;
+    }
+
     private void RetainForTransaction()
     {
         if (_retained) return;

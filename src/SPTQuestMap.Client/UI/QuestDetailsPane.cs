@@ -165,6 +165,22 @@ internal sealed class QuestDetailsPane : IDisposable
         _disposed = true;
         ClearNativeObjectiveHosts();
         _actionHost?.Dispose();
+        DestroyPane();
+    }
+
+    public void AbandonNativeRuntime()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _skipVisibility.Clear();
+        foreach (var host in _objectiveHosts) host?.Abandon();
+        _objectiveHosts.Clear();
+        _actionHost?.Abandon();
+        DestroyPane();
+    }
+
+    private void DestroyPane()
+    {
         if (Root != null)
         {
             Root.gameObject.SetActive(false);
@@ -350,6 +366,7 @@ internal sealed class QuestDetailsPane : IDisposable
             var disabled = UnityUiFactory.AddText(area.gameObject, ClientLocale.Text("label.actionsDisabledInRaid"), 12,
                 TextAlignmentOptions.Center, QuestGraphPalette.MutedText);
             disabled.fontStyle = FontStyles.Bold;
+            UnityUiFactory.FitSingleLine(disabled, 8f, 8f);
             return;
         }
         if (liveQuest is null || !actionBound)
@@ -406,6 +423,7 @@ internal sealed class QuestDetailsPane : IDisposable
             var button = UnityUiFactory.AddButton(rect.gameObject, QuestGraphPalette.Control);
             var label = UnityUiFactory.AddText(rect.gameObject, action.Label, 12, TextAlignmentOptions.Center, Color.white);
             label.fontStyle = FontStyles.Bold;
+            UnityUiFactory.FitSingleLine(label, 8f, 6f);
             button.onClick.AddListener(() => RunNativeAction(action.Action, action.Kind, button));
             QuestMapNativeTooltips.Bind(rect.gameObject, () => ClientLocale.Format(action.Kind switch
             {
@@ -500,6 +518,7 @@ internal sealed class QuestDetailsPane : IDisposable
                     TextAlignmentOptions.Center,
                     inRaid ? QuestGraphPalette.MutedText : Color.white);
                 buttonLabel.fontStyle = FontStyles.Bold;
+                UnityUiFactory.FitSingleLine(buttonLabel, 8f, 4f);
                 var templateId = item.TemplateId;
                 button.onClick.AddListener(() => OpenFlea(templateId));
                 QuestMapNativeTooltips.Bind(buttonRect.gameObject, () => ClientLocale.Format(
@@ -706,6 +725,7 @@ internal sealed class QuestDetailsPane : IDisposable
                 var skipText = UnityUiFactory.AddText(skipRect.gameObject, ClientLocale.Text("label.skip"), 9,
                     TextAlignmentOptions.Center, Color.white);
                 skipText.fontStyle = FontStyles.Bold;
+                UnityUiFactory.FitSingleLine(skipText, 7f, 3f);
                 skipButton.onClick.AddListener(() => RequestObjectiveSkip(node, objective, liveQuest));
                 QuestMapNativeTooltips.Bind(skipRect.gameObject, () => ClientLocale.Format("tooltip.skip",
                     ClientLocale.Arg("objective", objective.Text)));
@@ -1184,6 +1204,7 @@ internal sealed class QuestDetailsPane : IDisposable
         var button = UnityUiFactory.AddButton(rect.gameObject, active ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control);
         var text = UnityUiFactory.AddText(rect.gameObject, label, 11, TextAlignmentOptions.Center, Color.white);
         text.fontStyle = FontStyles.Bold;
+        UnityUiFactory.FitSingleLine(text, 8f, 5f);
         button.onClick.AddListener(() => action());
         if (tooltip is not null) QuestMapNativeTooltips.Bind(rect.gameObject, tooltip);
     }
@@ -1253,6 +1274,7 @@ internal sealed class QuestDetailsPane : IDisposable
         var label = UnityUiFactory.AddText(rect.gameObject, ClientLocale.Text("label.wiki"), 11, TextAlignmentOptions.Center,
             new Color(0.95f, 0.90f, 0.72f, 1f));
         label.fontStyle = FontStyles.Bold;
+        UnityUiFactory.FitSingleLine(label, 8f, 4f);
         button.onClick.AddListener(() => OpenWiki(wikiUrl));
         QuestMapNativeTooltips.Bind(rect.gameObject, () => ClientLocale.Format("tooltip.openWiki",
             ClientLocale.Arg("quest", SelectedQuestName())));
@@ -1268,6 +1290,7 @@ internal sealed class QuestDetailsPane : IDisposable
         var label = UnityUiFactory.AddText(badge.gameObject, ClientLocale.Text("common.scav"), 10,
             TextAlignmentOptions.Center, new Color(1f, 0.96f, 0.78f, 1f));
         label.fontStyle = FontStyles.Bold;
+        UnityUiFactory.FitSingleLine(label, 7f, 3f);
     }
 
     private static void AddRouteBarPart(

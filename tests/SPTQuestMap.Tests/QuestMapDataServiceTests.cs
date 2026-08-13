@@ -513,6 +513,35 @@ public sealed class QuestMapDataServiceTests
     }
 
     [Test]
+    public void RepeatableEliminationUsesSpecificBossRoleInsteadOfGenericScavTarget()
+    {
+        var objective = RepeatableEliminationCondition("Savage", ["bossKilla"]);
+        var result = QuestProfileStateBuilder.RepeatableObjectiveText(
+            objective,
+            "Elimination",
+            AnyLocation(),
+            EliminationLocale(),
+            new Dictionary<MongoId, TemplateItem>());
+
+        Assert.That(result, Is.EqualTo("Eliminate the target: Killa"));
+    }
+
+    [Test]
+    public void RepeatableEliminationCanonicalizesAnyPmcLocaleKey()
+    {
+        var objective = RepeatableEliminationCondition("AnyPmc", []);
+        var result = QuestProfileStateBuilder.RepeatableObjectiveText(
+            objective,
+            "Elimination",
+            AnyLocation(),
+            EliminationLocale(),
+            new Dictionary<MongoId, TemplateItem>());
+
+        Assert.That(result, Is.EqualTo("Eliminate any PMC operatives"));
+        Assert.That(result, Does.Not.Contain("AnyPmc"));
+    }
+
+    [Test]
     public void WttSalvageCounterExposesNestedTasksWithoutReplacingAggregateProgressOwner()
     {
         const string parentId = "6a050718b79a994add4fba60";
@@ -1217,6 +1246,40 @@ public sealed class QuestMapDataServiceTests
         Index = index,
         DynamicLocale = false,
         ConditionType = "CounterCreator",
+    };
+
+    private static QuestCondition RepeatableEliminationCondition(string target, List<string> savageRoles) =>
+        Condition("000000000000000000000030", 0) with
+        {
+            DynamicLocale = true,
+            Value = 6,
+            Counter = new QuestConditionCounter
+            {
+                Conditions =
+                [
+                    new QuestConditionCounterCondition
+                    {
+                        Id = new MongoId("000000000000000000000031"),
+                        DynamicLocale = true,
+                        ConditionType = "Kills",
+                        Target = new ListOrT<string>(null, target),
+                        SavageRole = savageRoles,
+                        Value = 1,
+                    },
+                ],
+            },
+        };
+
+    private static QuestLocationDto AnyLocation() => new("any", null, true, null);
+
+    private static Dictionary<string, string> EliminationLocale() => new(StringComparer.Ordinal)
+    {
+        ["QuestCondition/Elimination"] = "Eliminate{kill}{zone}{enemyPreset}{playerPreset}{resetOnSessionEnd}",
+        ["QuestCondition/Elimination/Kill"] = " {target}{botrole}{bodypart}{distance}{weapon}{weapontype}{onesession}",
+        ["QuestCondition/Elimination/Kill/BotRole"] = "the target: {0}",
+        ["QuestCondition/Elimination/Kill/BotRole/bossKilla"] = "Killa",
+        ["QuestCondition/Elimination/Kill/Target/Savage"] = "Scavs",
+        ["QuestCondition/Elimination/Kill/Target/AnyPMC"] = "any PMC operatives",
     };
 
     private static Quest QuestTemplate(string id, MongoId traderId, params QuestCondition[] startConditions) => new()

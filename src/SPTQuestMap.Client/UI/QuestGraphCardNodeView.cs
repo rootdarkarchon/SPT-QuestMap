@@ -134,8 +134,10 @@ internal sealed class QuestGraphCardNodeView
         routes.offsetMax = new Vector2(-10, 10);
         var collector = AddImage("Collector", routes, Vector2.zero, Vector2.one, QuestGraphPalette.Collector, true);
         var lightkeeper = AddImage("Lightkeeper", routes, Vector2.zero, Vector2.one, QuestGraphPalette.Lightkeeper, true);
-        UnityUiFactory.AddText(collector.gameObject, ClientLocale.Text("legend.collector"), 8, TextAlignmentOptions.Center, Color.white);
-        UnityUiFactory.AddText(lightkeeper.gameObject, ClientLocale.Text("legend.lightkeeper"), 8, TextAlignmentOptions.Center, Color.white);
+        var collectorText = UnityUiFactory.AddText(collector.gameObject, ClientLocale.Text("legend.collector"), 8, TextAlignmentOptions.Center, Color.white);
+        UnityUiFactory.FitSingleLine(collectorText, 6f, 3f);
+        var lightkeeperText = UnityUiFactory.AddText(lightkeeper.gameObject, ClientLocale.Text("legend.lightkeeper"), 8, TextAlignmentOptions.Center, Color.white);
+        UnityUiFactory.FitSingleLine(lightkeeperText, 6f, 3f);
 
         var terminal = AddImage("Terminal", root, new Vector2(1, 0), Vector2.one, QuestGraphPalette.Terminal, false);
         terminal.rectTransform.pivot = new Vector2(1, 0.5f);
@@ -156,6 +158,7 @@ internal sealed class QuestGraphCardNodeView
         var scavText = UnityUiFactory.AddText(scavBadge.gameObject, ClientLocale.Text("common.scav"), 9,
             TextAlignmentOptions.Center, new Color(1f, 0.96f, 0.78f, 1f));
         scavText.fontStyle = FontStyles.Bold;
+        UnityUiFactory.FitSingleLine(scavText, 7f, 3f);
         scavBadge.gameObject.SetActive(false);
 
         root.gameObject.SetActive(false);

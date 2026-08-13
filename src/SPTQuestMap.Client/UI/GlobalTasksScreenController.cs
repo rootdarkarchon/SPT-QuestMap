@@ -202,7 +202,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         QuestProfileOverlay overlay)
     {
         if (!CanResume) return "screen-cache-invalid";
-        RebindInventoryController(inventoryController);
+        var runtimeContextChanged = RebindRuntimeContext(session, inventoryController, questController);
 
         _favoriteQuestService = FavoriteQuestServiceField.GetValue(_tasksPanel) as GClass3794
             ?? throw new InvalidOperationException("TasksPanel native favorite-quest service was null while resuming.");
@@ -244,7 +244,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         var cachedRows = (_graphView as InProgressQuestTableView)?.CachedRowCount ?? 0;
         QuestMapDebugLog.Info(Log,
             "QUESTMAP_M06_RESUME " +
-            $"screen={_screen.GetInstanceID()}; topologyChanged={topologyChanged}; modeChanged={modeChanged}; " +
+            $"screen={_screen.GetInstanceID()}; topologyChanged={topologyChanged}; modeChanged={modeChanged}; runtimeContextChanged={runtimeContextChanged}; " +
             $"mode={_mode}; cachedRows={cachedRows}; rootReused={!topologyChanged && !modeChanged}");
         return topologyChanged || modeChanged ? "global-content-rebuilt" : "global-screen-reused";
     }
@@ -255,6 +255,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
         PersistCurrentState();
         QuestGraphViewStateStore.Flush();
         ClearNativeOverlays();
+        _detailPane?.Dispose();
+        _detailPane = null;
+        if (_graphView is InProgressQuestTableView table) table.ReleaseNativeRuntimeBindings(false);
         if (_graphView?.Root != null) _graphView.Root.gameObject.SetActive(false);
         _visible = false;
         UnsubscribeInventoryUpdates();
@@ -848,7 +851,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             () => ClientLocale.Text(_overlayMode == GlobalOverlayMode.Notes ? "tooltip.closeNotes" : "tooltip.openNotes"));
         _questItemsButtonImage = AddRightHeaderButton(header, "QuestItems", ClientLocale.Text("label.questItems"), 6, 104,
             _overlayMode == GlobalOverlayMode.QuestItems, () => ToggleNativeOverlay(false),
-            () => QuestItemsTooltip());
+            () => QuestItemsTooltip(), allowTwoLines: true);
         BuildQuestItemsWarningBadge();
         if (CustomDetailsEnabled)
         {
@@ -984,7 +987,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
                 : new Color(0, 0, 0, 0.48f);
             var text = UnityUiFactory.AddText(root.gameObject, label, 11, TextAlignmentOptions.Center, Color.white);
             text.fontStyle = FontStyles.Bold;
-            text.enableWordWrapping = false;
+            UnityUiFactory.FitSingleLine(text, 8f, 5f);
             var outline = root.gameObject.AddComponent<Outline>();
             outline.effectColor = selected ? QuestGraphPalette.Selected : QuestGraphPalette.Border;
             outline.effectDistance = selected ? new Vector2(2, -2) : Vector2.one;
@@ -1204,6 +1207,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         var text = UnityUiFactory.AddText(viewport.gameObject, _search, 12, TextAlignmentOptions.MidlineLeft, Color.white);
         var placeholder = UnityUiFactory.AddText(viewport.gameObject, ClientLocale.Text("label.searchQuestTraderOrId"), 12,
             TextAlignmentOptions.MidlineLeft, new Color(0.55f, 0.57f, 0.58f, 1));
+        UnityUiFactory.FitSingleLine(placeholder, 9f, 0f);
         var input = root.gameObject.AddComponent<TMP_InputField>();
         input.textViewport = viewport;
         input.textComponent = text;
@@ -1297,9 +1301,10 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
     private static Image AddRightHeaderButton(
         RectTransform parent, string name, string label, float right, float width, bool active, Action action,
-        Func<string>? tooltip = null)
+        Func<string>? tooltip = null, bool allowTwoLines = false)
     {
-        return QuestWorkspaceChrome.AddRightButton(parent, name, label, right, width, active, action, tooltip: tooltip);
+        return QuestWorkspaceChrome.AddRightButton(parent, name, label, right, width, active, action,
+            tooltip: tooltip, allowTwoLines: allowTwoLines);
     }
 
     private static int TraderRank(string traderId)
@@ -1589,11 +1594,22 @@ internal sealed class GlobalTasksScreenController : IDisposable
         if (!_disposed && _visible) UpdateQuestItemsButtonState();
     }
 
-    private void RebindInventoryController(InventoryController inventoryController)
+    private bool RebindRuntimeContext(
+        ISession session,
+        InventoryController inventoryController,
+        AbstractQuestControllerClass questController)
     {
-        if (!ReferenceEquals(InventoryController, inventoryController)) UnsubscribeInventoryUpdates();
-        _workspace.RebindInventoryController(inventoryController);
+        var inventoryChanged = !ReferenceEquals(InventoryController, inventoryController);
+        if (inventoryChanged) UnsubscribeInventoryUpdates();
+        var changed = _workspace.Rebind(session, inventoryController, questController);
+        if (changed)
+        {
+            _detailPane?.AbandonNativeRuntime();
+            _detailPane = null;
+            if (_graphView is InProgressQuestTableView table) table.ReleaseNativeRuntimeBindings(true);
+        }
         SubscribeInventoryUpdates();
+        return changed;
     }
 
     private void SubscribeInventoryUpdates()

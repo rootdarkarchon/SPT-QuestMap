@@ -42,6 +42,31 @@ internal static class UnityUiFactory
         return label;
     }
 
+    public static void FitSingleLine(TMP_Text label, float minimumSize = 8f, float horizontalMargin = 4f)
+    {
+        label.enableWordWrapping = false;
+        label.enableAutoSizing = true;
+        label.fontSizeMax = label.fontSize;
+        label.fontSizeMin = Mathf.Min(minimumSize, label.fontSize);
+        label.overflowMode = TextOverflowModes.Ellipsis;
+        label.margin = new Vector4(horizontalMargin, 0, horizontalMargin, 0);
+    }
+
+    public static void FitTwoLines(
+        TMP_Text label,
+        float minimumSize = 8f,
+        float horizontalMargin = 4f,
+        float verticalMargin = 1f)
+    {
+        label.enableWordWrapping = true;
+        label.enableAutoSizing = true;
+        label.fontSizeMax = label.fontSize;
+        label.fontSizeMin = Mathf.Min(minimumSize, label.fontSize);
+        label.maxVisibleLines = 2;
+        label.overflowMode = TextOverflowModes.Ellipsis;
+        label.margin = new Vector4(horizontalMargin, verticalMargin, horizontalMargin, verticalMargin);
+    }
+
     public static void Stretch(RectTransform rect, float left = 0, float right = 0, float top = 0, float bottom = 0)
     {
         rect.anchorMin = Vector2.zero;

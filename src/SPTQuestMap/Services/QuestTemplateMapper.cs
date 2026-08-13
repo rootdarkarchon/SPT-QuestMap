@@ -454,6 +454,9 @@ internal static class QuestTemplateMapper
     internal static IEnumerable<string> GetTargets(QuestCondition condition)
         => GetTargets(condition.Target);
 
+    internal static IEnumerable<string> GetTargets(QuestConditionCounterCondition condition)
+        => GetTargets(condition.Target);
+
     private static IEnumerable<string> GetTargets(SPTarkov.Server.Core.Utils.Json.ListOrT<string>? target)
     {
         if (target is null) return [];

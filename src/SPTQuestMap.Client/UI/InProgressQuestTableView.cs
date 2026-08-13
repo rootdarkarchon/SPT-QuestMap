@@ -459,6 +459,16 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         }
     }
 
+    public void ReleaseNativeRuntimeBindings(bool abandon)
+    {
+        if (_disposed) return;
+        foreach (var row in _rows.Values)
+        {
+            if (abandon) row.AbandonNativeActions();
+            else row.DisposeNativeActions();
+        }
+    }
+
     private void BuildHeader(RectTransform header)
     {
         var firstColumn = ShowFavoriteColumn ? 0.03f : 0f;
@@ -506,6 +516,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var rect = CreateAnchoredCell(name, parent, minimum, maximum, 1, 1);
         var button = UnityUiFactory.AddButton(rect.gameObject, active ? QuestGraphPalette.ControlActive : Color.clear);
         var text = UnityUiFactory.AddText(rect.gameObject, label + suffix, 12, TextAlignmentOptions.MidlineLeft, Color.white);
+        UnityUiFactory.FitSingleLine(text, 8f, 4f);
         text.margin = new Vector4(12, 0, 4, 0);
         text.fontStyle = FontStyles.Bold;
         button.onClick.AddListener(() => _onSortChanged(column));
@@ -518,6 +529,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     {
         var rect = CreateAnchoredCell(name, parent, minimum, maximum, 1, 1);
         var text = UnityUiFactory.AddText(rect.gameObject, label, 12, TextAlignmentOptions.MidlineLeft, Color.white);
+        UnityUiFactory.FitSingleLine(text, 8f, 4f);
         text.margin = new Vector4(12, 0, 4, 0);
         text.fontStyle = FontStyles.Bold;
     }
@@ -907,7 +919,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             var badgeText = UnityUiFactory.AddText(badge.gameObject, repeatableLabel, 9,
                 TextAlignmentOptions.Center, Color.white);
             badgeText.fontStyle = FontStyles.Bold;
-            badgeText.enableWordWrapping = false;
+            UnityUiFactory.FitSingleLine(badgeText, 6f, 3f);
         }
         if (canReplace)
         {
@@ -1212,6 +1224,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
                 var skipText = UnityUiFactory.AddText(skipRect.gameObject, ClientLocale.Text("label.skip"), 8,
                     TextAlignmentOptions.Center, Color.white);
                 skipText.fontStyle = FontStyles.Bold;
+                UnityUiFactory.FitSingleLine(skipText, 7f, 3f);
                 skipButton.onClick.AddListener(() => RequestObjectiveSkip(node, definition));
                 QuestMapNativeTooltips.Bind(skipRect.gameObject, () => ClientLocale.Format("tooltip.skip",
                     ClientLocale.Arg("objective", definition.Text)));
@@ -1279,6 +1292,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
                 : ClientLocale.Format("label.showMoreTasks", ClientLocale.Arg("count", remaining));
             var text = UnityUiFactory.AddText(expander.gameObject, label, 10, TextAlignmentOptions.Center, Color.white);
             text.fontStyle = FontStyles.Bold;
+            UnityUiFactory.FitSingleLine(text, 7f, 5f);
             button.onClick.AddListener(() => _onExpansionChanged(node.Id));
             QuestMapNativeTooltips.Bind(expander.gameObject, () => expanded
                 ? ClientLocale.Format("tooltip.collapseTasks", ClientLocale.Arg("quest", node.Name))
@@ -1831,6 +1845,12 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         public void DisposeNativeActions()
         {
             foreach (var action in NativeActions) action.Dispose();
+            NativeActions.Clear();
+        }
+
+        public void AbandonNativeActions()
+        {
+            foreach (var action in NativeActions) action.Abandon();
             NativeActions.Clear();
         }
     }

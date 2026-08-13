@@ -26,8 +26,9 @@ internal static class QuestWorkspaceChrome
         rect.sizeDelta = new Vector2(width, height);
         var button = UnityUiFactory.AddButton(rect.gameObject, active ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control);
         button.interactable = enabled;
-        UnityUiFactory.AddText(rect.gameObject, label, height <= 24 ? 10 : 12, TextAlignmentOptions.Center,
+        var text = UnityUiFactory.AddText(rect.gameObject, label, height <= 24 ? 10 : 12, TextAlignmentOptions.Center,
             enabled ? Color.white : new Color(0.48f, 0.50f, 0.50f, 1f));
+        UnityUiFactory.FitSingleLine(text, height <= 24 ? 7f : 8f, 5f);
         button.onClick.AddListener(() => action());
         if (tooltip is not null) QuestMapNativeTooltips.Bind(rect.gameObject, tooltip);
         return rect.GetComponent<Image>();
@@ -42,7 +43,8 @@ internal static class QuestWorkspaceChrome
         bool active,
         Action action,
         bool enabled = true,
-        Func<string>? tooltip = null)
+        Func<string>? tooltip = null,
+        bool allowTwoLines = false)
     {
         var rect = UnityUiFactory.CreateRect(name, parent);
         rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1, 1);
@@ -50,8 +52,10 @@ internal static class QuestWorkspaceChrome
         rect.sizeDelta = new Vector2(width, 32);
         var button = UnityUiFactory.AddButton(rect.gameObject, active ? QuestGraphPalette.ControlActive : QuestGraphPalette.Control);
         button.interactable = enabled;
-        UnityUiFactory.AddText(rect.gameObject, label, 12, TextAlignmentOptions.Center,
+        var text = UnityUiFactory.AddText(rect.gameObject, label, 12, TextAlignmentOptions.Center,
             enabled ? Color.white : new Color(0.48f, 0.50f, 0.50f, 1f));
+        if (allowTwoLines) UnityUiFactory.FitTwoLines(text, 9f, 5f, 2f);
+        else UnityUiFactory.FitSingleLine(text, 8f, 5f);
         button.onClick.AddListener(() => action());
         if (tooltip is not null) QuestMapNativeTooltips.Bind(rect.gameObject, tooltip);
         return rect.GetComponent<Image>();

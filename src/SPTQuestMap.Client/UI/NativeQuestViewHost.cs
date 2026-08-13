@@ -103,6 +103,12 @@ internal sealed class NativeQuestViewHost : IDisposable
 
     public Task Replace() => _view.ShowChangeQuestConfirmation();
 
+    public void Abandon()
+    {
+        _bound = false;
+        if (_view != null) UnityEngine.Object.Destroy(_view.gameObject);
+    }
+
     public void Dispose()
     {
         if (_view == null) return;

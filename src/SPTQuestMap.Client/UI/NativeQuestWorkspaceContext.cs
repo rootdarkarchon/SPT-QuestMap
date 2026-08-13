@@ -36,11 +36,11 @@ internal sealed class NativeQuestWorkspaceContext
         DebugLogging = configuration.EnableDebugLogging.Value;
     }
 
-    public ISession Session { get; }
+    public ISession Session { get; private set; }
 
     public InventoryController InventoryController { get; private set; }
 
-    public AbstractQuestControllerClass QuestController { get; }
+    public AbstractQuestControllerClass QuestController { get; private set; }
 
     public ManualLogSource Log { get; }
 
@@ -56,8 +56,19 @@ internal sealed class NativeQuestWorkspaceContext
 
     public bool MutationsAllowed() => !InRaidQuestContext.TryCapture(out _);
 
-    public void RebindInventoryController(InventoryController inventoryController) =>
+    public bool Rebind(
+        ISession session,
+        InventoryController inventoryController,
+        AbstractQuestControllerClass questController)
+    {
+        var changed = !ReferenceEquals(Session, session)
+            || !ReferenceEquals(InventoryController, inventoryController)
+            || !ReferenceEquals(QuestController, questController);
+        Session = session;
         InventoryController = inventoryController;
+        QuestController = questController;
+        return changed;
+    }
 
     public QuestClass? FindLiveQuest(string questId) => QuestController.Quests.LastOrDefault(
         quest => string.Equals(quest.Id, questId, StringComparison.Ordinal));

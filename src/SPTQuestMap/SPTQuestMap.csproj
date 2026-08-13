@@ -51,6 +51,7 @@
     <None Update="Data\triggerIds.json" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="Localization\Locales\*.json" />
     <EmbeddedResource Include="Localization\Summaries\*.json" />
+    <Content Remove="Localization\Summaries\ru.json" />
     <EmbeddedResource Include="Presentation\Assets\QuestMap.css" />
     <EmbeddedResource Include="Presentation\Assets\QuestMapRenderer.mjs" />
   </ItemGroup>

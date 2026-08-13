@@ -483,6 +483,7 @@ internal sealed class TraderTasksScreenController : IDisposable
         var text = UnityUiFactory.AddText(viewport.gameObject, _search, 12, TextAlignmentOptions.MidlineLeft, Color.white);
         var placeholder = UnityUiFactory.AddText(viewport.gameObject, ClientLocale.Text("label.searchQuestOrId"), 12,
             TextAlignmentOptions.MidlineLeft, new Color(0.55f, 0.57f, 0.58f, 1));
+        UnityUiFactory.FitSingleLine(placeholder, 9f, 0f);
         var input = root.gameObject.AddComponent<TMP_InputField>();
         input.textViewport = viewport;
         input.textComponent = text;
