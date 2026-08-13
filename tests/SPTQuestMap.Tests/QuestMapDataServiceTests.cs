@@ -542,6 +542,39 @@ public sealed class QuestMapDataServiceTests
     }
 
     [Test]
+    public void RepeatableExplorationUsesNativeSurviveTemplateAndLocalizedExitName()
+    {
+        var objective = RepeatableExplorationCondition("Scav_Coastal_South");
+        var locale = ExplorationLocale();
+        locale["Scav_Coastal_South"] = "Southern Road Landslide";
+
+        var result = QuestProfileStateBuilder.RepeatableObjectiveText(
+            objective,
+            "Exit the location",
+            new QuestLocationDto("shoreline", "Shoreline", false, null),
+            locale,
+            new Dictionary<MongoId, TemplateItem>());
+
+        Assert.That(result, Is.EqualTo("Survive on the location by extracting through the \"Southern Road Landslide\""));
+        Assert.That(result, Does.Not.Contain("Exit the location: Shoreline"));
+    }
+
+    [Test]
+    public void RepeatableExplorationWithoutSpecificExitUsesNativeLocationText()
+    {
+        var objective = RepeatableExplorationCondition(null);
+
+        var result = QuestProfileStateBuilder.RepeatableObjectiveText(
+            objective,
+            "Exit the location",
+            new QuestLocationDto("woods", "Woods", false, null),
+            ExplorationLocale(),
+            new Dictionary<MongoId, TemplateItem>());
+
+        Assert.That(result, Is.EqualTo("Survive on the location"));
+    }
+
+    [Test]
     public void WttSalvageCounterExposesNestedTasksWithoutReplacingAggregateProgressOwner()
     {
         const string parentId = "6a050718b79a994add4fba60";
@@ -1270,6 +1303,44 @@ public sealed class QuestMapDataServiceTests
             },
         };
 
+    private static QuestCondition RepeatableExplorationCondition(string? exitName)
+    {
+        List<QuestConditionCounterCondition> conditions =
+        [
+            new QuestConditionCounterCondition
+            {
+                Id = new MongoId("000000000000000000000041"),
+                DynamicLocale = true,
+                ConditionType = "ExitStatus",
+                Status = ["Survived"],
+            },
+            new QuestConditionCounterCondition
+            {
+                Id = new MongoId("000000000000000000000042"),
+                DynamicLocale = true,
+                ConditionType = "Location",
+                Target = new ListOrT<string>(null, "Shoreline"),
+            },
+        ];
+        if (exitName is not null)
+        {
+            conditions.Add(new QuestConditionCounterCondition
+            {
+                Id = new MongoId("000000000000000000000043"),
+                DynamicLocale = true,
+                ConditionType = "ExitName",
+                ExitName = exitName,
+            });
+        }
+
+        return Condition("000000000000000000000040", 0) with
+        {
+            DynamicLocale = true,
+            Value = 4,
+            Counter = new QuestConditionCounter { Conditions = conditions },
+        };
+    }
+
     private static QuestLocationDto AnyLocation() => new("any", null, true, null);
 
     private static Dictionary<string, string> EliminationLocale() => new(StringComparer.Ordinal)
@@ -1280,6 +1351,14 @@ public sealed class QuestMapDataServiceTests
         ["QuestCondition/Elimination/Kill/BotRole/bossKilla"] = "Killa",
         ["QuestCondition/Elimination/Kill/Target/Savage"] = "Scavs",
         ["QuestCondition/Elimination/Kill/Target/AnyPMC"] = "any PMC operatives",
+    };
+
+    private static Dictionary<string, string> ExplorationLocale() => new(StringComparer.Ordinal)
+    {
+        ["QuestCondition/SurviveOnLocation"] = "Survive on {location}{exitName}",
+        ["QuestCondition/SurviveOnLocation/Any"] = "any location",
+        ["QuestCondition/SurviveOnLocation/Location"] = "the location",
+        ["QuestCondition/SurviveOnLocation/ExitName"] = " by extracting through the \"{0}\"",
     };
 
     private static Quest QuestTemplate(string id, MongoId traderId, params QuestCondition[] startConditions) => new()

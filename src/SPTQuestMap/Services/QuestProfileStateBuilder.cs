@@ -433,8 +433,51 @@ internal sealed class QuestProfileStateBuilder(
         var kill = counterConditions.FirstOrDefault(counter => counter.ConditionType == "Kills");
         if (kill is not null) return RepeatableEliminationText(condition, kill, typeName, locale, items);
 
+        if (counterConditions.Any(counter => counter.ConditionType == "ExitStatus"))
+            return RepeatableExplorationText(counterConditions, location, locale);
+
         if (!location.Any && !string.IsNullOrWhiteSpace(location.Name)) return $"{typeName}: {location.Name}";
         return typeName;
+    }
+
+    private static string RepeatableExplorationText(
+        IReadOnlyCollection<QuestConditionCounterCondition> counterConditions,
+        QuestLocationDto location,
+        Dictionary<string, string> locale)
+    {
+        var hasSpecificLocation = counterConditions.Any(counter =>
+            counter.ConditionType == "Location" && QuestTemplateMapper.GetTargets(counter).Any());
+        var locationText = QuestTemplateMapper.Localize(
+            locale,
+            hasSpecificLocation || !location.Any
+                ? "QuestCondition/SurviveOnLocation/Location"
+                : "QuestCondition/SurviveOnLocation/Any",
+            hasSpecificLocation || !location.Any ? "the location" : "any location");
+
+        var exit = counterConditions.FirstOrDefault(counter =>
+            counter.ConditionType == "ExitName" && !string.IsNullOrWhiteSpace(counter.ExitName));
+        var exitText = string.Empty;
+        if (exit?.ExitName is { } exitName)
+        {
+            var localizedExitName = QuestTemplateMapper.Localize(locale, exitName, exitName);
+            exitText = FormatLocale(
+                QuestTemplateMapper.Localize(
+                    locale,
+                    "QuestCondition/SurviveOnLocation/ExitName",
+                    " by extracting through the \"{0}\""),
+                localizedExitName);
+        }
+
+        return ReplaceTokens(
+            QuestTemplateMapper.Localize(
+                locale,
+                "QuestCondition/SurviveOnLocation",
+                "Survive on {location}{exitName}"),
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["location"] = locationText,
+                ["exitName"] = exitText,
+            }).Trim();
     }
 
     private static string RepeatableEliminationText(
