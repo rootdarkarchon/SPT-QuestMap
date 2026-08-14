@@ -20,7 +20,7 @@ SPT-QuestMap is an independent community project. It is not affiliated with or e
 | Native client | The primary, full-featured questing replacement inside EFT | Quest table, dependency map, complete details, native quest actions, tracking, raid progress notifications, and tracked-quest list |
 | Browser companion | A read-only planning and comparison view at `/questmap` | Large interactive graph, profile selection and comparison, progression analysis, search, filters, and quest details |
 
-The combined release installs both parts. They share the same understanding of quest state, progress, blockers, dependencies, routes, repeatables, and locations, so the in-game workspace and browser planner remain consistent.
+The combined release installs both parts. The dependency is one-way: the **server component can run by itself** and is all that is required for the browser-based QuestMap, but the **native client requires the QuestMap server component** for its topology and repeatable-quest data. They share the same understanding of quest state, progress, blockers, dependencies, routes, repeatables, and locations, so the in-game workspace and browser planner remain consistent.
 
 ## Feature overview
 
@@ -44,9 +44,9 @@ The native client validates the installed identity and required UI/action target
 
 When either in-game Tasks replacement is enabled, QuestMap renders a completely custom task table rather than extending EFT's native task-list rows. Mods that patch or decorate the native list—most notably **DrakiaXYZ Quest Tracker** and **Task List Fixes**—cannot apply their task-list integration to QuestMap's replacement. QuestMap provides its own profile-scoped pin/tracking controls, in-raid progress notifications, tracked-quest overlay, sorting, filtering, and corrected task presentation; the corresponding Quest Tracker and Task List Fixes behavior is therefore largely redundant. Do not expect those mods' native-list additions to appear inside QuestMap.
 
-QuestMap does not require SPT-Skipper. Its [optional task-skip action](#optional-task-skipping) is an exact-version, default-off feature with a narrower objective-only boundary.
-
 ## Installation
+
+The combined archive is the recommended installation. For a server/browser-only setup, install only `SPT/user/mods/SPT-QuestMap/`; the BepInEx client is not required. A client-only installation is not supported: `BepInEx/plugins/SPTQuestMap/` requires the matching server component to be installed and running.
 
 1. Back up the profiles you care about.
 2. Stop the SPT server and close EFT.
