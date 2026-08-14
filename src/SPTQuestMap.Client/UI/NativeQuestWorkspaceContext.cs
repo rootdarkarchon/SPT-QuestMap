@@ -9,6 +9,7 @@ using EFT.UI;
 using SPTQuestMap.Client.Configuration;
 using SPTQuestMap.Client.Data;
 using SPTQuestMap.Core.Models;
+using SPTQuestMap.Core.Rules;
 using UnityEngine;
 
 namespace SPTQuestMap.Client.UI;
@@ -49,6 +50,12 @@ internal sealed class NativeQuestWorkspaceContext
     public bool ShowHiddenRewards() => _configuration.ShowHiddenQuestRewards.Value;
 
     public bool DefaultDetailsToSummary() => _configuration.DefaultQuestDetailsToSummary.Value;
+
+    public QuestTaskTextSize TaskListQuestTextSize() => _configuration.TaskListQuestTextSize.Value;
+
+    public ConfigEntry<QuestTaskTextSize> TaskListQuestTextSizeSetting => _configuration.TaskListQuestTextSize;
+
+    public bool InvertLocationFilterMouseButtons() => _configuration.InvertLocationFilterMouseButtons.Value;
 
     public bool TaskSkippingEnabled() => _configuration.EnableTaskSkipping.Value;
 

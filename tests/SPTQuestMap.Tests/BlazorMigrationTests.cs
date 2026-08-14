@@ -77,8 +77,8 @@ public sealed class BlazorMigrationTests
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("comparisonById"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("comparisonReason"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("displayMapReferences"));
-            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("usesActualMaps"));
-            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("'marathon'"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("node.taskLocation?.id"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("scope==='transition'"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("drawAngledMapSlices"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("mapLeft=preserveQuestArtwork?layer.width*.6:0"),
                 "Quest artwork must remain visible while map banners occupy angled slices in only the right 40 percent of a card.");

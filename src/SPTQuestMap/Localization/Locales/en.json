@@ -137,6 +137,7 @@
   "details.prerequisites": "Prerequisites",
   "details.successors": "Direct successors",
   "location.any": "Any location",
+  "location.none": "No location",
   "trader.unlocked": "unlocked",
   "trader.unavailable": "unavailable",
   "trader.noState": "{trader} · no profile trader state",

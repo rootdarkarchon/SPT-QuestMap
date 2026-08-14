@@ -16,6 +16,7 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
     private CanvasGroup? _group;
     private Func<float>? _opacity;
     private Func<bool>? _minimal;
+    private Func<QuestTaskTextSize>? _taskTextSize;
     private Func<float>? _fadeDuration;
     private Func<float>? _displayDuration;
     private QuestAssetSpriteCache? _assetCache;
@@ -37,12 +38,15 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
     private float _fadeStartAlpha;
     private int _contentVersion;
     private bool _displaying;
+    private bool _appliedMinimal;
+    private QuestTaskTextSize _appliedTaskTextSize;
 
     public static RaidQuestProgressNotificationView Create(
         Transform owner,
         ManualLogSource log,
         Func<float> opacity,
         Func<bool> minimal,
+        Func<QuestTaskTextSize> taskTextSize,
         Func<float> fadeDuration,
         Func<float> displayDuration,
         QuestAssetSpriteCache assetCache)
@@ -52,6 +56,7 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         var view = host.AddComponent<RaidQuestProgressNotificationView>();
         view._opacity = opacity;
         view._minimal = minimal;
+        view._taskTextSize = taskTextSize;
         view._fadeDuration = fadeDuration;
         view._displayDuration = displayDuration;
         view._assetCache = assetCache;
@@ -75,7 +80,7 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         var node = change.Quest;
         var progress = change.Progress;
         var minimal = _minimal?.Invoke() == true;
-        ApplyPresentationMode(minimal);
+        ApplyPresentationMode(minimal, TaskTextSize);
 
         _questName!.text = node.Name;
         var statusColor = QuestGraphPalette.Status(DisplayState(change.ExactStatus));
@@ -145,6 +150,7 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         _assetCache = null;
         _opacity = null;
         _minimal = null;
+        _taskTextSize = null;
         _fadeDuration = null;
         _displayDuration = null;
     }
@@ -283,7 +289,11 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
     private void Update()
     {
         if (!_displaying || _root is null || _group is null) return;
-        ApplyBackgroundOpacity(_minimal?.Invoke() == true);
+        var minimal = _minimal?.Invoke() == true;
+        var taskTextSize = TaskTextSize;
+        if (minimal != _appliedMinimal || taskTextSize != _appliedTaskTextSize)
+            ApplyPresentationMode(minimal, taskTextSize);
+        ApplyBackgroundOpacity(minimal);
         var elapsed = Time.unscaledTime - _shownAt;
         var fadeDuration = FadeDuration;
         var displayDuration = DisplayDuration;
@@ -325,9 +335,13 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
 
     private float DisplayDuration => Mathf.Clamp(_displayDuration?.Invoke() ?? 4f, 0.5f, 30f);
 
-    private void ApplyPresentationMode(bool minimal)
+    private QuestTaskTextSize TaskTextSize => _taskTextSize?.Invoke() ?? QuestTaskTextSize.Small;
+
+    private void ApplyPresentationMode(bool minimal, QuestTaskTextSize taskTextSize)
     {
         if (_root is null || _questName is null || _task is null) return;
+        _appliedMinimal = minimal;
+        _appliedTaskTextSize = taskTextSize;
         _root.sizeDelta = minimal ? new Vector2(320, 54) : new Vector2(390, 94);
         ApplyBackgroundOpacity(minimal);
         _shade?.gameObject.SetActive(!minimal);
@@ -345,7 +359,7 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         var taskRoot = (RectTransform)_task.transform;
         taskRoot.offsetMin = minimal ? new Vector2(10, 4) : new Vector2(84, 24);
         taskRoot.offsetMax = minimal ? new Vector2(-10, -26) : new Vector2(-12, -39);
-        _task.fontSize = minimal ? 11 : 11;
+        _task.fontSize = QuestTableLayoutRules.RaidPopupTaskFontSize(taskTextSize);
         _task.enableWordWrapping = false;
         _task.overflowMode = TextOverflowModes.Ellipsis;
     }

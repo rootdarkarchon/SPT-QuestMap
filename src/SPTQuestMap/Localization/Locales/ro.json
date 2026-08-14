@@ -88,5 +88,6 @@
   "details.branchAlternatives": "Ramuri alternative",
   "details.prerequisites": "Cerințe preliminare",
   "details.successors": "Succesoare directe",
-  "profile.aria": "Profil"
+  "profile.aria": "Profil",
+  "location.none": "Nicio locație"
 }

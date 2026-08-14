@@ -5,6 +5,7 @@ using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Utils.Json;
 using SPTQuestMap.Presentation;
+using SPTQuestMap.Core.Rules;
 using SPTQuestMap.Services;
 
 namespace SPTQuestMap.Tests;
@@ -70,6 +71,10 @@ public sealed class QuestZoneMapCatalogTests
             new QuestLocationDto("marathon", "Transition", false, null), null, false,
             [], [], [], [], [])
         {
+            TaskLocation = new QuestMapReferenceDto(
+                QuestObjectiveMapRules.TransitionFilterId,
+                "Transition",
+                QuestObjectiveMapRules.TransitionBannerUrl),
             ActualMapsComplete = true,
             ActualMaps =
             [
@@ -81,6 +86,10 @@ public sealed class QuestZoneMapCatalogTests
         {
             Id = "any",
             Location = new QuestLocationDto("any", null, true, null),
+            TaskLocation = new QuestMapReferenceDto(
+                QuestObjectiveMapRules.AnyFilterId,
+                "Any location",
+                QuestObjectiveMapRules.AnyBannerUrl),
         };
         var singleMap = transition with
         {
@@ -91,14 +100,47 @@ public sealed class QuestZoneMapCatalogTests
         Assert.Multiple(() =>
         {
             Assert.That(
-                QuestMapLocationPresentation.DisplayMaps(transition, "Any").Select(map => map.Name),
+                QuestMapLocationPresentation.DisplayMaps(transition).Select(map => map.Name),
                 Is.EqualTo(new[] { "Transition", "Customs", "Woods" }));
             Assert.That(
-                QuestMapLocationPresentation.DisplayMaps(any, "Any").Select(map => map.Name),
+                QuestMapLocationPresentation.DisplayMaps(any).Select(map => map.Name),
                 Is.EqualTo(new[] { "Customs", "Woods" }));
             Assert.That(
-                QuestMapLocationPresentation.DisplayMaps(singleMap, "Any").Select(map => map.Name),
+                QuestMapLocationPresentation.DisplayMaps(singleMap).Select(map => map.Name),
                 Is.EqualTo(new[] { "Customs" }));
+        });
+    }
+
+    [Test]
+    public void ServerAssignsAuthoritativeTaskLocationScopeAndUniqueBanners()
+    {
+        var ui = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["location.none"] = "No location",
+            ["location.any"] = "Any location",
+        };
+        var passive = Objective("passive", []) with { ConditionType = "HandoverItem" };
+        var inRaid = Objective("visit", []) with { ConditionType = "VisitPlace" };
+        var mapped = passive with { Id = "mapped", MapIds = ["bigmap"] };
+
+        var noLocation = QuestTemplateMapper.BuildTaskLocation(
+            new QuestLocationDto("any", null, true, null), [passive], ui);
+        var any = QuestTemplateMapper.BuildTaskLocation(
+            new QuestLocationDto("any", null, true, null), [inRaid], ui);
+        var transition = QuestTemplateMapper.BuildTaskLocation(
+            new QuestLocationDto("marathon", "Transition", false, "/old.jpg"), [mapped], ui);
+        var customs = QuestTemplateMapper.BuildTaskLocation(
+            new QuestLocationDto("bigmap", "Customs", false, "/customs.jpg"), [mapped], ui);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(noLocation, Is.EqualTo(new QuestMapReferenceDto(
+                QuestObjectiveMapRules.NoLocationFilterId, "No location", QuestObjectiveMapRules.NoLocationBannerUrl)));
+            Assert.That(any, Is.EqualTo(new QuestMapReferenceDto(
+                QuestObjectiveMapRules.AnyFilterId, "Any location", QuestObjectiveMapRules.AnyBannerUrl)));
+            Assert.That(transition, Is.EqualTo(new QuestMapReferenceDto(
+                QuestObjectiveMapRules.TransitionFilterId, "Transition", QuestObjectiveMapRules.TransitionBannerUrl)));
+            Assert.That(customs, Is.EqualTo(new QuestMapReferenceDto("bigmap", "Customs", "/customs.jpg")));
         });
     }
 

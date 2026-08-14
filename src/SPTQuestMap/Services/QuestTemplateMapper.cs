@@ -5,6 +5,7 @@ using SPTarkov.Server.Core.Extensions;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using SPTQuestMap.Core.Rules;
 
 namespace SPTQuestMap.Services;
 
@@ -162,6 +163,45 @@ internal static class QuestTemplateMapper
             && mapIds.Length > 0
             && spatialObjectives.All(objective => objective.UnresolvedZoneIds.Length == 0);
         return (BuildMapReferences(mapIds, locale, locationsById), complete);
+    }
+
+    internal static QuestMapReferenceDto BuildTaskLocation(
+        QuestLocationDto nativeLocation,
+        IReadOnlyCollection<ObjectiveDefinitionDto> objectives,
+        IReadOnlyDictionary<string, string> ui)
+    {
+        var hasDirectInRaidConnection = objectives.Any(objective =>
+            objective.MapIds.Length > 0
+            || QuestAutoTrackingRules.IsInRaidObjectiveType(objective.ConditionType));
+        if (!hasDirectInRaidConnection)
+        {
+            return new QuestMapReferenceDto(
+                QuestObjectiveMapRules.NoLocationFilterId,
+                ui.GetValueOrDefault("location.none") ?? "No location",
+                QuestObjectiveMapRules.NoLocationBannerUrl);
+        }
+
+        if (nativeLocation.Any)
+        {
+            return new QuestMapReferenceDto(
+                QuestObjectiveMapRules.AnyFilterId,
+                ui.GetValueOrDefault("location.any") ?? "Any location",
+                QuestObjectiveMapRules.AnyBannerUrl);
+        }
+
+        if (QuestObjectiveMapRules.IsTransitionLocation(
+                nativeLocation.Id, nativeLocation.Name, nativeLocation.Any))
+        {
+            return new QuestMapReferenceDto(
+                QuestObjectiveMapRules.TransitionFilterId,
+                nativeLocation.Name ?? "Transition",
+                QuestObjectiveMapRules.TransitionBannerUrl);
+        }
+
+        return new QuestMapReferenceDto(
+            nativeLocation.Id,
+            nativeLocation.Name ?? nativeLocation.Id,
+            nativeLocation.BannerImageUrl);
     }
 
     internal static string? ToFileUrl(string? assetPath)

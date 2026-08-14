@@ -133,6 +133,7 @@
   "details.objectives": "Ziele",
   "details.rewards": "Belohnungen",
   "location.any": "Beliebiger Ort",
+  "location.none": "Kein Ort",
   "trader.unlocked": "freigeschaltet",
   "trader.unavailable": "nicht verfügbar",
   "trader.noState": "{trader} · kein Händlerstatus im Profil",

@@ -1,4 +1,5 @@
 using BepInEx.Configuration;
+using SPTQuestMap.Core.Rules;
 using UnityEngine;
 
 namespace SPTQuestMap.Client.Configuration;
@@ -11,6 +12,9 @@ internal sealed class QuestMapClientConfiguration
         ConfigEntry<bool> enableGlobalTasksGraph,
         ConfigEntry<bool> showHiddenQuestRewards,
         ConfigEntry<bool> defaultQuestDetailsToSummary,
+        ConfigEntry<QuestTaskTextSize> taskListQuestTextSize,
+        ConfigEntry<QuestTaskTextSize> inRaidQuestTaskTextSize,
+        ConfigEntry<bool> invertLocationFilterMouseButtons,
         ConfigEntry<bool> enableTaskSkipping,
         ConfigEntry<KeyboardShortcut> taskSkipModifier,
         ConfigEntry<bool> autoTrackNewQuests,
@@ -46,6 +50,9 @@ internal sealed class QuestMapClientConfiguration
         EnableGlobalTasksGraph = enableGlobalTasksGraph;
         ShowHiddenQuestRewards = showHiddenQuestRewards;
         DefaultQuestDetailsToSummary = defaultQuestDetailsToSummary;
+        TaskListQuestTextSize = taskListQuestTextSize;
+        InRaidQuestTaskTextSize = inRaidQuestTaskTextSize;
+        InvertLocationFilterMouseButtons = invertLocationFilterMouseButtons;
         EnableTaskSkipping = enableTaskSkipping;
         TaskSkipModifier = taskSkipModifier;
         AutoTrackNewQuests = autoTrackNewQuests;
@@ -86,6 +93,12 @@ internal sealed class QuestMapClientConfiguration
     public ConfigEntry<bool> ShowHiddenQuestRewards { get; }
 
     public ConfigEntry<bool> DefaultQuestDetailsToSummary { get; }
+
+    public ConfigEntry<QuestTaskTextSize> TaskListQuestTextSize { get; }
+
+    public ConfigEntry<QuestTaskTextSize> InRaidQuestTaskTextSize { get; }
+
+    public ConfigEntry<bool> InvertLocationFilterMouseButtons { get; }
 
     public ConfigEntry<bool> EnableTaskSkipping { get; }
 
@@ -169,6 +182,21 @@ internal sealed class QuestMapClientConfiguration
                 "Prefer quest summary",
                 true,
                 "Open the Summary tab by default when the selected quest has a QuestMap summary."),
+            config.Bind(
+                "Task list",
+                "Quest task text size",
+                QuestTaskTextSize.Small,
+                "Text-size preset for quest objective text in QuestMap's in-menu task lists."),
+            config.Bind(
+                "Raid overlays",
+                "In-raid quest task text size",
+                QuestTaskTextSize.Small,
+                "Text-size preset for quest objective text in the in-raid tracked quest list and progress popups."),
+            config.Bind(
+                "Task list",
+                "Invert location-filter mouse buttons",
+                true,
+                "Use left-click to isolate a location and right-click to include or exclude it. Disable to use left-click for include/exclude and right-click for isolation."),
             config.Bind(
                 "Quest actions",
                 "Enable task skipping",

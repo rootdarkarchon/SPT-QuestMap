@@ -19,15 +19,14 @@ internal static class QuestMapLocationVisuals
     {
         if (QuestObjectiveMapRules.UsesActualMaps(node))
         {
-            if (QuestObjectiveMapRules.ShouldPrependTransitionLabel(
-                    node.Location.Id,
-                    node.Location.Name,
-                    node.Location.Any,
-                    node.ActualMaps.Count))
+            if (node.TaskLocation.Id.Equals(
+                    QuestObjectiveMapRules.TransitionFilterId,
+                    StringComparison.OrdinalIgnoreCase)
+                && node.ActualMaps.Count > 1)
             {
                 return
                 [
-                    NativeLocation(node, fallbackBannerUrl),
+                    node.TaskLocation,
                     .. node.ActualMaps,
                 ];
             }
@@ -35,18 +34,13 @@ internal static class QuestMapLocationVisuals
             return node.ActualMaps;
         }
 
-        return [NativeLocation(node, fallbackBannerUrl)];
-    }
-
-    private static QuestMapReference NativeLocation(QuestGraphNode node, string fallbackBannerUrl)
-    {
-        var name = node.Location.Any
-            ? ClientLocale.Text("common.any")
-            : node.Location.Name ?? node.Location.Id;
-        var banner = QuestObjectiveMapRules.IsActualMapPlaceholder(node.Location)
-            ? fallbackBannerUrl
-            : node.Location.BannerImageUrl ?? fallbackBannerUrl;
-        return new QuestMapReference(node.Location.Id, name, banner);
+        return
+        [
+            node.TaskLocation with
+            {
+                BannerImageUrl = node.TaskLocation.BannerImageUrl ?? fallbackBannerUrl,
+            },
+        ];
     }
 
     public static TMP_Text AddCompactMapText(

@@ -88,5 +88,6 @@
   "details.branchAlternatives": "代替分岐",
   "details.prerequisites": "前提条件",
   "details.successors": "直接の後続クエスト",
-  "profile.aria": "プロフィール"
+  "profile.aria": "プロフィール",
+  "location.none": "場所なし"
 }

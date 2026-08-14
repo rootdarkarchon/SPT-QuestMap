@@ -4,6 +4,13 @@ namespace SPTQuestMap.Core.Rules;
 
 public static class QuestObjectiveMapRules
 {
+    public const string NoLocationFilterId = "no-location";
+    public const string AnyFilterId = "any";
+    public const string TransitionFilterId = "transition";
+    public const string NoLocationBannerUrl = "/files/banners/norvinskzone.png";
+    public const string AnyBannerUrl = "/files/banners/67e4047d22d6081b78031ddb.jpg";
+    public const string TransitionBannerUrl = "/files/banners/banner_tarkov.png";
+
     public static IReadOnlyCollection<string> ExpandMapIds(
         IReadOnlyCollection<string> mapIds,
         IReadOnlyDictionary<string, IReadOnlyCollection<string>> mapAliases)
@@ -38,22 +45,24 @@ public static class QuestObjectiveMapRules
         && IsTransitionLocation(locationId, locationName, any);
 
     public static bool UsesActualMaps(QuestGraphNode quest) =>
-        IsActualMapPlaceholder(quest.Location)
+        (quest.TaskLocation.Id.Equals(AnyFilterId, StringComparison.OrdinalIgnoreCase)
+            || quest.TaskLocation.Id.Equals(TransitionFilterId, StringComparison.OrdinalIgnoreCase))
         && quest.ActualMapsComplete
         && quest.ActualMaps.Count > 0;
 
-    public static string NativeFilterId(QuestGraphNode quest) =>
-        quest.Location.Any ? "any" : quest.Location.Id;
+    public static string NativeFilterId(QuestGraphNode quest) => quest.TaskLocation.Id;
 
     public static bool MatchesTableLocationFilter(
         QuestGraphNode quest,
         IReadOnlyCollection<string> selectedLocationIds)
     {
         var selected = selectedLocationIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (!IsActualMapPlaceholder(quest.Location)) return selected.Contains(quest.Location.Id);
+        if (quest.TaskLocation.Id.Equals(NoLocationFilterId, StringComparison.OrdinalIgnoreCase))
+            return selected.Contains(NoLocationFilterId);
+        var nativeSelected = selected.Contains(NativeFilterId(quest));
+        if (!UsesActualMaps(quest)) return nativeSelected;
         var mappedTaskMatches = quest.Objectives.Any(objective => objective.MapIds.Any(selected.Contains));
-        if (UsesActualMaps(quest)) return mappedTaskMatches;
-        return selected.Contains(NativeFilterId(quest)) || mappedTaskMatches;
+        return nativeSelected || mappedTaskMatches;
     }
 
     public static IReadOnlyList<QuestObjectiveDefinition> FilterTableObjectives(
@@ -62,11 +71,14 @@ public static class QuestObjectiveMapRules
     {
         if (selectedLocationIds is null) return quest.Objectives;
         var selected = selectedLocationIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (!IsActualMapPlaceholder(quest.Location)) return quest.Objectives;
+        if (quest.TaskLocation.Id.Equals(NoLocationFilterId, StringComparison.OrdinalIgnoreCase))
+            return selected.Contains(NoLocationFilterId) ? quest.Objectives : [];
         var nativeSelected = selected.Contains(NativeFilterId(quest));
+        if (nativeSelected) return quest.Objectives;
+        if (!UsesActualMaps(quest)) return [];
         return quest.Objectives
             .Where(objective => objective.MapIds.Count == 0
-                ? quest.Location.Any || nativeSelected
+                ? quest.Location.Any
                 : objective.MapIds.Any(selected.Contains))
             .ToArray();
     }

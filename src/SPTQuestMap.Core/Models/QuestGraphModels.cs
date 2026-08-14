@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using SPTQuestMap.Core.Rules;
 
 namespace SPTQuestMap.Core.Models;
 
@@ -128,6 +129,11 @@ public sealed record QuestGraphNode(
     bool ProfileGenerated,
     string? RepeatableKind)
 {
+    public QuestMapReference TaskLocation { get; init; } = new(
+        QuestObjectiveMapRules.NoLocationFilterId,
+        "No location",
+        QuestObjectiveMapRules.NoLocationBannerUrl);
+
     public IReadOnlyList<QuestMapReference> ActualMaps { get; init; } = [];
 
     public bool ActualMapsComplete { get; init; }

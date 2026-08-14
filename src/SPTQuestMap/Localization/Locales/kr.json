@@ -88,5 +88,6 @@
   "details.branchAlternatives": "대체 분기",
   "details.prerequisites": "선행 조건",
   "details.successors": "직접 후속 퀘스트",
-  "profile.aria": "프로필"
+  "profile.aria": "프로필",
+  "location.none": "위치 없음"
 }

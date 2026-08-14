@@ -256,6 +256,7 @@ internal sealed class QuestProfileStateBuilder(
     )
     {
         var locale = localeService.GetLocaleDb(language);
+        var ui = QuestMapUiCatalog.For(language, locale);
         var traders = databaseService.GetTraders();
         var items = preload.Items;
         var locationValues = databaseService
@@ -282,7 +283,8 @@ internal sealed class QuestProfileStateBuilder(
                         locationsById,
                         pmc.TaskConditionCounters,
                         expired,
-                        scav
+                        scav,
+                        ui
                     ))
                     .OrderBy(entry => QuestTraderOrder.Rank(entry.Node.TraderId))
                     .ThenBy(entry => entry.Node.TraderName, StringComparer.OrdinalIgnoreCase)
@@ -308,7 +310,8 @@ internal sealed class QuestProfileStateBuilder(
         IReadOnlyDictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location> locationsById,
         Dictionary<MongoId, TaskConditionCounter>? counters,
         bool expired,
-        bool scav
+        bool scav,
+        IReadOnlyDictionary<string, string> ui
     )
     {
         traders.TryGetValue(quest.TraderId, out var trader);
@@ -362,6 +365,7 @@ internal sealed class QuestProfileStateBuilder(
             rewards
         )
         {
+            TaskLocation = QuestTemplateMapper.BuildTaskLocation(location, objectives, ui),
             ActualMaps = actualMaps.Maps,
             ActualMapsComplete = actualMaps.Complete,
             ScavRepeatable = scav,

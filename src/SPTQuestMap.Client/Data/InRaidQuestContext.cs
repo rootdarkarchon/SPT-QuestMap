@@ -41,8 +41,8 @@ internal readonly struct InRaidQuestContext
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         locations.UnionWith(new[]
         {
-            "any",
-            "marathon",
+            QuestObjectiveMapRules.AnyFilterId,
+            QuestObjectiveMapRules.TransitionFilterId,
         });
         return locations;
     }

@@ -23,6 +23,7 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
     private ManualLogSource? _log;
     private Func<KeyboardShortcut>? _hotkey;
     private Func<float>? _backgroundOpacity;
+    private Func<QuestTaskTextSize>? _taskTextSize;
     private Func<float>? _fadeDuration;
     private Func<float>? _displayDuration;
     private Func<RaidTrackedQuestListProjection>? _projection;
@@ -37,12 +38,14 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
     private float _transitionAt;
     private float _fadeStartAlpha;
     private int _contentVersion;
+    private QuestTaskTextSize _appliedTaskTextSize;
 
     public static RaidTrackedQuestListView Create(
         Transform owner,
         ManualLogSource log,
         Func<KeyboardShortcut> hotkey,
         Func<float> backgroundOpacity,
+        Func<QuestTaskTextSize> taskTextSize,
         Func<float> fadeDuration,
         Func<float> displayDuration,
         Func<RaidTrackedQuestListProjection> projection,
@@ -54,6 +57,8 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
         view._log = log;
         view._hotkey = hotkey;
         view._backgroundOpacity = backgroundOpacity;
+        view._taskTextSize = taskTextSize;
+        view._appliedTaskTextSize = taskTextSize();
         view._fadeDuration = fadeDuration;
         view._displayDuration = displayDuration;
         view._projection = projection;
@@ -81,6 +86,7 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
         _log = null;
         _hotkey = null;
         _backgroundOpacity = null;
+        _taskTextSize = null;
         _fadeDuration = null;
         _displayDuration = null;
         _projection = null;
@@ -133,6 +139,12 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
 
     private void Update()
     {
+        var taskTextSize = TaskTextSize;
+        if (taskTextSize != _appliedTaskTextSize)
+        {
+            _appliedTaskTextSize = taskTextSize;
+            if (_shown) Rebuild();
+        }
         var inRaid = InRaidQuestContext.TryCapture(out _);
         if (_hotkey is not null && inRaid && QuestMapKeyboardShortcut.IsDown(_hotkey()))
         {
@@ -261,14 +273,18 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
             TextAlignmentOptions.MidlineLeft, Color.white, 8, rowLeft);
         if (entry.Objectives.Count == 0)
         {
-            AddTextRow("Ready", ClientLocale.Text("state.readyToTurnIn"), ref y, 17, 10,
+            AddTextRow("Ready", ClientLocale.Text("state.readyToTurnIn"), ref y,
+                QuestTableLayoutRules.RaidTrackedTaskRowHeight(TaskTextSize),
+                QuestTableLayoutRules.RaidTrackedTaskFontSize(TaskTextSize),
                 TextAlignmentOptions.MidlineLeft, QuestGraphPalette.Selected, 18, rowLeft);
             return;
         }
         foreach (var objective in entry.Objectives)
         {
             if (IsNumeric(objective.Progress)) AddObjectiveProgress(objective, ref y, rowLeft);
-            else AddTextRow($"Task-{objective.Definition.Id}", objective.Definition.Text, ref y, 18, 10,
+            else AddTextRow($"Task-{objective.Definition.Id}", objective.Definition.Text, ref y,
+                QuestTableLayoutRules.RaidTrackedTaskRowHeight(TaskTextSize),
+                QuestTableLayoutRules.RaidTrackedTaskFontSize(TaskTextSize),
                 TextAlignmentOptions.MidlineLeft, new Color(0.90f, 0.91f, 0.89f, 1), 18, rowLeft);
         }
     }
@@ -276,7 +292,8 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
     private void AddObjectiveProgress(RaidTrackedObjectiveEntry objective, ref float y, float rowLeft)
     {
         if (_content is null || objective.Progress is null) return;
-        var row = TopRect($"Task-{objective.Definition.Id}", y, 24, rowLeft);
+        var rowHeight = QuestTableLayoutRules.RaidTrackedProgressRowHeight(TaskTextSize);
+        var row = TopRect($"Task-{objective.Definition.Id}", y, rowHeight, rowLeft);
         var track = UnityUiFactory.CreateRect("Track", row);
         UnityUiFactory.Stretch(track, 18, 4, 3, 3);
         track.gameObject.AddComponent<Image>().color = new Color(0.16f, 0.18f, 0.18f, 0.90f);
@@ -292,10 +309,11 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
         var label = UnityUiFactory.AddText(track.gameObject,
             ClientLocale.Format("common.progressCompact", ClientLocale.Arg("current", CappedCurrent(objective.Progress)),
                 ClientLocale.Arg("required", objective.Progress.Required.Value), ClientLocale.Arg("text", objective.Definition.Text)),
-            9, TextAlignmentOptions.Center, Color.white);
+            QuestTableLayoutRules.RaidTrackedProgressFontSize(TaskTextSize),
+            TextAlignmentOptions.Center, Color.white);
         label.enableWordWrapping = false;
         label.overflowMode = TextOverflowModes.Ellipsis;
-        y += 24f;
+        y += rowHeight;
     }
 
     private void AddTextRow(
@@ -334,6 +352,8 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
     private float DisplayDuration => Mathf.Clamp(_displayDuration?.Invoke() ?? 8f, 1f, 60f);
 
     private float BackgroundOpacity => Mathf.Clamp(_backgroundOpacity?.Invoke() ?? 0.82f, 0.2f, 1f);
+
+    private QuestTaskTextSize TaskTextSize => _taskTextSize?.Invoke() ?? QuestTaskTextSize.Small;
 
     private static bool IsNumeric(QuestObjectiveProgress? progress) => progress?.ProgressKnown == true
         && progress.Current.HasValue && progress.Required is > 1d;

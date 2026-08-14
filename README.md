@@ -90,13 +90,13 @@ The Tasks view provides:
 
 - sortable Quest, Trader, Location, Status, Progress, and Tasks columns;
 - natural numeric ordering for quest series;
-- quest/trader search plus trader, status, map, and repeatable filters;
+- quest/trader search plus trader, status, map, and repeatable filters; `No location` covers menu-only quests, while `Any` is reserved for quests with direct in-raid work;
 - separate pinned, Daily, Scav Daily, Weekly, and ordinary sections;
 - native favorite stars and a separate QuestMap tracking control;
 - current/required objective progress while an objective remains incomplete; and
 - Accept, Restart, Hand In, Turn In, and repeatable Replace actions only when they are actually eligible.
 
-Map filters support normal multi-selection. Right-click a map to make it the exclusive map filter. The retained table preserves its filters, sort, selection, scroll position, rows, and cached artwork when you leave and reopen Tasks.
+Map filters are ordered as **Reset**, **No location**, **Any**, **Transition**, then concrete maps alphabetically. By default, left-click isolates one choice and right-click includes or excludes it; the mouse buttons can be inverted in F12. **Reset** selects every available choice outside raids, or restores **Any**, the current map, and **Transition** during a raid. The retained table preserves its filters, sort, selection, scroll position, rows, and cached artwork when you leave and reopen Tasks.
 
 The Quest Map view supplies search and trader/status/level/repeatable filters, future-depth and finished-quest toggles, drag panning, cursor-centered wheel zoom, Fit, Center, Focus Chain, and selection controls. During a raid, the global replacement intentionally remains on Tasks and does not offer the full dependency graph.
 
@@ -145,6 +145,9 @@ Tracked quests can produce stacked, deduplicated in-raid progress notifications.
 | Replace trader task screens | On | Enables trader Tasks replacements |
 | Show hidden quest rewards | On | Includes template rewards marked hidden |
 | Prefer quest summary | On | Opens Summary first when one is available |
+| Quest task text size | Small | Selects Small, Medium, or Large objective text in the in-menu Tasks tables |
+| In-raid quest task text size | Small | Independently sizes objective text in the tracked quest list and progress popups |
+| Invert location-filter mouse buttons | On | Uses left-click to isolate and right-click to include/exclude map filters |
 | Enable task skipping | **Off** | Allows modifier-revealed objective skipping |
 | Task skip modifier | Left Ctrl | Hold to reveal eligible **SKIP** controls |
 | Track newly accepted quests | Off | Adds new accepts to manual tracking |

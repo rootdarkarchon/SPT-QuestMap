@@ -88,5 +88,6 @@
   "details.branchAlternatives": "Альтернативные ветви",
   "details.prerequisites": "Предварительные условия",
   "details.successors": "Прямые последующие задания",
-  "profile.aria": "Профиль"
+  "profile.aria": "Профиль",
+  "location.none": "Без локации"
 }

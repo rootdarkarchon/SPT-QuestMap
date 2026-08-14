@@ -27,6 +27,7 @@ internal sealed class QuestMapNativeTooltipTrigger : MonoBehaviour, IPointerEnte
     private SimpleTooltip? _tooltip;
     private float _delay;
     private float _maxWidth;
+    private string? _displayedText;
 
     public void Bind(Func<string> text, float delay, float maxWidth)
     {
@@ -42,7 +43,22 @@ internal sealed class QuestMapNativeTooltipTrigger : MonoBehaviour, IPointerEnte
         _tooltip = ItemUiContext.Instance?.Tooltip;
         if (_tooltip is null) return;
         _owner = this;
+        _displayedText = value;
         _tooltip.Show(value, null, _delay, _maxWidth);
+    }
+
+    private void Update()
+    {
+        if (!ReferenceEquals(_owner, this) || _tooltip is null) return;
+        var value = _text?.Invoke();
+        if (string.Equals(value, _displayedText, StringComparison.Ordinal)) return;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            CloseIfOwner();
+            return;
+        }
+        _displayedText = value;
+        _tooltip.Show(value, null, 0f, _maxWidth);
     }
 
     public void OnPointerExit(PointerEventData eventData) => CloseIfOwner();
@@ -57,5 +73,6 @@ internal sealed class QuestMapNativeTooltipTrigger : MonoBehaviour, IPointerEnte
         _owner = null;
         if (_tooltip is not null && _tooltip.isActiveAndEnabled) _tooltip.Close();
         _tooltip = null;
+        _displayedText = null;
     }
 }

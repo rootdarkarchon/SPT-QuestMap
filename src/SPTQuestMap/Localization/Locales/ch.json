@@ -88,5 +88,6 @@
   "details.branchAlternatives": "分支选项",
   "details.prerequisites": "前置任务",
   "details.successors": "直接后续任务",
-  "profile.aria": "档案"
+  "profile.aria": "档案",
+  "location.none": "无地点"
 }

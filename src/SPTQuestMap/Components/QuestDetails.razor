@@ -146,7 +146,7 @@
     private string QuestName(string? id) => id is null ? Localizer["common.unknownQuest"] : State.GetNode(id)?.Name ?? id;
     private string TraderName(string? id) => id is null ? Localizer["common.trader"] : State.Topology?.Traders.FirstOrDefault(trader => trader.Id == id)?.Name ?? id;
     private QuestMapReferenceDto[] DisplayMaps(QuestNodeDto node) =>
-        QuestMapLocationPresentation.DisplayMaps(node, Localizer["location.any"]);
+        QuestMapLocationPresentation.DisplayMaps(node);
 
     private string TraderSummary(QuestNodeDto node, TraderStateDto? traderState) => traderState is null
         ? Localizer.Format("trader.noState", ("trader", node.TraderName))

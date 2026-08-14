@@ -236,6 +236,16 @@ public static class QuestTopologyNormalizer
             profileGenerated,
             repeatableKind)
         {
+            TaskLocation = new QuestMapReference(
+                string.IsNullOrWhiteSpace(node.TaskLocation?.Id)
+                    ? QuestObjectiveMapRules.NoLocationFilterId
+                    : node.TaskLocation.Id,
+                string.IsNullOrWhiteSpace(node.TaskLocation?.Name)
+                    ? "No location"
+                    : node.TaskLocation.Name,
+                string.IsNullOrWhiteSpace(node.TaskLocation?.BannerImageUrl)
+                    ? QuestObjectiveMapRules.NoLocationBannerUrl
+                    : node.TaskLocation.BannerImageUrl),
             ActualMaps = (node.ActualMaps ?? [])
                 .Where(map => !string.IsNullOrWhiteSpace(map.Id))
                 .Select(map => new QuestMapReference(map.Id, map.Name, map.BannerImageUrl))

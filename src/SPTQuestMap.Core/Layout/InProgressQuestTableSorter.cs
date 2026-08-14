@@ -157,7 +157,7 @@ public static class InProgressQuestTableSorter
         };
 
         private static string LocationName(QuestGraphNode node) =>
-            node.Location.Any ? "Any" : node.Location.Name ?? node.Location.Id;
+            node.TaskLocation.Name ?? node.TaskLocation.Id;
 
         private static int CompareText(string left, string right) =>
             StringComparer.OrdinalIgnoreCase.Compare(left, right);

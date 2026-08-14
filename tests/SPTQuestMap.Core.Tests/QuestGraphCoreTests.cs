@@ -28,25 +28,27 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
-    public void RepeatableBadgesMatchQuestActionButtonHeight()
+    public void TaskTableLayoutSupportsProgressActionsAndTextSizePresets()
     {
         Assert.Multiple(() =>
         {
-            Assert.That(QuestTableLayoutRules.RepeatableBadgeHeight,
-                Is.EqualTo(QuestTableLayoutRules.QuestBannerActionHeight));
             Assert.That(QuestTableLayoutRules.RepeatableBadgeHeight, Is.EqualTo(24f));
+            Assert.That(QuestTableLayoutRules.ProgressActionHeight, Is.EqualTo(30f));
+            Assert.That(QuestTableLayoutRules.ProgressActionSpan(0, 1), Is.EqualTo((0f, 1f)));
+            Assert.That(QuestTableLayoutRules.ProgressActionSpan(0, 2), Is.EqualTo((0f, 0.5f)));
+            Assert.That(QuestTableLayoutRules.ProgressActionSpan(1, 2), Is.EqualTo((0.5f, 1f)));
+            Assert.That(QuestTableLayoutRules.TaskFontSize(QuestTaskTextSize.Small), Is.EqualTo(11f));
+            Assert.That(QuestTableLayoutRules.TaskFontSize(QuestTaskTextSize.Medium), Is.EqualTo(13f));
+            Assert.That(QuestTableLayoutRules.TaskFontSize(QuestTaskTextSize.Large), Is.EqualTo(15f));
+            Assert.That(QuestTableLayoutRules.CompactTaskRowHeight(QuestTaskTextSize.Small), Is.EqualTo(20f));
+            Assert.That(QuestTableLayoutRules.ProgressTaskRowHeight(QuestTaskTextSize.Large), Is.EqualTo(38f));
+            Assert.That(QuestTableLayoutRules.RaidTrackedTaskFontSize(QuestTaskTextSize.Small), Is.EqualTo(10f));
+            Assert.That(QuestTableLayoutRules.RaidTrackedTaskFontSize(QuestTaskTextSize.Large), Is.EqualTo(14f));
+            Assert.That(QuestTableLayoutRules.RaidTrackedProgressFontSize(QuestTaskTextSize.Medium), Is.EqualTo(11f));
+            Assert.That(QuestTableLayoutRules.RaidTrackedTaskRowHeight(QuestTaskTextSize.Medium), Is.EqualTo(22f));
+            Assert.That(QuestTableLayoutRules.RaidTrackedProgressRowHeight(QuestTaskTextSize.Large), Is.EqualTo(32f));
+            Assert.That(QuestTableLayoutRules.RaidPopupTaskFontSize(QuestTaskTextSize.Large), Is.EqualTo(15f));
         });
-    }
-
-    [TestCase(false, false)]
-    [TestCase(true, false)]
-    [TestCase(false, true)]
-    [TestCase(true, true)]
-    public void QuestBannerActionsUseOneAnchorRegardlessOfRouteState(bool collectorRoute, bool lightkeeperRoute)
-    {
-        Assert.That(
-            QuestTableLayoutRules.QuestBannerActionRightOffset(collectorRoute, lightkeeperRoute),
-            Is.EqualTo(26f));
     }
 
     [Test]
@@ -706,9 +708,12 @@ public sealed class QuestGraphCoreTests
     {
         var woods = Node("woods", "Prapor", "Woods");
         woods.Location = new QuestLocationPayload { Id = "woods", Name = "Woods", Any = false, BannerImageUrl = "/woods.png" };
+        woods.TaskLocation = new QuestMapReferencePayload { Id = "woods", Name = "Woods", BannerImageUrl = "/woods.png" };
         var customs = Node("customs", "Prapor", "Customs");
         customs.Location = new QuestLocationPayload { Id = "customs", Name = "Customs", Any = false, BannerImageUrl = "/customs.png" };
+        customs.TaskLocation = new QuestMapReferencePayload { Id = "customs", Name = "Customs", BannerImageUrl = "/customs.png" };
         var anywhere = Node("anywhere", "Prapor", "Any");
+        anywhere.TaskLocation = new QuestMapReferencePayload { Id = QuestObjectiveMapRules.AnyFilterId, Name = "Any location" };
         var feed = Feed([woods, customs, anywhere], []);
         feed.DefaultVisibleQuestIds = ["woods", "customs", "anywhere"];
         feed.AllApplicableQuestIds = ["woods", "customs", "anywhere"];
@@ -1482,6 +1487,12 @@ public sealed class QuestGraphCoreTests
     public void InProgressLocationFilter_UsesTaskMapsButPreservesNativeAnySelection()
     {
         var any = Node("mapped-any", "Prapor", "Any");
+        any.TaskLocation = new QuestMapReferencePayload
+        {
+            Id = QuestObjectiveMapRules.AnyFilterId,
+            Name = "Any location",
+            BannerImageUrl = QuestObjectiveMapRules.AnyBannerUrl,
+        };
         any.ActualMaps =
         [
             new QuestMapReferencePayload { Id = "customs", Name = "Customs" },
@@ -1520,12 +1531,12 @@ public sealed class QuestGraphCoreTests
         {
             Assert.That(factory.Nodes.Select(value => value.Id), Is.EqualTo(new[] { any.Id }));
             Assert.That(woods.Nodes, Is.Empty);
-            Assert.That(nativeAny.Nodes, Is.Empty,
-                "A fully resolved actual-map quest is filtered by its task maps, while retaining native Any only for sorting.");
+            Assert.That(nativeAny.Nodes.Select(value => value.Id), Is.EqualTo(new[] { any.Id }),
+                "The server-provided Any scope includes the whole quest even when derived maps are also available.");
             Assert.That(QuestObjectiveMapRules.FilterTableObjectives(node, ["factory4_day"])
                 .Select(objective => objective.Id), Is.EquivalentTo(new[] { "factory-task", "any-task" }));
             Assert.That(QuestObjectiveMapRules.FilterTableObjectives(node, ["any"])
-                .Select(objective => objective.Id), Is.EqualTo(new[] { "any-task" }));
+                .Select(objective => objective.Id), Is.EqualTo(new[] { "customs-task", "factory-task", "any-task" }));
             Assert.That(QuestObjectiveMapRules.TableObjectivesExcludedByLocationFilter(node, ["factory4_day"])
                 .Select(objective => objective.Id), Is.EqualTo(new[] { "customs-task" }));
             Assert.That(QuestObjectiveMapRules.TableObjectivesExcludedByLocationFilter(node, ["customs", "factory4_day"]),

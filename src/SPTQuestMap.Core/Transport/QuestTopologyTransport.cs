@@ -99,6 +99,7 @@ public sealed class QuestNodePayload
     public QuestExclusionPayload[] ExclusionRules { get; set; } = [];
     public QuestRewardPayload[] Rewards { get; set; } = [];
     public QuestUnknownConditionPayload[] UnknownConditions { get; set; } = [];
+    public QuestMapReferencePayload TaskLocation { get; set; } = new();
     public QuestMapReferencePayload[] ActualMaps { get; set; } = [];
     public bool ActualMapsComplete { get; set; }
 }

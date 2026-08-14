@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using SPTQuestMap.Core.Rules;
 
 namespace SPTQuestMap.Services;
 
@@ -36,6 +37,11 @@ public sealed record QuestNodeDto(
     QuestRewardDto[] Rewards
 )
 {
+    public QuestMapReferenceDto TaskLocation { get; init; } = new(
+        QuestObjectiveMapRules.NoLocationFilterId,
+        "No location",
+        QuestObjectiveMapRules.NoLocationBannerUrl);
+
     public QuestMapReferenceDto[] ActualMaps { get; init; } = [];
 
     public bool ActualMapsComplete { get; init; }

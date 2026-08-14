@@ -23,9 +23,6 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private const float TableHeaderHeight = 38f;
     private const float NonTaskContentHeight = 78f;
     private const float MinimumRowHeight = NonTaskContentHeight + 4f;
-    private const float TaskRowHeight = 30f;
-    private const float CompactTaskRowHeight = 20f;
-    private const float FilteredTaskSummaryHeight = 20f;
     private static readonly Color RowUnderlay = new(0.035f, 0.041f, 0.044f, 0.52f);
     private static readonly Color CellSurface = new(0.09f, 0.102f, 0.108f, 0.96f);
     private const int CollapsedTaskCount = 4;
@@ -120,6 +117,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         if (_favoriteQuestService is not null)
             _favoriteQuestService.OnFavoriteQuestAddedOrRemoved += OnFavoriteQuestAddedOrRemoved;
         _tracking.TrackingChanged += OnTrackingChanged;
+        _workspace.TaskListQuestTextSizeSetting.SettingChanged += OnTaskListQuestTextSizeChanged;
         scrollViewport.gameObject.AddComponent<QuestTableBackgroundClickHandler>().Bind(onBackgroundClick);
     }
 
@@ -130,6 +128,10 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     public QuestAssetSpriteCache AssetCache { get; }
     private bool ForceExpandedTasks => _sectionMode == QuestTableSectionMode.TraderStatus;
     private bool ShowFavoriteColumn => _sectionMode != QuestTableSectionMode.TraderStatus;
+    private QuestTaskTextSize TaskTextSize => _workspace.TaskListQuestTextSize();
+    private float TaskFontSize => QuestTableLayoutRules.TaskFontSize(TaskTextSize);
+    private float CompactTaskRowHeight => QuestTableLayoutRules.CompactTaskRowHeight(TaskTextSize);
+    private float ProgressTaskRowHeight => QuestTableLayoutRules.ProgressTaskRowHeight(TaskTextSize);
 
     public static InProgressQuestTableView Create(
         RectTransform mountRect,
@@ -447,6 +449,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         if (_favoriteQuestService is not null)
             _favoriteQuestService.OnFavoriteQuestAddedOrRemoved -= OnFavoriteQuestAddedOrRemoved;
         _tracking.TrackingChanged -= OnTrackingChanged;
+        _workspace.TaskListQuestTextSizeSetting.SettingChanged -= OnTaskListQuestTextSizeChanged;
         foreach (var row in _rows.Values) row.DisposeNativeActions();
         _rowBackgrounds.Clear();
         _rows.Clear();
@@ -457,6 +460,23 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             Root.gameObject.SetActive(false);
             UnityEngine.Object.Destroy(Root.gameObject);
         }
+    }
+
+    private void OnTaskListQuestTextSizeChanged(object? sender, EventArgs eventArgs)
+    {
+        if (_disposed) return;
+        var viewport = CaptureViewportState();
+        _content.gameObject.SetActive(false);
+        try
+        {
+            foreach (var row in _rows.Values) RefreshTasks(row);
+            LayoutRows();
+        }
+        finally
+        {
+            _content.gameObject.SetActive(true);
+        }
+        RestoreViewport(viewport);
     }
 
     public void ReleaseNativeRuntimeBindings(bool abandon)
@@ -756,7 +776,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var displayedTasksHeight = displayedObjectives.Count == 0
             ? CompactTaskRowHeight
             : displayedObjectives.Sum(definition => TaskVisualHeight(progressById.GetValueOrDefault(definition.Id)));
-        if (HasFilteredTaskSummary(node, filteredObjectives)) displayedTasksHeight += FilteredTaskSummaryHeight;
+        if (HasFilteredTaskSummary(node, filteredObjectives)) displayedTasksHeight += CompactTaskRowHeight;
         var taskAreaHeight = 18 + displayedTasksHeight + (hasExpander ? 28 : 0);
         var height = Mathf.Max(MinimumRowHeight, taskAreaHeight);
         var row = UnityUiFactory.CreateRect($"Row-{node.Id}", _content);
@@ -815,7 +835,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var displayedTasksHeight = displayedObjectives.Count == 0
             ? CompactTaskRowHeight
             : displayedObjectives.Sum(definition => TaskVisualHeight(progressById.GetValueOrDefault(definition.Id)));
-        if (HasFilteredTaskSummary(row.Node, filteredObjectives)) displayedTasksHeight += FilteredTaskSummaryHeight;
+        if (HasFilteredTaskSummary(row.Node, filteredObjectives)) displayedTasksHeight += CompactTaskRowHeight;
         var taskAreaHeight = 18 + displayedTasksHeight + (hasExpander ? 28 : 0);
         row.Height = Mathf.Max(MinimumRowHeight, taskAreaHeight);
         row.Root.sizeDelta = new Vector2(0, row.Height);
@@ -898,11 +918,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var collectorRoute = _topology.CollectorPathQuestIds.Contains(node.Id);
         var lightkeeperRoute = _topology.LightkeeperPathQuestIds.Contains(node.Id);
         AddQuestRouteStrips(content, collectorRoute, lightkeeperRoute);
-        var actionOffset = QuestTableLayoutRules.QuestBannerActionRightOffset(collectorRoute, lightkeeperRoute);
 
-        var canAccept = _workspace.CanAccept(_topology, node.Id);
-        var canComplete = _workspace.CanComplete(_topology, node.Id);
-        var canReplace = node.RepeatableKind is "Daily" or "Weekly" && _workspace.CanReplace(_topology, node.Id);
         if (node.RepeatableKind is "Daily" or "Weekly")
         {
             var repeatableKind = ClientLocale.Text($"repeatable.{node.RepeatableKind!.ToLowerInvariant()}");
@@ -910,10 +926,9 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
                 ? ClientLocale.Format("common.scavRepeatable", ClientLocale.Arg("kind", repeatableKind)).ToUpperInvariant()
                 : repeatableKind.ToUpperInvariant();
             var badgeWidth = node.ScavRepeatable ? 92f : 66f;
-            var actionCount = (canAccept || canComplete ? 1 : 0) + (canReplace ? 1 : 0);
             var badge = UnityUiFactory.CreateRect("RepeatableBadge", content);
             badge.anchorMin = badge.anchorMax = badge.pivot = new Vector2(1, 1);
-            badge.anchoredPosition = new Vector2(-actionOffset - actionCount * 34, -8);
+            badge.anchoredPosition = new Vector2(-26, -8);
             badge.sizeDelta = new Vector2(badgeWidth, QuestTableLayoutRules.RepeatableBadgeHeight);
             badge.gameObject.AddComponent<Image>().color = QuestGraphPalette.ControlActive;
             var badgeText = UnityUiFactory.AddText(badge.gameObject, repeatableLabel, 9,
@@ -921,19 +936,6 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             badgeText.fontStyle = FontStyles.Bold;
             UnityUiFactory.FitSingleLine(badgeText, 6f, 3f);
         }
-        if (canReplace)
-        {
-            AddQuestAction(content, "Replace", "↻", actionOffset, button => RunReplace(node.Id, button),
-                () => ClientLocale.Format("tooltip.replace", ClientLocale.Arg("quest", node.Name)));
-            actionOffset += 34;
-        }
-        if (canAccept)
-            AddQuestAction(content, "Accept", "✓", actionOffset, button => RunAccept(node.Id, button),
-                () => ClientLocale.Format(state == QuestMapDisplayStateKind.RestartableFailure ? "tooltip.restart" : "tooltip.accept",
-                    ClientLocale.Arg("quest", node.Name)));
-        else if (canComplete)
-            AddQuestAction(content, "Complete", "→", actionOffset, button => RunComplete(node.Id, button),
-                () => ClientLocale.Format("tooltip.turnIn", ClientLocale.Arg("quest", node.Name)));
 
         AddClickableHoverOutline(content, "QuestHover", bottomOnly: false);
         AddTopRightBorder(cell);
@@ -1103,16 +1105,50 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         var cell = CreateAnchoredCell("Progress", row, 0.49f, 0.58f, 2, 2);
         var content = CreateTopContentFrame(cell, "ProgressContent", false);
         content.gameObject.AddComponent<Image>().color = CellSurface;
+        var state = QuestGraphRules.ClassifyProfileDisplayState(_topology, node, _overlay);
+        var actions = new List<(string Name, string Label, Action<Button> Run, Func<string> Tooltip)>();
+        if (_workspace.CanAccept(_topology, node.Id))
+        {
+            var restart = state == QuestMapDisplayStateKind.RestartableFailure;
+            actions.Add((
+                restart ? "Restart" : "Accept",
+                ClientLocale.Text(restart ? "label.restart" : "label.accept"),
+                button => RunAccept(node.Id, button),
+                () => ClientLocale.Format(restart ? "tooltip.restart" : "tooltip.accept",
+                    ClientLocale.Arg("quest", node.Name))));
+        }
+        else if (_workspace.CanComplete(_topology, node.Id))
+        {
+            actions.Add((
+                "Complete",
+                ClientLocale.Text("label.turnIn"),
+                button => RunComplete(node.Id, button),
+                () => ClientLocale.Format("tooltip.turnIn", ClientLocale.Arg("quest", node.Name))));
+        }
+        if (node.RepeatableKind is "Daily" or "Weekly" && _workspace.CanReplace(_topology, node.Id))
+        {
+            actions.Add((
+                "Replace",
+                ClientLocale.Text("label.replace"),
+                button => RunReplace(node.Id, button),
+                () => ClientLocale.Format("tooltip.replace", ClientLocale.Arg("quest", node.Name))));
+        }
+        for (var index = 0; index < actions.Count; index++)
+        {
+            var action = actions[index];
+            AddProgressQuestAction(content, action.Name, action.Label, index, actions.Count, action.Run, action.Tooltip);
+        }
+
         var progress = OverallProgress(node, live);
         var labelRect = UnityUiFactory.CreateRect("Value", content);
-        UnityUiFactory.Stretch(labelRect, 8, 8, 10, 34);
+        UnityUiFactory.Stretch(labelRect, 8, 8, actions.Count > 0 ? 38 : 10, actions.Count > 0 ? 22 : 34);
         var label = UnityUiFactory.AddText(labelRect.gameObject, progress.HasValue
                 ? ClientLocale.Format("common.percent", ClientLocale.Arg("percent", progress.Value))
                 : "—",
-            16, TextAlignmentOptions.Center, Color.white);
+            actions.Count > 0 ? 13 : 16, TextAlignmentOptions.Center, Color.white);
         label.fontStyle = FontStyles.Bold;
         if (progress.HasValue) AddProgressBar(content, progress.Value / 100d, 10, 12, QuestGraphPalette.Status(
-            QuestGraphRules.ClassifyProfileDisplayState(_topology, node, _overlay)));
+            state));
         AddTopRightBorder(cell);
     }
 
@@ -1158,7 +1194,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             var definition = displayedObjectives[index];
             progressById.TryGetValue(definition.Id, out var progress);
             var percent = ObjectivePercent(progress);
-            var taskHeight = percent.HasValue ? TaskRowHeight : CompactTaskRowHeight;
+            var taskHeight = percent.HasValue ? ProgressTaskRowHeight : CompactTaskRowHeight;
             var task = UnityUiFactory.CreateRect($"Task-{definition.Id}", cell);
             task.anchorMin = new Vector2(0, 1);
             task.anchorMax = new Vector2(1, 1);
@@ -1182,7 +1218,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             var textRect = UnityUiFactory.CreateRect("Text", task);
             var nestedIndent = definition.ContributesToProgress ? 0f : 12f;
             UnityUiFactory.Stretch(textRect, 10 + actionWidth + nestedIndent, 8, 0, percent.HasValue ? 9 : 0);
-            var text = UnityUiFactory.AddText(textRect.gameObject, value + definition.Text + suffix, 11,
+            var text = UnityUiFactory.AddText(textRect.gameObject, value + definition.Text + suffix, TaskFontSize,
                 TextAlignmentOptions.MidlineLeft, progress?.Complete == true ? QuestGraphPalette.Completed : Color.white);
             text.enableWordWrapping = false;
             if (percent.HasValue)
@@ -1364,7 +1400,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         node.ActualMaps.Count > 1
         && filteredObjectives.Count > 0;
 
-    private static void AddFilteredTaskSummary(
+    private void AddFilteredTaskSummary(
         RectTransform cell,
         QuestGraphNode node,
         IReadOnlyList<QuestObjectiveDefinition> filteredObjectives,
@@ -1385,10 +1421,10 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         summary.overflowMode = TextOverflowModes.Ellipsis;
         summary.raycastTarget = true;
         QuestMapNativeTooltips.Bind(summary.gameObject, () => summaryText);
-        taskOffset += FilteredTaskSummaryHeight;
+        taskOffset += CompactTaskRowHeight;
     }
 
-    private static TMP_Text AddCompactTaskLine(
+    private TMP_Text AddCompactTaskLine(
         RectTransform cell,
         string name,
         string value,
@@ -1401,7 +1437,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         line.pivot = new Vector2(0.5f, 1);
         line.anchoredPosition = new Vector2(0, -offset);
         line.sizeDelta = new Vector2(0, CompactTaskRowHeight);
-        var text = UnityUiFactory.AddText(line.gameObject, value, 11, TextAlignmentOptions.MidlineLeft, color);
+        var text = UnityUiFactory.AddText(line.gameObject, value, TaskFontSize, TextAlignmentOptions.MidlineLeft, color);
         text.margin = new Vector4(10, 0, 8, 0);
         text.enableWordWrapping = false;
         return text;
@@ -1423,8 +1459,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal)
         ?? new Dictionary<string, QuestObjectiveProgress>(StringComparer.Ordinal);
 
-    private static float TaskVisualHeight(QuestObjectiveProgress? progress) =>
-        ObjectivePercent(progress).HasValue ? TaskRowHeight : CompactTaskRowHeight;
+    private float TaskVisualHeight(QuestObjectiveProgress? progress) =>
+        ObjectivePercent(progress).HasValue ? ProgressTaskRowHeight : CompactTaskRowHeight;
 
     private static void AddQuestRouteStrips(RectTransform parent, bool collectorRoute, bool lightkeeperRoute)
     {
@@ -1547,21 +1583,26 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         }
     }
 
-    private static void AddQuestAction(
+    private static void AddProgressQuestAction(
         RectTransform parent,
         string name,
         string text,
-        float rightOffset,
+        int index,
+        int count,
         Action<Button> onClick,
         Func<string> tooltip)
     {
+        var span = QuestTableLayoutRules.ProgressActionSpan(index, count);
         var root = UnityUiFactory.CreateRect(name, parent);
-        root.anchorMin = root.anchorMax = root.pivot = new Vector2(1, 1);
-        root.anchoredPosition = new Vector2(-rightOffset, -8);
-        root.sizeDelta = new Vector2(28, QuestTableLayoutRules.QuestBannerActionHeight);
-        var button = UnityUiFactory.AddButton(root.gameObject, QuestGraphPalette.Control);
-        var label = UnityUiFactory.AddText(root.gameObject, text, 16, TextAlignmentOptions.Center, Color.white);
+        root.anchorMin = new Vector2(span.Minimum, 1);
+        root.anchorMax = new Vector2(span.Maximum, 1);
+        root.pivot = new Vector2(0.5f, 1);
+        root.anchoredPosition = new Vector2(0, -4);
+        root.sizeDelta = new Vector2(-8, QuestTableLayoutRules.ProgressActionHeight);
+        var button = UnityUiFactory.AddButton(root.gameObject, QuestGraphPalette.ControlActive);
+        var label = UnityUiFactory.AddText(root.gameObject, text, 10, TextAlignmentOptions.Center, Color.white);
         label.fontStyle = FontStyles.Bold;
+        UnityUiFactory.FitSingleLine(label, 7f, 3f);
         button.onClick.AddListener(() => onClick(button));
         QuestMapNativeTooltips.Bind(root.gameObject, tooltip);
     }

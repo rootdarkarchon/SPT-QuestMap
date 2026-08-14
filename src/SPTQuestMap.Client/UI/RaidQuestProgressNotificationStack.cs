@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using BepInEx.Logging;
 using SPTQuestMap.Client.Data;
+using SPTQuestMap.Core.Rules;
 using UnityEngine;
 
 namespace SPTQuestMap.Client.UI;
@@ -13,6 +14,7 @@ internal sealed class RaidQuestProgressNotificationStack : MonoBehaviour, IDispo
     private ManualLogSource? _log;
     private Func<float>? _opacity;
     private Func<bool>? _minimal;
+    private Func<QuestTaskTextSize>? _taskTextSize;
     private Func<float>? _fadeDuration;
     private Func<float>? _displayDuration;
     private QuestAssetSpriteCache? _assetCache;
@@ -22,6 +24,7 @@ internal sealed class RaidQuestProgressNotificationStack : MonoBehaviour, IDispo
         ManualLogSource log,
         Func<float> opacity,
         Func<bool> minimal,
+        Func<QuestTaskTextSize> taskTextSize,
         Func<float> fadeDuration,
         Func<float> displayDuration,
         QuestAssetSpriteCache assetCache)
@@ -32,6 +35,7 @@ internal sealed class RaidQuestProgressNotificationStack : MonoBehaviour, IDispo
         stack._log = log;
         stack._opacity = opacity;
         stack._minimal = minimal;
+        stack._taskTextSize = taskTextSize;
         stack._fadeDuration = fadeDuration;
         stack._displayDuration = displayDuration;
         stack._assetCache = assetCache;
@@ -41,13 +45,13 @@ internal sealed class RaidQuestProgressNotificationStack : MonoBehaviour, IDispo
 
     public void Show(InRaidQuestProgressChange change)
     {
-        if (_log is null || _opacity is null || _minimal is null || _fadeDuration is null
+        if (_log is null || _opacity is null || _minimal is null || _taskTextSize is null || _fadeDuration is null
             || _displayDuration is null || _assetCache is null) return;
         var questId = change.Quest.Id;
         if (!_cards.TryGetValue(questId, out var card))
         {
             card = RaidQuestProgressNotificationView.Create(
-                transform, _log, _opacity, _minimal, _fadeDuration, _displayDuration, _assetCache);
+                transform, _log, _opacity, _minimal, _taskTextSize, _fadeDuration, _displayDuration, _assetCache);
             _cards.Add(questId, card);
         }
         _order.Remove(questId);
@@ -69,6 +73,7 @@ internal sealed class RaidQuestProgressNotificationStack : MonoBehaviour, IDispo
         _log = null;
         _opacity = null;
         _minimal = null;
+        _taskTextSize = null;
         _fadeDuration = null;
         _displayDuration = null;
         _assetCache = null;

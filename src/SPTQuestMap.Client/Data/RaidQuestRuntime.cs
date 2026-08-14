@@ -62,6 +62,7 @@ internal sealed class RaidQuestRuntime : IDisposable
             log,
             () => _configuration.RaidNotificationOpacity.Value,
             () => _configuration.RaidNotificationMinimal.Value,
+            () => _configuration.InRaidQuestTaskTextSize.Value,
             () => _configuration.RaidOverlayFadeDurationSeconds.Value,
             () => _configuration.RaidNotificationDisplayDurationSeconds.Value,
             assetCache);
@@ -70,6 +71,7 @@ internal sealed class RaidQuestRuntime : IDisposable
             log,
             () => _configuration.TrackedQuestListHotkey.Value,
             () => _configuration.RaidNotificationOpacity.Value,
+            () => _configuration.InRaidQuestTaskTextSize.Value,
             () => _configuration.RaidOverlayFadeDurationSeconds.Value,
             () => _configuration.TrackedQuestListDisplayDurationSeconds.Value,
             BuildTrackedQuestListProjection,

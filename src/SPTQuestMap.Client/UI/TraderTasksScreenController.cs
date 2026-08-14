@@ -335,7 +335,7 @@ internal sealed class TraderTasksScreenController : IDisposable
         if (_contentView is null || _topology?.NodesById.ContainsKey(questId) != true) return;
         if (string.Equals(_selectedQuestId, questId, StringComparison.Ordinal))
         {
-            if (_mode == GlobalQuestGraphMode.InProgress) ClearSelection();
+            if (_mode == GlobalQuestGraphMode.InProgress) ToggleDetails();
             else ShowSelectedDetails();
             return;
         }

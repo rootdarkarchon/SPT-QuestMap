@@ -88,5 +88,6 @@
   "details.branchAlternatives": "Rami alternativi",
   "details.prerequisites": "Prerequisiti",
   "details.successors": "Successori diretti",
-  "profile.aria": "Profilo"
+  "profile.aria": "Profilo",
+  "location.none": "Nessuna località"
 }

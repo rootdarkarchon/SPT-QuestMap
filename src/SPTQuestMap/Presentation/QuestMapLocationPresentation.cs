@@ -5,19 +5,18 @@ namespace SPTQuestMap.Presentation;
 
 internal static class QuestMapLocationPresentation
 {
-    public static QuestMapReferenceDto[] DisplayMaps(QuestNodeDto node, string anyLocationName)
+    public static QuestMapReferenceDto[] DisplayMaps(QuestNodeDto node)
     {
         if (UsesActualMaps(node))
         {
-            if (QuestObjectiveMapRules.ShouldPrependTransitionLabel(
-                    node.Location.Id,
-                    node.Location.Name,
-                    node.Location.Any,
-                    node.ActualMaps.Length))
+            if (node.TaskLocation.Id.Equals(
+                    QuestObjectiveMapRules.TransitionFilterId,
+                    StringComparison.OrdinalIgnoreCase)
+                && node.ActualMaps.Length > 1)
             {
                 return
                 [
-                    NativeLocation(node, anyLocationName),
+                    node.TaskLocation,
                     .. node.ActualMaps,
                 ];
             }
@@ -25,19 +24,12 @@ internal static class QuestMapLocationPresentation
             return node.ActualMaps;
         }
 
-        return [NativeLocation(node, anyLocationName)];
+        return [node.TaskLocation];
     }
 
     private static bool UsesActualMaps(QuestNodeDto node) =>
-        (node.Location.Any || QuestObjectiveMapRules.IsTransitionLocation(
-            node.Location.Id,
-            node.Location.Name,
-            node.Location.Any))
+        (node.TaskLocation.Id.Equals(QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase)
+            || node.TaskLocation.Id.Equals(QuestObjectiveMapRules.TransitionFilterId, StringComparison.OrdinalIgnoreCase))
         && node.ActualMapsComplete
         && node.ActualMaps.Length > 0;
-
-    private static QuestMapReferenceDto NativeLocation(QuestNodeDto node, string anyLocationName) => new(
-        node.Location.Id,
-        node.Location.Any ? anyLocationName : node.Location.Name ?? node.Location.Id,
-        node.Location.BannerImageUrl);
 }

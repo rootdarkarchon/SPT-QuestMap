@@ -41,6 +41,7 @@ internal sealed class QuestTopologyBuilder(
         var totalStopwatch = Stopwatch.StartNew();
         var stageStopwatch = Stopwatch.StartNew();
         var locale = localeService.GetLocaleDb(language);
+        var ui = QuestMapUiCatalog.For(language, locale);
         var dbQuests = databaseService.GetQuests().Values.OrderBy(quest => quest.Id.ToString(), StringComparer.Ordinal).ToArray();
         var items = preload.Items;
         var traders = databaseService.GetTraders();
@@ -150,6 +151,7 @@ internal sealed class QuestTopologyBuilder(
                 )
             )
             {
+                TaskLocation = QuestTemplateMapper.BuildTaskLocation(nativeLocation, objectives, ui),
                 ActualMaps = actualMaps.Maps,
                 ActualMapsComplete = actualMaps.Complete,
                 UnknownConditions = unknownConditions,
@@ -187,7 +189,7 @@ internal sealed class QuestTopologyBuilder(
             logger.Warning($"SPT-QuestMap: Knock-Knock quest {QuestMapQuestIds.KnockKnock} was not found; Lightkeeper-path markers and unlock evaluation are disabled.");
         }
 
-        var canonical = string.Join('\n', nodes.Select(node => $"{node.Id}:{node.ActualMapsComplete}:{string.Join(',', node.ActualMaps.Select(map => map.Id))}:{string.Join(';', node.Objectives.Select(objective => $"{objective.Id}={string.Join(',', objective.MapIds)}!{string.Join(',', objective.UnresolvedZoneIds)}"))}").Concat(edges
+        var canonical = string.Join('\n', nodes.Select(node => $"{node.Id}:{node.TaskLocation.Id}:{node.ActualMapsComplete}:{string.Join(',', node.ActualMaps.Select(map => map.Id))}:{string.Join(';', node.Objectives.Select(objective => $"{objective.Id}={string.Join(',', objective.MapIds)}!{string.Join(',', objective.UnresolvedZoneIds)}"))}").Concat(edges
             .OrderBy(edge => edge.SourceId)
             .ThenBy(edge => edge.TargetId)
             .Select(edge => $"{edge.SourceId}>{edge.TargetId}:{string.Join(',', edge.RequiredStatuses)}"))
