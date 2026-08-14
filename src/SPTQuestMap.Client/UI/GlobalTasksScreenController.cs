@@ -909,6 +909,10 @@ internal sealed class GlobalTasksScreenController : IDisposable
         if (_graphView is null) return;
         _inProgressMapAliases.Clear();
         var relevantNodes = BuildProjection(false).Nodes;
+        var taskLocations = relevantNodes
+            .SelectMany(NodeTaskLocations)
+            .Where(map => !string.IsNullOrWhiteSpace(map.Id))
+            .ToArray();
         var locations = relevantNodes
             .SelectMany(FilterMapChoices)
             .Where(map => !string.IsNullOrWhiteSpace(map.Id))
@@ -928,12 +932,12 @@ internal sealed class GlobalTasksScreenController : IDisposable
             .ThenBy(location => location.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var noLocation = relevantNodes.FirstOrDefault(node => node.TaskLocation.Id.Equals(
-            QuestObjectiveMapRules.NoLocationFilterId, StringComparison.OrdinalIgnoreCase))?.TaskLocation;
-        var any = relevantNodes.FirstOrDefault(node => node.TaskLocation.Id.Equals(
-            QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase))?.TaskLocation;
-        var transition = relevantNodes.FirstOrDefault(node => node.TaskLocation.Id.Equals(
-            QuestObjectiveMapRules.TransitionFilterId, StringComparison.OrdinalIgnoreCase))?.TaskLocation;
+        var noLocation = taskLocations.FirstOrDefault(map => map.Id.Equals(
+            QuestObjectiveMapRules.NoLocationFilterId, StringComparison.OrdinalIgnoreCase));
+        var any = taskLocations.FirstOrDefault(map => map.Id.Equals(
+            QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase));
+        var transition = taskLocations.FirstOrDefault(map => map.Id.Equals(
+            QuestObjectiveMapRules.TransitionFilterId, StringComparison.OrdinalIgnoreCase));
         const float startX = 12;
         const float y = -103;
         const float width = 116;
@@ -1048,23 +1052,33 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
     private static IEnumerable<QuestMapReference> FilterMapChoices(QuestGraphNode node)
     {
-        if (node.TaskLocation.Id.Equals(QuestObjectiveMapRules.NoLocationFilterId, StringComparison.OrdinalIgnoreCase))
-            yield break;
-        if (node.TaskLocation.Id.Equals(QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase)
-            || node.TaskLocation.Id.Equals(QuestObjectiveMapRules.TransitionFilterId, StringComparison.OrdinalIgnoreCase))
+        foreach (var map in NodeTaskLocations(node))
         {
-            foreach (var map in node.ActualMaps) yield return map;
-            yield break;
+            if (map.Id.Equals(QuestObjectiveMapRules.NoLocationFilterId, StringComparison.OrdinalIgnoreCase)
+                || map.Id.Equals(QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase)
+                || map.Id.Equals(QuestObjectiveMapRules.TransitionFilterId, StringComparison.OrdinalIgnoreCase))
+                continue;
+            yield return map;
         }
-        yield return node.TaskLocation;
     }
 
     private static bool AddNodeLocationFilters(HashSet<string> target, QuestGraphNode node)
     {
-        var changed = target.Add(QuestObjectiveMapRules.NativeFilterId(node));
-        if (!QuestObjectiveMapRules.UsesActualMaps(node)) return changed;
-        foreach (var map in node.ActualMaps) changed |= target.Add(map.Id);
+        var changed = false;
+        foreach (var map in NodeTaskLocations(node)) changed |= target.Add(map.Id);
         return changed;
+    }
+
+    private static IEnumerable<QuestMapReference> NodeTaskLocations(QuestGraphNode node)
+    {
+        var locations = node.Objectives
+            .SelectMany(objective => objective.TaskLocations)
+            .Where(map => !string.IsNullOrWhiteSpace(map.Id))
+            .GroupBy(map => map.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToArray();
+        if (locations.Length > 0) return locations;
+        return node.Objectives.Count == 0 ? [node.TaskLocation] : [];
     }
 
     private bool UpdateInProgressPresentation(

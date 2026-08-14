@@ -41,14 +41,11 @@ public static class QuestObjectiveMapRules
         string? locationName,
         bool any,
         int derivedMapCount) =>
-        derivedMapCount > 1
+        derivedMapCount > 0
         && IsTransitionLocation(locationId, locationName, any);
 
     public static bool UsesActualMaps(QuestGraphNode quest) =>
-        (quest.TaskLocation.Id.Equals(AnyFilterId, StringComparison.OrdinalIgnoreCase)
-            || quest.TaskLocation.Id.Equals(TransitionFilterId, StringComparison.OrdinalIgnoreCase))
-        && quest.ActualMapsComplete
-        && quest.ActualMaps.Count > 0;
+        quest.ActualMaps.Count > 0;
 
     public static string NativeFilterId(QuestGraphNode quest) => quest.TaskLocation.Id;
 
@@ -57,12 +54,9 @@ public static class QuestObjectiveMapRules
         IReadOnlyCollection<string> selectedLocationIds)
     {
         var selected = selectedLocationIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (quest.TaskLocation.Id.Equals(NoLocationFilterId, StringComparison.OrdinalIgnoreCase))
-            return selected.Contains(NoLocationFilterId);
-        var nativeSelected = selected.Contains(NativeFilterId(quest));
-        if (!UsesActualMaps(quest)) return nativeSelected;
-        var mappedTaskMatches = quest.Objectives.Any(objective => objective.MapIds.Any(selected.Contains));
-        return nativeSelected || mappedTaskMatches;
+        return quest.Objectives.Count == 0
+            ? selected.Contains(quest.TaskLocation.Id)
+            : quest.Objectives.Any(objective => objective.TaskLocations.Any(map => selected.Contains(map.Id)));
     }
 
     public static IReadOnlyList<QuestObjectiveDefinition> FilterTableObjectives(
@@ -71,15 +65,8 @@ public static class QuestObjectiveMapRules
     {
         if (selectedLocationIds is null) return quest.Objectives;
         var selected = selectedLocationIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (quest.TaskLocation.Id.Equals(NoLocationFilterId, StringComparison.OrdinalIgnoreCase))
-            return selected.Contains(NoLocationFilterId) ? quest.Objectives : [];
-        var nativeSelected = selected.Contains(NativeFilterId(quest));
-        if (nativeSelected) return quest.Objectives;
-        if (!UsesActualMaps(quest)) return [];
         return quest.Objectives
-            .Where(objective => objective.MapIds.Count == 0
-                ? quest.Location.Any
-                : objective.MapIds.Any(selected.Contains))
+            .Where(objective => objective.TaskLocations.Any(map => selected.Contains(map.Id)))
             .ToArray();
     }
 
@@ -87,7 +74,7 @@ public static class QuestObjectiveMapRules
         QuestGraphNode quest,
         IReadOnlyCollection<string>? selectedLocationIds)
     {
-        if (selectedLocationIds is null || !UsesActualMaps(quest)) return [];
+        if (selectedLocationIds is null) return [];
         var includedIds = FilterTableObjectives(quest, selectedLocationIds)
             .Select(objective => objective.Id)
             .ToHashSet(StringComparer.Ordinal);
@@ -101,8 +88,8 @@ public static class QuestObjectiveMapRules
         IReadOnlyCollection<string> currentMapIds)
     {
         var maps = currentMapIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (!IsActualMapPlaceholder(quest.Location)) return maps.Contains(quest.Location.Id);
-        return quest.Objectives.Any(objective => objective.MapIds.Any(maps.Contains));
+        return quest.Objectives.Any(objective => objective.InRaidRelevant
+            && IsTaskLocationActiveInRaid(objective.TaskLocations, maps));
     }
 
     public static bool IsObjectiveActiveInRaid(
@@ -111,11 +98,15 @@ public static class QuestObjectiveMapRules
         IReadOnlyCollection<string> currentMapIds,
         bool smartTracking)
     {
-        if (smartTracking && !QuestAutoTrackingRules.IsInRaidObjectiveType(objective.ConditionType)) return false;
         var maps = currentMapIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (objective.MapIds.Count > 0) return objective.MapIds.Any(maps.Contains);
-        if (quest.Location.Any) return true;
-        if (IsActualMapPlaceholder(quest.Location)) return false;
-        return maps.Contains(quest.Location.Id);
+        if (!objective.InRaidRelevant) return !smartTracking && IsMapRelated(quest, maps);
+        return IsTaskLocationActiveInRaid(objective.TaskLocations, maps);
     }
+
+    private static bool IsTaskLocationActiveInRaid(
+        IReadOnlyCollection<QuestMapReference> taskLocations,
+        HashSet<string> currentMapIds) =>
+        taskLocations.Any(map =>
+            map.Id.Equals(AnyFilterId, StringComparison.OrdinalIgnoreCase)
+            || currentMapIds.Contains(map.Id));
 }

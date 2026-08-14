@@ -39,17 +39,24 @@ public sealed class QuestZoneMapCatalogTests
         {
             MapIds = ["bigmap"],
         };
-        var nonSpatial = Objective("handover", []);
+        var nonSpatial = Objective("handover", []) with { ConditionType = "HandoverItem" };
         ObjectiveDefinitionDto unknown = Objective("unknown", ["zone-unknown"]) with
         {
             UnresolvedZoneIds = ["zone-unknown"],
         };
 
         var locations = new Dictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location>(StringComparer.Ordinal);
-        var complete = QuestTemplateMapper.BuildActualMaps(nativeAny, [mapped, nonSpatial], [], locations);
-        var incomplete = QuestTemplateMapper.BuildActualMaps(nativeAny, [mapped, unknown], [], locations);
+        var ui = new Dictionary<string, string>();
+        var completeObjectives = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            nativeAny, [mapped, nonSpatial], ui, [], locations);
+        var incompleteObjectives = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            nativeAny, [mapped, unknown], ui, [], locations);
+        var complete = QuestTemplateMapper.BuildActualMaps(completeObjectives);
+        var incomplete = QuestTemplateMapper.BuildActualMaps(incompleteObjectives);
         var nativeTransition = new QuestLocationDto("marathon", "Transition", false, null);
-        var transition = QuestTemplateMapper.BuildActualMaps(nativeTransition, [mapped, nonSpatial], [], locations);
+        var transitionObjectives = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            nativeTransition, [mapped, nonSpatial], ui, [], locations);
+        var transition = QuestTemplateMapper.BuildActualMaps(transitionObjectives);
 
         Assert.Multiple(() =>
         {
@@ -64,7 +71,7 @@ public sealed class QuestZoneMapCatalogTests
     }
 
     [Test]
-    public void WebPresentation_PutsTransitionBeforeDerivedMapsOnlyForMultiMapTransitionQuest()
+    public void WebPresentation_PutsTransitionBeforeEveryDerivedMapSet()
     {
         var transition = new QuestNodeDto(
             "transition", "Transition quest", "", "trader", "Trader", null, "", "Any",
@@ -107,7 +114,7 @@ public sealed class QuestZoneMapCatalogTests
                 Is.EqualTo(new[] { "Customs", "Woods" }));
             Assert.That(
                 QuestMapLocationPresentation.DisplayMaps(singleMap).Select(map => map.Name),
-                Is.EqualTo(new[] { "Customs" }));
+                Is.EqualTo(new[] { "Transition", "Customs" }));
         });
     }
 
@@ -116,31 +123,78 @@ public sealed class QuestZoneMapCatalogTests
     {
         var ui = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["location.none"] = "No location",
+            ["location.none"] = "Out of Raid",
             ["location.any"] = "Any location",
         };
         var passive = Objective("passive", []) with { ConditionType = "HandoverItem" };
         var inRaid = Objective("visit", []) with { ConditionType = "VisitPlace" };
-        var mapped = passive with { Id = "mapped", MapIds = ["bigmap"] };
+        var mapped = inRaid with { Id = "mapped", MapIds = ["bigmap"] };
+
+        var locations = new Dictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location>();
+        var noLocationObjectives = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            new QuestLocationDto("any", null, true, null), [passive], ui, [], locations);
+        var anyObjectives = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            new QuestLocationDto("any", null, true, null), [inRaid], ui, [], locations);
+        var transitionObjectives = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            new QuestLocationDto("marathon", "Transition", false, "/old.jpg"), [mapped], ui, [], locations);
+        var customsObjectives = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            new QuestLocationDto("bigmap", "Customs", false, "/customs.jpg"), [mapped], ui, [], locations);
 
         var noLocation = QuestTemplateMapper.BuildTaskLocation(
-            new QuestLocationDto("any", null, true, null), [passive], ui);
+            new QuestLocationDto("any", null, true, null), noLocationObjectives, ui);
         var any = QuestTemplateMapper.BuildTaskLocation(
-            new QuestLocationDto("any", null, true, null), [inRaid], ui);
+            new QuestLocationDto("any", null, true, null), anyObjectives, ui);
         var transition = QuestTemplateMapper.BuildTaskLocation(
-            new QuestLocationDto("marathon", "Transition", false, "/old.jpg"), [mapped], ui);
+            new QuestLocationDto("marathon", "Transition", false, "/old.jpg"), transitionObjectives, ui);
         var customs = QuestTemplateMapper.BuildTaskLocation(
-            new QuestLocationDto("bigmap", "Customs", false, "/customs.jpg"), [mapped], ui);
+            new QuestLocationDto("bigmap", "Customs", false, "/customs.jpg"), customsObjectives, ui);
 
         Assert.Multiple(() =>
         {
             Assert.That(noLocation, Is.EqualTo(new QuestMapReferenceDto(
-                QuestObjectiveMapRules.NoLocationFilterId, "No location", QuestObjectiveMapRules.NoLocationBannerUrl)));
+                QuestObjectiveMapRules.NoLocationFilterId, "Out of Raid", QuestObjectiveMapRules.NoLocationBannerUrl)));
             Assert.That(any, Is.EqualTo(new QuestMapReferenceDto(
                 QuestObjectiveMapRules.AnyFilterId, "Any location", QuestObjectiveMapRules.AnyBannerUrl)));
             Assert.That(transition, Is.EqualTo(new QuestMapReferenceDto(
                 QuestObjectiveMapRules.TransitionFilterId, "Transition", QuestObjectiveMapRules.TransitionBannerUrl)));
-            Assert.That(customs, Is.EqualTo(new QuestMapReferenceDto("bigmap", "Customs", "/customs.jpg")));
+            Assert.That(customs.Id, Is.EqualTo("bigmap"));
+        });
+    }
+
+    [Test]
+    public void MixedObjectiveScopes_DriveQuestLocationPrecedenceAndRemainExactPerTask()
+    {
+        var ui = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["location.none"] = "Out of Raid",
+            ["location.any"] = "Any location",
+        };
+        var nativeAny = new QuestLocationDto("any", null, true, null);
+        var locations = new Dictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location>();
+        var objectives = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            nativeAny,
+            [
+                Objective("customs", []) with { ConditionType = "VisitPlace", MapIds = ["bigmap"] },
+                Objective("any", []) with { ConditionType = "FindItem" },
+                Objective("passive", []) with { ConditionType = "HandoverItem" },
+            ],
+            ui,
+            [],
+            locations);
+        var actualMaps = QuestTemplateMapper.BuildActualMaps(objectives);
+        var taskLocation = QuestTemplateMapper.BuildTaskLocation(nativeAny, objectives, ui);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(objectives.Single(objective => objective.Id == "customs").TaskLocations.Select(map => map.Id),
+                Is.EqualTo(new[] { "bigmap" }));
+            Assert.That(objectives.Single(objective => objective.Id == "any").TaskLocations.Select(map => map.Id),
+                Is.EqualTo(new[] { QuestObjectiveMapRules.AnyFilterId }));
+            Assert.That(objectives.Single(objective => objective.Id == "passive").TaskLocations.Select(map => map.Id),
+                Is.EqualTo(new[] { QuestObjectiveMapRules.NoLocationFilterId }));
+            Assert.That(objectives.Single(objective => objective.Id == "passive").InRaidRelevant, Is.False);
+            Assert.That(taskLocation.Id, Is.EqualTo("bigmap"), "Concrete task maps beat Any and Out of Raid.");
+            Assert.That(actualMaps.Maps.Select(map => map.Id), Is.EqualTo(new[] { "bigmap" }));
         });
     }
 
@@ -196,9 +250,97 @@ public sealed class QuestZoneMapCatalogTests
         });
     }
 
-    private static Location Location(string internalId, string mongoId) => new()
+    [Test]
+    public void SafeCorridorLocationConditionExcludesArenaButKeepsReserve()
     {
-        Base = new LocationBase { Id = internalId, IdField = new MongoId(mongoId) },
+        const string reserveMongoId = "5704e5fad2720bc05b8b4567";
+        const string arenaMongoId = "56db0b3bd2720bb0678b4567";
+        var reserve = Location("RezervBase", reserveMongoId, "Reserve");
+        var arena = Location("develop", arenaMongoId, "Arena");
+        var locations = new[] { reserve, arena };
+        var locationsById = QuestTemplateMapper.BuildLocationLookup(locations);
+        var canonicalMapIdsByAlias = QuestTemplateMapper.BuildCanonicalMapIdLookup(locationsById);
+        var aliases = QuestTemplateMapper.BuildMapAliases(locations);
+        var safeCorridor = Condition("000000000000000000000051", "CounterCreator") with
+        {
+            Counter = new QuestConditionCounter
+            {
+                Conditions =
+                [
+                    new QuestConditionCounterCondition
+                    {
+                        ConditionType = "Location",
+                        Target = new ListOrT<string>(["RezervBase", "develop"], null),
+                    },
+                ],
+            },
+        };
+        using var fixture = new CatalogFixture(new Dictionary<string, string[]>());
+        var resolved = QuestTemplateMapper.ResolveObjectiveMaps(
+            QuestTemplateMapper.OrderObjectives([safeCorridor], []),
+            new QuestZoneMapCatalog(fixture.Path),
+            new Dictionary<string, QuestCondition>(StringComparer.Ordinal)
+            {
+                [safeCorridor.Id.ToString()] = safeCorridor,
+            },
+            new Dictionary<string, string[]>(StringComparer.Ordinal),
+            canonicalMapIdsByAlias);
+        var classified = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            QuestTemplateMapper.BuildLocation(reserveMongoId, [], locationsById),
+            resolved,
+            new Dictionary<string, string>(),
+            [],
+            locationsById);
+        var taskLocation = QuestTemplateMapper.BuildTaskLocation(
+            QuestTemplateMapper.BuildLocation(reserveMongoId, [], locationsById),
+            classified,
+            new Dictionary<string, string>());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(canonicalMapIdsByAlias.ContainsKey("RezervBase"), Is.True);
+            Assert.That(canonicalMapIdsByAlias.ContainsKey(reserveMongoId), Is.True);
+            Assert.That(canonicalMapIdsByAlias.ContainsKey("develop"), Is.False);
+            Assert.That(canonicalMapIdsByAlias.ContainsKey(arenaMongoId), Is.False);
+            Assert.That(aliases.Keys, Does.Contain("RezervBase"));
+            Assert.That(aliases.Keys, Does.Not.Contain("develop"));
+            Assert.That(resolved.Single().MapIds, Is.EqualTo(new[] { "RezervBase" }));
+            Assert.That(classified.Single().InRaidRelevant, Is.True);
+            Assert.That(classified.Single().TaskLocations.Select(map => map.Id),
+                Is.EqualTo(new[] { "RezervBase" }));
+            Assert.That(taskLocation.Id, Is.EqualTo("RezervBase"));
+        });
+    }
+
+    [Test]
+    public void ArenaOnlyObjectiveDoesNotBecomeAnOutOfRaidFilterScope()
+    {
+        var arena = Location("develop", "56db0b3bd2720bb0678b4567", "Arena");
+        var locationsById = QuestTemplateMapper.BuildLocationLookup([arena]);
+        var objective = Objective("arena", []) with
+        {
+            ConditionType = "Location",
+            MapIds = ["develop"],
+        };
+
+        var classified = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            QuestTemplateMapper.BuildLocation("develop", [], locationsById),
+            [objective],
+            new Dictionary<string, string> { ["location.none"] = "Out of Raid" },
+            [],
+            locationsById);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(classified.Single().InRaidRelevant, Is.False);
+            Assert.That(classified.Single().TaskLocations, Is.Empty);
+            Assert.That(QuestTemplateMapper.BuildActualMaps(classified).Maps, Is.Empty);
+        });
+    }
+
+    private static Location Location(string internalId, string mongoId, string? name = null) => new()
+    {
+        Base = new LocationBase { Id = internalId, IdField = new MongoId(mongoId), Name = name },
     };
 
     [Test]
@@ -239,11 +381,13 @@ public sealed class QuestZoneMapCatalogTests
                 Is.EqualTo(new[] { "bigmap" }));
             Assert.That(resolved.Single(objective => objective.Id == streets.Id.ToString()).MapIds,
                 Is.EqualTo(new[] { "TarkovStreets" }));
-            var actual = QuestTemplateMapper.BuildActualMaps(
+            var classified = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
                 new QuestLocationDto("marathon", "Transition", false, null),
                 resolved,
+                new Dictionary<string, string>(),
                 [],
                 new Dictionary<string, SPTarkov.Server.Core.Models.Eft.Common.Location>());
+            var actual = QuestTemplateMapper.BuildActualMaps(classified);
             Assert.That(actual.Complete, Is.True);
             Assert.That(actual.Maps.Select(map => map.Id), Is.EquivalentTo(new[] { "bigmap", "TarkovStreets" }));
         });

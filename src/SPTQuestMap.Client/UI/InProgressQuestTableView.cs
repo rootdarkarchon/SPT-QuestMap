@@ -1377,7 +1377,6 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private IReadOnlyList<QuestObjectiveDefinition> LocationFilteredObjectives(QuestGraphNode node, QuestLiveState? live)
     {
         var filtered = QuestObjectiveMapRules.TableObjectivesExcludedByLocationFilter(node, _locationIds)
-            .Where(objective => objective.MapIds.Count > 0)
             .ToArray();
         return ApplyCompletedTaskFilter(filtered, live);
     }
@@ -1397,8 +1396,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private static bool HasFilteredTaskSummary(
         QuestGraphNode node,
         IReadOnlyList<QuestObjectiveDefinition> filteredObjectives) =>
-        node.ActualMaps.Count > 1
-        && filteredObjectives.Count > 0;
+        filteredObjectives.Count > 0;
 
     private void AddFilteredTaskSummary(
         RectTransform cell,
@@ -1406,7 +1404,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         IReadOnlyList<QuestObjectiveDefinition> filteredObjectives,
         ref float taskOffset)
     {
-        var mapNames = QuestMapLocationVisuals.MapNames(node, filteredObjectives.SelectMany(objective => objective.MapIds));
+        var mapNames = QuestMapLocationVisuals.MapNames(
+            filteredObjectives.SelectMany(objective => objective.TaskLocations));
         if (mapNames.Count == 0) return;
         var maps = string.Join(ClientLocale.Text("common.listSeparator"), mapNames);
         var key = filteredObjectives.Count == 1

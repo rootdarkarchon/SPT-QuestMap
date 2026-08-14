@@ -2,21 +2,25 @@ namespace SPTQuestMap.Core.Rules;
 
 public static class QuestAutoTrackingRules
 {
-    private static readonly HashSet<string> AnyLocationInRaidObjectiveTypes = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> OutOfRaidObjectiveTypes = new(StringComparer.Ordinal)
     {
-        "CounterCreator",
-        "FindItem",
-        "LeaveItemAtLocation",
-        "PlaceBeacon",
-        "VisitPlace",
+        "GlobalVariableValue",
+        "HandoverItem",
+        "HideoutArea",
+        "Quest",
+        "SellItemToTrader",
+        "Skill",
+        "TraderLoyalty",
+        "TraderStanding",
+        "WeaponAssembly",
     };
 
-    public static bool ShouldAutoTrackNewQuest(bool anyLocation, IEnumerable<string> objectiveTypes)
+    public static bool ShouldAutoTrackNewQuest(bool anyLocation, IEnumerable<bool> objectiveRaidRelevance)
     {
         if (!anyLocation) return true;
-        return objectiveTypes.Any(IsInRaidObjectiveType);
+        return objectiveRaidRelevance.Any(inRaidRelevant => inRaidRelevant);
     }
 
     public static bool IsInRaidObjectiveType(string objectiveType) =>
-        AnyLocationInRaidObjectiveTypes.Contains(objectiveType);
+        !OutOfRaidObjectiveTypes.Contains(objectiveType);
 }

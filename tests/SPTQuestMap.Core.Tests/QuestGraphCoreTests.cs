@@ -326,6 +326,8 @@ public sealed class QuestGraphCoreTests
                 ZoneIds = ["zone-customs", "zone-unknown"],
                 MapIds = ["bigmap"],
                 UnresolvedZoneIds = ["zone-unknown"],
+                InRaidRelevant = true,
+                TaskLocations = [Map("bigmap", "Customs")],
             },
         ];
 
@@ -338,6 +340,8 @@ public sealed class QuestGraphCoreTests
             Assert.That(mapped.ActualMaps.Select(map => map.Id), Is.EqualTo(new[] { "bigmap", "Woods" }));
             Assert.That(mapped.Objectives.Single().MapIds, Is.EqualTo(new[] { "bigmap" }));
             Assert.That(mapped.Objectives.Single().UnresolvedZoneIds, Is.EqualTo(new[] { "zone-unknown" }));
+            Assert.That(mapped.Objectives.Single().InRaidRelevant, Is.True);
+            Assert.That(mapped.Objectives.Single().TaskLocations.Select(map => map.Id), Is.EqualTo(new[] { "bigmap" }));
         });
     }
 
@@ -1306,8 +1310,8 @@ public sealed class QuestGraphCoreTests
         currentZulu.Location = new QuestLocationPayload { Id = "customs", Name = "Customs" };
         currentZulu.Objectives =
         [
-            new QuestObjectivePayload { Id = "open", Text = "Open", Index = 0, RequiredValue = 5 },
-            new QuestObjectivePayload { Id = "done", Text = "Done", Index = 1, RequiredValue = 1 },
+            new QuestObjectivePayload { Id = "open", Text = "Open", Index = 0, RequiredValue = 5, TaskLocations = [Map("customs", "Customs")] },
+            new QuestObjectivePayload { Id = "done", Text = "Done", Index = 1, RequiredValue = 1, TaskLocations = [Map("customs", "Customs")] },
         ];
         var transitAlpha = Node("transit-alpha", "Prapor", "Any");
         transitAlpha.Name = "Alpha";
@@ -1320,6 +1324,7 @@ public sealed class QuestGraphCoreTests
                 Text = "Transit Customs",
                 ConditionType = "VisitPlace",
                 MapIds = ["customs"],
+                TaskLocations = [Map("transition", "Transition"), Map("customs", "Customs")],
             },
         ];
         var anyBravo = Node("any-bravo", "Therapist", "Any");
@@ -1379,29 +1384,29 @@ public sealed class QuestGraphCoreTests
         var mixedAny = Node("mixed-any", "Prapor", "Any");
         mixedAny.Objectives =
         [
-            new QuestObjectivePayload { Id = "global", Text = "Global", ConditionType = "FindItem" },
-            new QuestObjectivePayload { Id = "matching", Text = "Matching", ConditionType = "VisitPlace", MapIds = ["customs"] },
-            new QuestObjectivePayload { Id = "other", Text = "Other", ConditionType = "VisitPlace", MapIds = ["woods"] },
-            new QuestObjectivePayload { Id = "handover", Text = "Handover", ConditionType = "HandoverItem" },
+            new QuestObjectivePayload { Id = "global", Text = "Global", ConditionType = "FindItem", TaskLocations = [Map("any", "Any location")] },
+            new QuestObjectivePayload { Id = "matching", Text = "Matching", ConditionType = "VisitPlace", MapIds = ["customs"], TaskLocations = [Map("customs", "Customs")] },
+            new QuestObjectivePayload { Id = "other", Text = "Other", ConditionType = "VisitPlace", MapIds = ["woods"], TaskLocations = [Map("woods", "Woods")] },
+            new QuestObjectivePayload { Id = "handover", Text = "Handover", ConditionType = "HandoverItem", InRaidRelevant = false, TaskLocations = [Map("no-location", "Out of Raid")] },
         ];
         var otherOnlyAny = Node("other-only-any", "Prapor", "Any");
         otherOnlyAny.Objectives =
         [
-            new QuestObjectivePayload { Id = "other-only", Text = "Other only", ConditionType = "VisitPlace", MapIds = ["woods"] },
+            new QuestObjectivePayload { Id = "other-only", Text = "Other only", ConditionType = "VisitPlace", MapIds = ["woods"], TaskLocations = [Map("woods", "Woods")] },
         ];
         var specific = Node("specific", "Prapor", "Any");
         specific.Location = new QuestLocationPayload { Id = "customs-mongo", Name = "Customs" };
         specific.Objectives =
         [
-            new QuestObjectivePayload { Id = "specific-zone", Text = "Specific", ConditionType = "CounterCreator", MapIds = ["customs"] },
-            new QuestObjectivePayload { Id = "specific-handover", Text = "Handover", ConditionType = "HandoverItem" },
+            new QuestObjectivePayload { Id = "specific-zone", Text = "Specific", ConditionType = "CounterCreator", MapIds = ["customs"], TaskLocations = [Map("customs", "Customs")] },
+            new QuestObjectivePayload { Id = "specific-handover", Text = "Handover", ConditionType = "HandoverItem", InRaidRelevant = false, TaskLocations = [Map("no-location", "Out of Raid")] },
         ];
         var transition = Node("transition", "Prapor", "Any");
         transition.Location = new QuestLocationPayload { Id = "marathon", Name = "Transition" };
         transition.Objectives =
         [
-            new QuestObjectivePayload { Id = "transition-matching", Text = "Matching", ConditionType = "VisitPlace", MapIds = ["customs"] },
-            new QuestObjectivePayload { Id = "transition-other", Text = "Other", ConditionType = "VisitPlace", MapIds = ["woods"] },
+            new QuestObjectivePayload { Id = "transition-matching", Text = "Matching", ConditionType = "VisitPlace", MapIds = ["customs"], TaskLocations = [Map("transition", "Transition"), Map("customs", "Customs")] },
+            new QuestObjectivePayload { Id = "transition-other", Text = "Other", ConditionType = "VisitPlace", MapIds = ["woods"], TaskLocations = [Map("transition", "Transition"), Map("woods", "Woods")] },
         ];
         var nodes = new[] { mixedAny, otherOnlyAny, specific, transition };
         var feed = Feed(nodes, []);
@@ -1457,7 +1462,7 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
-    public void TransitionPresentation_PrependsNativeLabelOnlyForMultipleDerivedMaps()
+    public void TransitionPresentation_PrependsNativeLabelForEveryDerivedMapSet()
     {
         Assert.Multiple(() =>
         {
@@ -1468,8 +1473,7 @@ public sealed class QuestGraphCoreTests
             Assert.That(
                 QuestObjectiveMapRules.ShouldPrependTransitionLabel(
                     "marathon", "Transition", false, 1),
-                Is.False,
-                "A single derived map is not a multi-map quest.");
+                Is.True);
             Assert.That(
                 QuestObjectiveMapRules.ShouldPrependTransitionLabel(
                     "any", "Any", true, 2),
@@ -1484,62 +1488,62 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
-    public void InProgressLocationFilter_UsesTaskMapsButPreservesNativeAnySelection()
+    public void InProgressLocationFilter_UsesExactServerObjectiveScopes()
     {
-        var any = Node("mapped-any", "Prapor", "Any");
-        any.TaskLocation = new QuestMapReferencePayload
+        var mixed = Node("mixed-scopes", "Prapor", "Any");
+        mixed.TaskLocation = new QuestMapReferencePayload
         {
-            Id = QuestObjectiveMapRules.AnyFilterId,
-            Name = "Any location",
-            BannerImageUrl = QuestObjectiveMapRules.AnyBannerUrl,
+            Id = "customs",
+            Name = "Customs",
         };
-        any.ActualMaps =
+        mixed.ActualMaps =
         [
             new QuestMapReferencePayload { Id = "customs", Name = "Customs" },
-            new QuestMapReferencePayload { Id = "factory4_day", Name = "Factory" },
         ];
-        any.ActualMapsComplete = true;
-        any.Objectives =
+        mixed.ActualMapsComplete = true;
+        mixed.Objectives =
         [
-            new QuestObjectivePayload { Id = "customs-task", Text = "Customs", MapIds = ["customs"] },
-            new QuestObjectivePayload { Id = "factory-task", Text = "Factory", MapIds = ["factory4_day"] },
-            new QuestObjectivePayload { Id = "any-task", Text = "Any" },
+            new QuestObjectivePayload { Id = "customs-task", Text = "Customs", MapIds = ["customs"], TaskLocations = [Map("customs", "Customs")] },
+            new QuestObjectivePayload { Id = "any-task", Text = "Any", TaskLocations = [Map("any", "Any location")] },
+            new QuestObjectivePayload { Id = "passive-task", Text = "Passive", ConditionType = "HandoverItem", InRaidRelevant = false, TaskLocations = [Map("no-location", "Out of Raid")] },
         ];
-        var topology = QuestTopologyNormalizer.Normalize(Feed([any], []));
-        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(Quest(any.Id, "Started"))) with
+        var topology = QuestTopologyNormalizer.Normalize(Feed([mixed], []));
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(Quest(mixed.Id, "Started"))) with
         {
-            ApplicableQuestIds = [any.Id],
-            DefaultVisibleQuestIds = [any.Id],
+            ApplicableQuestIds = [mixed.Id],
+            DefaultVisibleQuestIds = [mixed.Id],
         };
         var layout = DeterministicGraphLayout.Build(topology);
-        var node = topology.NodesById[any.Id];
+        var node = topology.NodesById[mixed.Id];
 
-        var factory = GlobalQuestGraphProjectionBuilder.BuildMembershipOnly(
+        var customs = GlobalQuestGraphProjectionBuilder.BuildMembershipOnly(
             topology, layout, overlay,
             new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false,
-                null, null, null, null, QuestRouteFilter.None, LocationIds: ["factory4_day"]));
+                null, null, null, null, QuestRouteFilter.None, LocationIds: ["customs"]));
         var woods = GlobalQuestGraphProjectionBuilder.BuildMembershipOnly(
             topology, layout, overlay,
             new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false,
                 null, null, null, null, QuestRouteFilter.None, LocationIds: ["woods"]));
-        var nativeAny = GlobalQuestGraphProjectionBuilder.BuildMembershipOnly(
+        var exactAny = GlobalQuestGraphProjectionBuilder.BuildMembershipOnly(
             topology, layout, overlay,
             new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false,
                 null, null, null, null, QuestRouteFilter.None, LocationIds: ["any"]));
 
         Assert.Multiple(() =>
         {
-            Assert.That(factory.Nodes.Select(value => value.Id), Is.EqualTo(new[] { any.Id }));
+            Assert.That(customs.Nodes.Select(value => value.Id), Is.EqualTo(new[] { mixed.Id }));
             Assert.That(woods.Nodes, Is.Empty);
-            Assert.That(nativeAny.Nodes.Select(value => value.Id), Is.EqualTo(new[] { any.Id }),
-                "The server-provided Any scope includes the whole quest even when derived maps are also available.");
-            Assert.That(QuestObjectiveMapRules.FilterTableObjectives(node, ["factory4_day"])
-                .Select(objective => objective.Id), Is.EquivalentTo(new[] { "factory-task", "any-task" }));
-            Assert.That(QuestObjectiveMapRules.FilterTableObjectives(node, ["any"])
-                .Select(objective => objective.Id), Is.EqualTo(new[] { "customs-task", "factory-task", "any-task" }));
-            Assert.That(QuestObjectiveMapRules.TableObjectivesExcludedByLocationFilter(node, ["factory4_day"])
+            Assert.That(exactAny.Nodes.Select(value => value.Id), Is.EqualTo(new[] { mixed.Id }));
+            Assert.That(QuestObjectiveMapRules.FilterTableObjectives(node, ["customs"])
                 .Select(objective => objective.Id), Is.EqualTo(new[] { "customs-task" }));
-            Assert.That(QuestObjectiveMapRules.TableObjectivesExcludedByLocationFilter(node, ["customs", "factory4_day"]),
+            Assert.That(QuestObjectiveMapRules.FilterTableObjectives(node, ["any"])
+                .Select(objective => objective.Id), Is.EqualTo(new[] { "any-task" }));
+            Assert.That(QuestObjectiveMapRules.FilterTableObjectives(node, ["no-location"])
+                .Select(objective => objective.Id), Is.EqualTo(new[] { "passive-task" }));
+            Assert.That(QuestObjectiveMapRules.TableObjectivesExcludedByLocationFilter(node, ["any"])
+                .Select(objective => objective.Id), Is.EqualTo(new[] { "customs-task", "passive-task" }));
+            Assert.That(QuestObjectiveMapRules.TableObjectivesExcludedByLocationFilter(
+                    node, ["no-location", "any", "customs"]),
                 Is.Empty);
         });
     }
@@ -1659,6 +1663,12 @@ public sealed class QuestGraphCoreTests
         SourceId = source,
         TargetId = target,
         RequiredStatuses = statuses,
+    };
+
+    private static QuestMapReferencePayload Map(string id, string? name = null) => new()
+    {
+        Id = id,
+        Name = name ?? id,
     };
 
     private static HashSet<string> Set(params string[] values) => new(values, StringComparer.Ordinal);

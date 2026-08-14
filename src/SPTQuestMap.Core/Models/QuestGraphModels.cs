@@ -79,6 +79,10 @@ public sealed record QuestObjectiveDefinition(
 
     public IReadOnlyList<string> UnresolvedZoneIds { get; init; } = [];
 
+    public bool InRaidRelevant { get; init; } = true;
+
+    public IReadOnlyList<QuestMapReference> TaskLocations { get; init; } = [];
+
     public bool ContributesToProgress { get; init; } = true;
 }
 
@@ -131,7 +135,7 @@ public sealed record QuestGraphNode(
 {
     public QuestMapReference TaskLocation { get; init; } = new(
         QuestObjectiveMapRules.NoLocationFilterId,
-        "No location",
+        "Out of Raid",
         QuestObjectiveMapRules.NoLocationBannerUrl);
 
     public IReadOnlyList<QuestMapReference> ActualMaps { get; init; } = [];

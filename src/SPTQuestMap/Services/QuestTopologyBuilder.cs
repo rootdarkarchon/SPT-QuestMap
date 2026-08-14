@@ -47,10 +47,7 @@ internal sealed class QuestTopologyBuilder(
         var traders = databaseService.GetTraders();
         var locationValues = preload.Locations;
         var locationsById = QuestTemplateMapper.BuildLocationLookup(locationValues);
-        var canonicalMapIdsByAlias = locationsById.ToDictionary(
-            pair => pair.Key,
-            pair => pair.Value.Base.Id,
-            StringComparer.OrdinalIgnoreCase);
+        var canonicalMapIdsByAlias = QuestTemplateMapper.BuildCanonicalMapIdLookup(locationsById);
         var questItemSpawnMapIds = preload.QuestItemSpawnMapIds;
         var mapAliases = QuestTemplateMapper.BuildMapAliases(locationValues);
         var edges = new List<QuestEdgeDto>();
@@ -116,16 +113,21 @@ internal sealed class QuestTopologyBuilder(
             var conditionsById = finishConditions
                 .GroupBy(condition => condition.Id.ToString(), StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-            var objectives = QuestTemplateMapper.ResolveObjectiveMaps(
-                QuestTemplateMapper.OrderObjectives(
-                    finishConditions,
-                    locale,
-                    duplicateId => logger.Warning($"SPT-QuestMap: duplicate objective condition ID '{duplicateId}' on quest {questId}; keeping its first definition.")),
-                zoneMapCatalog,
-                conditionsById,
-                questItemSpawnMapIds,
-                canonicalMapIdsByAlias);
-            var actualMaps = QuestTemplateMapper.BuildActualMaps(nativeLocation, objectives, locale, locationsById);
+            var objectives = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+                nativeLocation,
+                QuestTemplateMapper.ResolveObjectiveMaps(
+                    QuestTemplateMapper.OrderObjectives(
+                        finishConditions,
+                        locale,
+                        duplicateId => logger.Warning($"SPT-QuestMap: duplicate objective condition ID '{duplicateId}' on quest {questId}; keeping its first definition.")),
+                    zoneMapCatalog,
+                    conditionsById,
+                    questItemSpawnMapIds,
+                    canonicalMapIdsByAlias),
+                ui,
+                locale,
+                locationsById);
+            var actualMaps = QuestTemplateMapper.BuildActualMaps(objectives);
 
             nodes.Add(new QuestNodeDto(
                 questId,
@@ -189,7 +191,7 @@ internal sealed class QuestTopologyBuilder(
             logger.Warning($"SPT-QuestMap: Knock-Knock quest {QuestMapQuestIds.KnockKnock} was not found; Lightkeeper-path markers and unlock evaluation are disabled.");
         }
 
-        var canonical = string.Join('\n', nodes.Select(node => $"{node.Id}:{node.TaskLocation.Id}:{node.ActualMapsComplete}:{string.Join(',', node.ActualMaps.Select(map => map.Id))}:{string.Join(';', node.Objectives.Select(objective => $"{objective.Id}={string.Join(',', objective.MapIds)}!{string.Join(',', objective.UnresolvedZoneIds)}"))}").Concat(edges
+        var canonical = string.Join('\n', nodes.Select(node => $"{node.Id}:{node.TaskLocation.Id}:{node.ActualMapsComplete}:{string.Join(',', node.ActualMaps.Select(map => map.Id))}:{string.Join(';', node.Objectives.Select(objective => $"{objective.Id}={objective.InRaidRelevant}:{string.Join(',', objective.TaskLocations.Select(map => map.Id))}:{string.Join(',', objective.MapIds)}!{string.Join(',', objective.UnresolvedZoneIds)}"))}").Concat(edges
             .OrderBy(edge => edge.SourceId)
             .ThenBy(edge => edge.TargetId)
             .Select(edge => $"{edge.SourceId}>{edge.TargetId}:{string.Join(',', edge.RequiredStatuses)}"))

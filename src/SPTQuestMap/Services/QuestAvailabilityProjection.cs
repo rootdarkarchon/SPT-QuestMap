@@ -31,7 +31,8 @@ internal static class QuestAvailabilityProjection
         {
             var questId = quest.Id.ToString();
 
-            // SPT always returns accepted quests, regardless of the normal availability gates.
+            // SPT always returns quests already represented in the profile, including explicit
+            // Locked rows, regardless of the normal availability gates.
             if (profileQuests.TryGetValue(questId, out var profileQuest))
             {
                 result.TryAdd(questId, profileQuest.Status);
@@ -41,6 +42,11 @@ internal static class QuestAvailabilityProjection
             if (questIsForOtherSide(playerSide, quest.Id) || !showEventQuestToPlayer(quest.Id)) continue;
 
             var startConditions = quest.Conditions?.AvailableForStart ?? [];
+            // Block is an opaque external gate. Mods can leave it on the template and add an
+            // authoritative AvailableForStart row to the profile after their own condition passes.
+            // Profile rows are handled above; never synthesize availability while Block remains.
+            if (startConditions.Any(condition => condition.ConditionType == "Block")) continue;
+
             if (startConditions.Any(condition =>
                     condition.ConditionType == "Level" && !levelRequirementPasses(playerLevel, condition)))
             {

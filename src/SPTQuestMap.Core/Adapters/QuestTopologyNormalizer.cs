@@ -213,6 +213,11 @@ public static class QuestTopologyNormalizer
             {
                 MapIds = objective.MapIds ?? [],
                 UnresolvedZoneIds = objective.UnresolvedZoneIds ?? [],
+                InRaidRelevant = objective.InRaidRelevant,
+                TaskLocations = (objective.TaskLocations ?? [])
+                    .Where(map => !string.IsNullOrWhiteSpace(map.Id))
+                    .Select(map => new QuestMapReference(map.Id, map.Name, map.BannerImageUrl))
+                    .ToArray(),
                 ContributesToProgress = objective.ContributesToProgress,
             }).ToArray(),
             (node.ExclusionRules ?? []).Select(rule => new QuestExclusionRule(
@@ -241,7 +246,7 @@ public static class QuestTopologyNormalizer
                     ? QuestObjectiveMapRules.NoLocationFilterId
                     : node.TaskLocation.Id,
                 string.IsNullOrWhiteSpace(node.TaskLocation?.Name)
-                    ? "No location"
+                    ? "Out of Raid"
                     : node.TaskLocation.Name,
                 string.IsNullOrWhiteSpace(node.TaskLocation?.BannerImageUrl)
                     ? QuestObjectiveMapRules.NoLocationBannerUrl

@@ -93,6 +93,7 @@ internal static class QuestProfileRules
         if (blockers.Any(blocker => blocker.Kind == "Level")) return "LevelGated";
         if (blockers.Any(blocker => blocker.Kind is "TraderLoyalty" or "TraderStanding")) return "TraderGated";
         if (blockers.Any(blocker => blocker.Kind == "Prerequisite")) return "PrerequisiteGated";
+        if (status == QuestStatusEnum.Locked) return "Locked";
         if (coreState == CoreDisplayState.AvailableForStart || authoritative) return "Available";
         return "Locked";
     }

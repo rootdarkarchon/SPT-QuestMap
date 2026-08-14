@@ -321,11 +321,19 @@ internal sealed class QuestProfileStateBuilder(
         var location = QuestTemplateMapper.BuildLocation(quest.Location, locale, locationsById);
         var typeName = QuestTemplateMapper.Localize(locale, $"DailyQuestName/{quest.Type}", quest.Type.ToString());
         var finishConditions = quest.Conditions?.AvailableForFinish ?? [];
+        var conditionsById = finishConditions
+            .GroupBy(condition => condition.Id.ToString(), StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var canonicalMapIdsByAlias = QuestTemplateMapper.BuildCanonicalMapIdLookup(locationsById);
         var objectives = QuestTemplateMapper.ResolveObjectiveMaps(QuestTemplateMapper.OrderObjectives(
-                finishConditions,
-                locale,
-                duplicateId => logger.Warning($"SPT-QuestMap: duplicate objective condition ID '{duplicateId}' on repeatable quest {questId}; keeping its first definition.")
-            ), zoneMapCatalog)
+                    finishConditions,
+                    locale,
+                    duplicateId => logger.Warning($"SPT-QuestMap: duplicate objective condition ID '{duplicateId}' on repeatable quest {questId}; keeping its first definition.")
+                ),
+                zoneMapCatalog,
+                conditionsById,
+                preload.QuestItemSpawnMapIds,
+                canonicalMapIdsByAlias)
             .Select(objective => !objective.ContributesToProgress
                 ? objective
                 : objective with
@@ -339,7 +347,13 @@ internal sealed class QuestProfileStateBuilder(
                     ),
                 })
             .ToArray();
-        var actualMaps = QuestTemplateMapper.BuildActualMaps(location, objectives, locale, locationsById);
+        objectives = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            location,
+            objectives,
+            ui,
+            locale,
+            locationsById);
+        var actualMaps = QuestTemplateMapper.BuildActualMaps(objectives);
         var rewards = QuestTemplateMapper.BuildRewards(
             quest.Rewards?.GetValueOrDefault("Success") ?? [],
             locale,

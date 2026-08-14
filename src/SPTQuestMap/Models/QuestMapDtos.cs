@@ -39,7 +39,7 @@ public sealed record QuestNodeDto(
 {
     public QuestMapReferenceDto TaskLocation { get; init; } = new(
         QuestObjectiveMapRules.NoLocationFilterId,
-        "No location",
+        "Out of Raid",
         QuestObjectiveMapRules.NoLocationBannerUrl);
 
     public QuestMapReferenceDto[] ActualMaps { get; init; } = [];
@@ -90,6 +90,10 @@ public sealed record ObjectiveDefinitionDto(
     public string[] MapIds { get; init; } = [];
 
     public string[] UnresolvedZoneIds { get; init; } = [];
+
+    public bool InRaidRelevant { get; init; } = true;
+
+    public QuestMapReferenceDto[] TaskLocations { get; init; } = [];
 
     public bool ContributesToProgress { get; init; } = true;
 }

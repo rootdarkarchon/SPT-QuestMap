@@ -11,6 +11,9 @@ namespace SPTQuestMap.Services;
 
 internal static class QuestTemplateMapper
 {
+    private const string ArenaInternalLocationId = "develop";
+    private const string ArenaMongoLocationId = "56db0b3bd2720bb0678b4567";
+
     internal static QuestLocationDto BuildLocation(
         string? locationId,
         Dictionary<string, string> locale,
@@ -50,6 +53,7 @@ internal static class QuestTemplateMapper
         IReadOnlyDictionary<string, Location> locationsById
     ) => mapIds
         .Distinct(StringComparer.Ordinal)
+        .Where(mapId => IsApplicableTaskMapId(mapId, locationsById))
         .Select(mapId =>
         {
             locationsById.TryGetValue(mapId, out var location);
@@ -113,7 +117,7 @@ internal static class QuestTemplateMapper
             .Select(pair => pair.Key.ToString())
             .ToHashSet(StringComparer.Ordinal);
         var mapIdsByItem = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        foreach (var location in locations)
+        foreach (var location in locations.Where(IsApplicableTaskMapLocation))
         {
             var mapId = location.Base?.Id;
             if (string.IsNullOrWhiteSpace(mapId)) continue;
@@ -140,29 +144,81 @@ internal static class QuestTemplateMapper
             StringComparer.Ordinal);
     }
 
-    internal static (QuestMapReferenceDto[] Maps, bool Complete) BuildActualMaps(
+    internal static ObjectiveDefinitionDto[] ClassifyObjectiveTaskLocations(
         QuestLocationDto nativeLocation,
-        IReadOnlyCollection<ObjectiveDefinitionDto> objectives,
+        IEnumerable<ObjectiveDefinitionDto> objectives,
+        IReadOnlyDictionary<string, string> ui,
         Dictionary<string, string> locale,
         IReadOnlyDictionary<string, Location> locationsById
+    ) => objectives
+        .Select(objective =>
+        {
+            var inRaidRelevant = QuestAutoTrackingRules.IsInRaidObjectiveType(objective.ConditionType);
+            QuestMapReferenceDto[] taskLocations;
+            if (!inRaidRelevant)
+            {
+                taskLocations = [BuildNoLocationReference(ui)];
+            }
+            else
+            {
+                var concreteMaps = BuildMapReferences(objective.MapIds, locale, locationsById);
+                if (IsArenaLocation(nativeLocation.Id, nativeLocation.Name)
+                    || (objective.MapIds.Length > 0 && concreteMaps.Length == 0))
+                {
+                    inRaidRelevant = false;
+                    taskLocations = [];
+                }
+                else if (QuestObjectiveMapRules.IsTransitionLocation(
+                        nativeLocation.Id, nativeLocation.Name, nativeLocation.Any))
+                {
+                    taskLocations = [BuildTransitionReference(nativeLocation), .. concreteMaps];
+                }
+                else if (concreteMaps.Length > 0)
+                {
+                    taskLocations = concreteMaps;
+                }
+                else if (nativeLocation.Any)
+                {
+                    taskLocations = [BuildAnyLocationReference(ui)];
+                }
+                else
+                {
+                    taskLocations =
+                    [
+                        new QuestMapReferenceDto(
+                            nativeLocation.Id,
+                            nativeLocation.Name ?? nativeLocation.Id,
+                            nativeLocation.BannerImageUrl),
+                    ];
+                }
+            }
+
+            return objective with
+            {
+                InRaidRelevant = inRaidRelevant,
+                TaskLocations = taskLocations
+                    .DistinctBy(map => map.Id, StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+            };
+        })
+        .ToArray();
+
+    internal static (QuestMapReferenceDto[] Maps, bool Complete) BuildActualMaps(
+        IReadOnlyCollection<ObjectiveDefinitionDto> objectives
     )
     {
-        if (!nativeLocation.Any
-            && !string.Equals(nativeLocation.Id, "marathon", StringComparison.OrdinalIgnoreCase))
-        {
-            return ([], false);
-        }
-        var spatialObjectives = objectives
-            .Where(objective => (objective.ZoneIds?.Length ?? 0) > 0 || objective.MapIds.Length > 0)
+        var maps = objectives
+            .SelectMany(objective => objective.TaskLocations)
+            .Where(map => !IsSpecialTaskLocation(map.Id))
+            .DistinctBy(map => map.Id, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(map => map.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(map => map.Id, StringComparer.Ordinal)
             .ToArray();
-        var mapIds = spatialObjectives
-            .SelectMany(objective => objective.MapIds)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        var complete = spatialObjectives.Length > 0
-            && mapIds.Length > 0
-            && spatialObjectives.All(objective => objective.UnresolvedZoneIds.Length == 0);
-        return (BuildMapReferences(mapIds, locale, locationsById), complete);
+        var inRaidObjectives = objectives.Where(objective => objective.InRaidRelevant).ToArray();
+        var complete = inRaidObjectives.Length > 0
+            && inRaidObjectives.All(objective => objective.TaskLocations.Length > 0
+                && objective.UnresolvedZoneIds.Length == 0);
+        return (maps, complete);
     }
 
     internal static QuestMapReferenceDto BuildTaskLocation(
@@ -170,39 +226,49 @@ internal static class QuestTemplateMapper
         IReadOnlyCollection<ObjectiveDefinitionDto> objectives,
         IReadOnlyDictionary<string, string> ui)
     {
-        var hasDirectInRaidConnection = objectives.Any(objective =>
-            objective.MapIds.Length > 0
-            || QuestAutoTrackingRules.IsInRaidObjectiveType(objective.ConditionType));
-        if (!hasDirectInRaidConnection)
-        {
-            return new QuestMapReferenceDto(
-                QuestObjectiveMapRules.NoLocationFilterId,
-                ui.GetValueOrDefault("location.none") ?? "No location",
-                QuestObjectiveMapRules.NoLocationBannerUrl);
-        }
-
-        if (nativeLocation.Any)
-        {
-            return new QuestMapReferenceDto(
-                QuestObjectiveMapRules.AnyFilterId,
-                ui.GetValueOrDefault("location.any") ?? "Any location",
-                QuestObjectiveMapRules.AnyBannerUrl);
-        }
-
         if (QuestObjectiveMapRules.IsTransitionLocation(
-                nativeLocation.Id, nativeLocation.Name, nativeLocation.Any))
+                nativeLocation.Id, nativeLocation.Name, nativeLocation.Any)
+            && objectives.Any(objective => objective.InRaidRelevant))
         {
-            return new QuestMapReferenceDto(
-                QuestObjectiveMapRules.TransitionFilterId,
-                nativeLocation.Name ?? "Transition",
-                QuestObjectiveMapRules.TransitionBannerUrl);
+            return BuildTransitionReference(nativeLocation);
         }
 
-        return new QuestMapReferenceDto(
-            nativeLocation.Id,
-            nativeLocation.Name ?? nativeLocation.Id,
-            nativeLocation.BannerImageUrl);
+        var concreteMap = objectives
+            .SelectMany(objective => objective.TaskLocations)
+            .Where(map => !IsSpecialTaskLocation(map.Id))
+            .OrderBy(map => map.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(map => map.Id, StringComparer.Ordinal)
+            .FirstOrDefault();
+        if (concreteMap is not null) return concreteMap;
+
+        if (objectives.Any(objective => objective.TaskLocations.Any(map => map.Id.Equals(
+                QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase))))
+        {
+            return BuildAnyLocationReference(ui);
+        }
+
+        return BuildNoLocationReference(ui);
     }
+
+    private static bool IsSpecialTaskLocation(string id) =>
+        id.Equals(QuestObjectiveMapRules.NoLocationFilterId, StringComparison.OrdinalIgnoreCase)
+        || id.Equals(QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase)
+        || id.Equals(QuestObjectiveMapRules.TransitionFilterId, StringComparison.OrdinalIgnoreCase);
+
+    private static QuestMapReferenceDto BuildNoLocationReference(IReadOnlyDictionary<string, string> ui) => new(
+        QuestObjectiveMapRules.NoLocationFilterId,
+        ui.GetValueOrDefault("location.none") ?? "Out of Raid",
+        QuestObjectiveMapRules.NoLocationBannerUrl);
+
+    private static QuestMapReferenceDto BuildAnyLocationReference(IReadOnlyDictionary<string, string> ui) => new(
+        QuestObjectiveMapRules.AnyFilterId,
+        ui.GetValueOrDefault("location.any") ?? "Any location",
+        QuestObjectiveMapRules.AnyBannerUrl);
+
+    private static QuestMapReferenceDto BuildTransitionReference(QuestLocationDto nativeLocation) => new(
+        QuestObjectiveMapRules.TransitionFilterId,
+        nativeLocation.Name ?? "Transition",
+        QuestObjectiveMapRules.TransitionBannerUrl);
 
     internal static string? ToFileUrl(string? assetPath)
     {
@@ -405,11 +471,21 @@ internal static class QuestTemplateMapper
         return mapId;
     }
 
+    internal static IReadOnlyDictionary<string, string> BuildCanonicalMapIdLookup(
+        IReadOnlyDictionary<string, Location> locationsById) => locationsById
+        .Where(pair => IsApplicableTaskMapLocation(pair.Value))
+        .ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Base.Id,
+            StringComparer.OrdinalIgnoreCase);
+
     internal static IReadOnlyDictionary<string, string[]> BuildMapAliases(
         IEnumerable<Location> locations)
     {
         var aliases = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var location in locations.Where(location => !string.IsNullOrWhiteSpace(location.Base?.Id)))
+        foreach (var location in locations.Where(location =>
+                     !string.IsNullOrWhiteSpace(location.Base?.Id)
+                     && IsApplicableTaskMapLocation(location)))
         {
             var internalId = location.Base.Id;
             var canonical = CanonicalizeVariantMapId(internalId);
@@ -426,6 +502,24 @@ internal static class QuestTemplateMapper
             pair => pair.Value.OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray(),
             StringComparer.OrdinalIgnoreCase);
     }
+
+    private static bool IsApplicableTaskMapId(
+        string mapId,
+        IReadOnlyDictionary<string, Location> locationsById)
+    {
+        if (IsArenaLocation(mapId, null)) return false;
+        return !locationsById.TryGetValue(mapId, out var location)
+            || IsApplicableTaskMapLocation(location);
+    }
+
+    private static bool IsApplicableTaskMapLocation(Location location) =>
+        !IsArenaLocation(location.Base?.Id, location.Base?.Name)
+        && !IsArenaLocation(location.Base?.IdField.ToString(), location.Base?.Name);
+
+    private static bool IsArenaLocation(string? id, string? name) =>
+        string.Equals(id, ArenaInternalLocationId, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(id, ArenaMongoLocationId, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, "Arena", StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<string> GetLocationIdentityIds(Location location)
     {

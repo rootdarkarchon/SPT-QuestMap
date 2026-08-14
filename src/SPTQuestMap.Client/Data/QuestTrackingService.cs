@@ -88,7 +88,7 @@ internal sealed class QuestTrackingService : IDisposable
             }
             if (!QuestAutoTrackingRules.ShouldAutoTrackNewQuest(
                     node.Location.Any,
-                    node.Objectives.Select(objective => objective.ConditionType)))
+                    node.Objectives.Select(objective => objective.InRaidRelevant)))
             {
                 QuestMapDebugLog.Info(_log,
                     $"QUESTMAP_M06_TRACKING autoTrackSkipped=True; reason=passive-any-objectives; quest={questId}");

@@ -773,6 +773,46 @@ public sealed class QuestMapDataServiceTests
     }
 
     [Test]
+    public void AvailabilityProjection_BlockRequiresExplicitProfileState()
+    {
+        var traderId = new MongoId("aaaaaaaaaaaaaaaaaaaaaaaa");
+        var blocked = QuestTemplate("00000000000000000000000d", traderId,
+            AvailabilityCondition("Block", "100000000000000000000008"));
+        var externallyUnlocked = QuestTemplate("00000000000000000000000e", traderId,
+            AvailabilityCondition("Block", "100000000000000000000009"));
+        var explicitlyLocked = QuestTemplate("00000000000000000000000f", traderId,
+            AvailabilityCondition("Block", "10000000000000000000000a"));
+        QuestStatus[] profileRows =
+        [
+            ProfileQuest(externallyUnlocked.Id, QuestStatusEnum.AvailableForStart),
+            ProfileQuest(explicitlyLocked.Id, QuestStatusEnum.Locked),
+        ];
+
+        var result = QuestAvailabilityProjection.Build(
+            [blocked, externallyUnlocked, explicitlyLocked],
+            profileRows,
+            QuestProfileStateBuilder.BuildProfileQuestLookup(profileRows),
+            "Usec",
+            79,
+            [traderId],
+            (_, _) => false,
+            _ => true,
+            (_, _) => true,
+            _ => true,
+            _ => true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Does.Not.ContainKey(blocked.Id.ToString()),
+                "an opaque Block condition must prevent synthesized availability");
+            Assert.That(result[externallyUnlocked.Id.ToString()], Is.EqualTo(QuestStatusEnum.AvailableForStart),
+                "an external unlock recorded in the profile must remain authoritative");
+            Assert.That(result[explicitlyLocked.Id.ToString()], Is.EqualTo(QuestStatusEnum.Locked),
+                "an explicit locked profile row must not be promoted to available");
+        });
+    }
+
+    [Test]
     public void AvailabilityProjection_HandlesLargeModdedQuestSetWithBoundedChecks()
     {
         const int questCount = 1258;
@@ -849,6 +889,14 @@ public sealed class QuestMapDataServiceTests
     public void ExactStatusesHaveDistinctDisplayStates(QuestStatusEnum status, string expected)
     {
         Assert.That(QuestProfileRules.Classify(Node("q", null), status, false, null, []), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void ExplicitLockedProfileStateRemainsLockedWhenPresentInClientPayload()
+    {
+        Assert.That(
+            QuestProfileRules.Classify(Node("q", null), QuestStatusEnum.Locked, true, null, []),
+            Is.EqualTo("Locked"));
     }
 
     [Test]

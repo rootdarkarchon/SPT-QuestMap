@@ -34,14 +34,14 @@ For each quest, normalize:
 - inherited/effective level and trader requirements;
 - mutual exclusion relationships;
 - direct successors.
-- each objective's zone trigger IDs, authoritative resolved map IDs, and any unresolved trigger IDs;
-- the derived actual-map union for native-`Any` quests, without replacing the native location field.
+- each objective's zone trigger IDs, authoritative resolved map IDs, unresolved trigger IDs, explicit in-raid relevance, and exact localized task-location scopes;
+- the derived concrete display-map union for every quest, without replacing the original native location metadata.
 
 Cache this topology. It should not be rebuilt for every profile refresh.
 
-An `Any` quest visually uses its actual-map union only when it has at least one zone-bearing objective and every zone on those objectives resolves through the shipped trigger catalog. Objectives without spatial triggers, such as a handover following an in-raid pickup, do not erase resolved map information. If any spatial trigger is unknown, `ActualMapsComplete` is false and presentation retains `Any`; partial task/map assignments remain available for diagnostics and future client filtering.
+The server classifies known handover, hideout, trader, skill, assembly, quest-outcome, sale, and global-variable objectives as out of raid; unknown objective types default to in raid. Out-of-raid objectives receive `Out of Raid`. In-raid objectives use resolved concrete maps when available and otherwise fall back to the original quest location as `Any`, Transition, or a concrete map. Transition is also attached to in-raid transit objectives alongside their concrete maps. `ActualMapsComplete` remains a resolution diagnostic, not a client inference switch.
 
-The native Tasks table treats that data as a second axis rather than rewriting the quest. Location sorting always uses the native location. For a fully resolved Any/Transition quest, enabled concrete map filters determine membership and mapped objective visibility; a map-independent Any objective remains visible with any matching concrete slice. The raid tracked-list projection expands the current raid Mongo ID through server-supplied location aliases, then uses the same task assignments. Factory day/night aliases resolve to `factory4_day`, and Ground Zero low/high aliases resolve to `Sandbox`, so each pair remains one tracking map. Its default-on smart mode then retains only the objective types already classified as useful for in-raid auto-tracking.
+The native Tasks table consumes these fields directly. A quest matches when at least one objective scope intersects the selected filters, but only matching objectives are displayed; `Any`, `Out of Raid`, Transition, and every concrete map are exact independent scopes. Omitted-objective summaries use the other server-provided scope names. To display every objective in a mixed quest, every represented scope must be selected. Quest headers prefer the concrete task-map union over Any and Any over Out of Raid; transit quests keep Transition first beside their concrete task maps. The raid tracked-list projection expands the current raid Mongo ID through server-supplied location aliases and consumes the same objective relevance/scopes. Factory day/night aliases resolve to `factory4_day`, Ground Zero low/high aliases resolve to `Sandbox`, and the non-SPT Arena location (`develop`) is excluded from task scopes and aliases.
 
 Prerequisite status arrays are alternatives, not cumulative requirements. Edge presentation therefore classifies an exact success-only condition as success, an exact failure-only condition as failure, `Started` combinations as started-or-later, and a `Success` + failure combination as either terminal outcome. Mixed terminal outcomes must never inherit the dashed red failure-only style merely because `Fail` is one accepted value (for example, First in Line → Shortage accepts both `Success` and `Fail`).
 
@@ -73,7 +73,7 @@ For each quest, derive a display state from:
 9. mutual exclusion outcome;
 10. the source-pinned SPT 4.0.13 availability projection.
 
-QuestMap follows the exact visibility/status decision order of `QuestHelper.GetClientQuests` and calls its public faction, event, level, loyalty, and standing helpers. It intentionally does not call `GetClientQuests` itself: that client-payload method mutates shared templates and deep-clones every visible full quest record before filtering rewards, while the sanitized overlay needs only ID/status pairs. Local blocker derivation explains *why* without contradicting the source-pinned result.
+QuestMap follows the visibility/status decision order of `QuestHelper.GetClientQuests` and calls its public faction, event, level, loyalty, and standing helpers. One deliberate compatibility correction applies to a template with an `AvailableForStart` `Block` condition: QuestMap keeps it locked instead of synthesizing `AvailableForStart`. `Block` is an opaque external gate used by mods such as WTT-DoomArcade. An explicit `Locked` profile row remains locked; only an authoritative `AvailableForStart` or later lifecycle status advances its presentation. QuestMap intentionally does not call `GetClientQuests` itself: that client-payload method mutates shared templates and deep-clones every visible full quest record before filtering rewards, while the sanitized overlay needs only ID/status pairs. Local blocker derivation explains *why* without contradicting the authoritative profile result.
 
 ### Repeatable overlay
 

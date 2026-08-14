@@ -148,6 +148,8 @@ public sealed class QuestObjectivePayload
     public string[] ZoneIds { get; set; } = [];
     public string[] MapIds { get; set; } = [];
     public string[] UnresolvedZoneIds { get; set; } = [];
+    public bool InRaidRelevant { get; set; } = true;
+    public QuestMapReferencePayload[] TaskLocations { get; set; } = [];
     public bool OneSessionOnly { get; set; }
     public bool DoNotResetIfCounterCompleted { get; set; }
     public bool ContributesToProgress { get; set; } = true;

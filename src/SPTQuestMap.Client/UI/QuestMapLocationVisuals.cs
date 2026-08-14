@@ -21,8 +21,7 @@ internal static class QuestMapLocationVisuals
         {
             if (node.TaskLocation.Id.Equals(
                     QuestObjectiveMapRules.TransitionFilterId,
-                    StringComparison.OrdinalIgnoreCase)
-                && node.ActualMaps.Count > 1)
+                    StringComparison.OrdinalIgnoreCase))
             {
                 return
                 [
@@ -75,23 +74,25 @@ internal static class QuestMapLocationVisuals
         return text;
     }
 
-    public static IReadOnlyList<string> MapNames(
-        QuestGraphNode node,
-        IEnumerable<string> mapIds)
+    public static IReadOnlyList<string> MapNames(IEnumerable<QuestMapReference> maps)
     {
-        var requested = mapIds
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (requested.Count == 0) return [];
-
-        var names = node.ActualMaps
-            .Where(map => requested.Remove(map.Id))
+        return maps
+            .Where(map => !string.IsNullOrWhiteSpace(map.Id) && !string.IsNullOrWhiteSpace(map.Name))
+            .GroupBy(map => map.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(MapSortGroup)
+            .ThenBy(map => map.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(map => map.Id, StringComparer.OrdinalIgnoreCase)
             .Select(map => map.Name)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        names.AddRange(requested.OrderBy(id => id, StringComparer.OrdinalIgnoreCase));
-        return names;
+            .ToArray();
+    }
+
+    private static int MapSortGroup(QuestMapReference map)
+    {
+        if (map.Id.Equals(QuestObjectiveMapRules.NoLocationFilterId, StringComparison.OrdinalIgnoreCase)) return 0;
+        if (map.Id.Equals(QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase)) return 1;
+        if (map.Id.Equals(QuestObjectiveMapRules.TransitionFilterId, StringComparison.OrdinalIgnoreCase)) return 2;
+        return 3;
     }
 
     public static void AddArtworkSlices(

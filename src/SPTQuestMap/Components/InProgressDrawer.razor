@@ -54,7 +54,8 @@
     [Parameter] public EventCallback<string> QuestSelected { get; set; }
 
     private CultureInfo NumberCulture { get { try { return CultureInfo.GetCultureInfo(Localizer.BrowserLocale); } catch { return CultureInfo.InvariantCulture; } } }
-    private string LocationName(QuestNodeDto node) => node.Location.Any ? Localizer["location.any"] : node.Location.Name ?? node.Location.Id;
+    private static string LocationName(QuestNodeDto node) =>
+        string.Join(", ", QuestMapLocationPresentation.DisplayMaps(node).Select(map => map.Name));
     private string RouteTitle(string id) => string.Join(" / ", new[] { State.IsCollectorRoute(id) ? Localizer["route.collector"] : null, State.IsLightkeeperRoute(id) ? Localizer["route.lightkeeper"] : null }.Where(value => value is not null));
     private string DifferenceLabel(QuestComparisonDto comparison) => $"{Localizer[$"compare.category.{comparison.Categories[0]}"]}{(comparison.Categories.Length > 1 ? $" +{comparison.Categories.Length - 1}" : string.Empty)}";
 

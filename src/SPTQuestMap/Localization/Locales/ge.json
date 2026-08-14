@@ -133,7 +133,7 @@
   "details.objectives": "Ziele",
   "details.rewards": "Belohnungen",
   "location.any": "Beliebiger Ort",
-  "location.none": "Kein Ort",
+  "location.none": "Außerhalb des Raids",
   "trader.unlocked": "freigeschaltet",
   "trader.unavailable": "nicht verfügbar",
   "trader.noState": "{trader} · kein Händlerstatus im Profil",

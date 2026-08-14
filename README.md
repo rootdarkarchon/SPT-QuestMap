@@ -90,13 +90,15 @@ The Tasks view provides:
 
 - sortable Quest, Trader, Location, Status, Progress, and Tasks columns;
 - natural numeric ordering for quest series;
-- quest/trader search plus trader, status, map, and repeatable filters; `No location` covers menu-only quests, while `Any` is reserved for quests with direct in-raid work;
+- quest/trader search plus trader, status, map, and repeatable filters; `Out of Raid` covers menu-only quests, while `Any` is reserved for quests with direct in-raid work;
 - separate pinned, Daily, Scav Daily, Weekly, and ordinary sections;
 - native favorite stars and a separate QuestMap tracking control;
 - current/required objective progress while an objective remains incomplete; and
 - Accept, Restart, Hand In, Turn In, and repeatable Replace actions only when they are actually eligible.
 
-Map filters are ordered as **Reset**, **No location**, **Any**, **Transition**, then concrete maps alphabetically. By default, left-click isolates one choice and right-click includes or excludes it; the mouse buttons can be inverted in F12. **Reset** selects every available choice outside raids, or restores **Any**, the current map, and **Transition** during a raid. The retained table preserves its filters, sort, selection, scroll position, rows, and cached artwork when you leave and reopen Tasks.
+Map filters are ordered as **Reset**, **Out of Raid**, **Any**, **Transition**, then concrete maps alphabetically. By default, left-click isolates one choice and right-click includes or excludes it; the mouse buttons can be inverted in F12. **Reset** selects every available choice outside raids, or restores **Any**, the current map, and **Transition** during a raid. The retained table preserves its filters, sort, selection, scroll position, rows, and cached artwork when you leave and reopen Tasks.
+
+Location filtering is objective-scoped and server-authoritative. A selected location shows only objectives assigned to that exact scope; `Any` is its own scope rather than a wildcard. A mixed quest therefore remains visible when any one objective matches and reports the omitted objectives with their other scopes. For quest headers, concrete objective maps take precedence over `Any`, which takes precedence over `Out of Raid`; Transition quests keep `Transition` first and then show their concrete objective maps.
 
 The Quest Map view supplies search and trader/status/level/repeatable filters, future-depth and finished-quest toggles, drag panning, cursor-centered wheel zoom, Fit, Center, Focus Chain, and selection controls. During a raid, the global replacement intentionally remains on Tasks and does not offer the full dependency graph.
 

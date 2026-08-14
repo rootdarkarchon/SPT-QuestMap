@@ -11,8 +11,7 @@ internal static class QuestMapLocationPresentation
         {
             if (node.TaskLocation.Id.Equals(
                     QuestObjectiveMapRules.TransitionFilterId,
-                    StringComparison.OrdinalIgnoreCase)
-                && node.ActualMaps.Length > 1)
+                    StringComparison.OrdinalIgnoreCase))
             {
                 return
                 [
@@ -28,8 +27,5 @@ internal static class QuestMapLocationPresentation
     }
 
     private static bool UsesActualMaps(QuestNodeDto node) =>
-        (node.TaskLocation.Id.Equals(QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase)
-            || node.TaskLocation.Id.Equals(QuestObjectiveMapRules.TransitionFilterId, StringComparison.OrdinalIgnoreCase))
-        && node.ActualMapsComplete
-        && node.ActualMaps.Length > 0;
+        node.ActualMaps.Length > 0;
 }
