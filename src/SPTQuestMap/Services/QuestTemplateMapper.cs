@@ -52,21 +52,24 @@ internal static class QuestTemplateMapper
         Dictionary<string, string> locale,
         IReadOnlyDictionary<string, Location> locationsById
     ) => mapIds
-        .Distinct(StringComparer.Ordinal)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
         .Where(mapId => IsApplicableTaskMapId(mapId, locationsById))
         .Select(mapId =>
         {
             locationsById.TryGetValue(mapId, out var location);
             var fallback = location?.Base?.Name;
             var localeId = location?.Base?.IdField.ToString();
+            var canonicalId = CanonicalizeVariantMapId(
+                string.IsNullOrWhiteSpace(location?.Base?.Id) ? mapId : location.Base.Id);
             var name = string.IsNullOrWhiteSpace(localeId)
                 ? (string.IsNullOrWhiteSpace(fallback) ? mapId : fallback)
                 : Localize(locale, $"{localeId} Name", string.IsNullOrWhiteSpace(fallback) ? mapId : fallback);
             return new QuestMapReferenceDto(
-                mapId,
+                canonicalId,
                 name,
                 ToFileUrl(location?.Base?.Banners?.FirstOrDefault()?.Picture?.Path));
         })
+        .DistinctBy(map => map.Id, StringComparer.OrdinalIgnoreCase)
         .OrderBy(map => map.Name, StringComparer.CurrentCultureIgnoreCase)
         .ThenBy(map => map.Id, StringComparer.Ordinal)
         .ToArray();
@@ -76,11 +79,12 @@ internal static class QuestTemplateMapper
         QuestZoneMapCatalog zoneMapCatalog,
         IReadOnlyDictionary<string, QuestCondition>? sourceConditionsById = null,
         IReadOnlyDictionary<string, string[]>? questItemSpawnMapIds = null,
-        IReadOnlyDictionary<string, string>? canonicalMapIdsByAlias = null
+        IReadOnlyDictionary<string, string>? canonicalMapIdsByAlias = null,
+        string? preferredZoneMapId = null
     ) => objectives
         .Select(objective =>
         {
-            var resolution = zoneMapCatalog.Resolve(objective.ZoneIds ?? []);
+            var resolution = zoneMapCatalog.Resolve(objective.ZoneIds ?? [], preferredZoneMapId);
             var mapIds = resolution.MapIds.ToHashSet(StringComparer.Ordinal);
             if (sourceConditionsById?.TryGetValue(objective.Id, out var sourceCondition) == true)
             {
@@ -183,13 +187,22 @@ internal static class QuestTemplateMapper
                 }
                 else
                 {
-                    taskLocations =
-                    [
-                        new QuestMapReferenceDto(
-                            nativeLocation.Id,
-                            nativeLocation.Name ?? nativeLocation.Id,
-                            nativeLocation.BannerImageUrl),
-                    ];
+                    var canonicalNativeMap = BuildMapReferences(
+                        [nativeLocation.Id], locale, locationsById).FirstOrDefault();
+                    if (canonicalNativeMap is not null)
+                    {
+                        taskLocations = [canonicalNativeMap];
+                    }
+                    else
+                    {
+                        taskLocations =
+                        [
+                            new QuestMapReferenceDto(
+                                nativeLocation.Id,
+                                nativeLocation.Name ?? nativeLocation.Id,
+                                nativeLocation.BannerImageUrl),
+                        ];
+                    }
                 }
             }
 
@@ -478,6 +491,19 @@ internal static class QuestTemplateMapper
             pair => pair.Key,
             pair => pair.Value.Base.Id,
             StringComparer.OrdinalIgnoreCase);
+
+    internal static string? ResolvePreferredZoneMapId(
+        QuestLocationDto nativeLocation,
+        IReadOnlyDictionary<string, string> canonicalMapIdsByAlias)
+    {
+        if (nativeLocation.Any
+            || QuestObjectiveMapRules.IsTransitionLocation(
+                nativeLocation.Id, nativeLocation.Name, nativeLocation.Any)
+            || !canonicalMapIdsByAlias.TryGetValue(nativeLocation.Id, out var canonicalMapId))
+            return null;
+
+        return CanonicalizeVariantMapId(canonicalMapId);
+    }
 
     internal static IReadOnlyDictionary<string, string[]> BuildMapAliases(
         IEnumerable<Location> locations)

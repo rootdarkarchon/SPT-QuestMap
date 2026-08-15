@@ -243,6 +243,7 @@ internal sealed class RaidQuestRuntime : IDisposable
         _notification.Hide();
         _trackedList.Hide();
         _tracking.EndRaid();
+        _requestRefresh("raid-ended", null, null);
         _clearObservedQuestController();
     }
 

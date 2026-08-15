@@ -32,6 +32,69 @@ public sealed class QuestZoneMapCatalogTests
     }
 
     [Test]
+    public void NativeLocationDisambiguatesOnlySharedZoneIds()
+    {
+        using var fixture = new CatalogFixture(new Dictionary<string, string[]>
+        {
+            ["bigmap"] = ["exit777"],
+            ["Labyrinth"] = ["exit777"],
+            ["Shoreline"] = ["shoreline-zone"],
+        });
+        var catalog = new QuestZoneMapCatalog(fixture.Path);
+
+        var customs = catalog.Resolve(["exit777", "shoreline-zone"], "bigmap");
+        var labyrinth = catalog.Resolve(["exit777"], "Labyrinth");
+        var any = catalog.Resolve(["exit777"]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(customs.MapIds, Is.EqualTo(new[] { "Shoreline", "bigmap" }),
+                "A distinct zone on the same objective must retain its own map.");
+            Assert.That(labyrinth.MapIds, Is.EqualTo(new[] { "Labyrinth" }));
+            Assert.That(any.MapIds, Is.EqualTo(new[] { "Labyrinth", "bigmap" }),
+                "Any/Transition quests have no preferred map and must retain every candidate.");
+        });
+    }
+
+    [Test]
+    public void WorkSmarterSharedExitUsesItsNativeCustomsContext()
+    {
+        const string customsMongoId = "56f40101d2720b2a4d8b45d6";
+        using var fixture = new CatalogFixture(new Dictionary<string, string[]>
+        {
+            ["bigmap"] = ["exit777"],
+            ["Labyrinth"] = ["exit777"],
+        });
+        var locationsById = QuestTemplateMapper.BuildLocationLookup(
+        [
+            Location("bigmap", customsMongoId, "Customs"),
+            Location("Labyrinth", "6733700029c367a3d40b02af", "The Labyrinth"),
+        ]);
+        var nativeLocation = QuestTemplateMapper.BuildLocation(customsMongoId, [], locationsById);
+        var canonicalMapIdsByAlias = QuestTemplateMapper.BuildCanonicalMapIdLookup(locationsById);
+        var resolved = QuestTemplateMapper.ResolveObjectiveMaps(
+            [Objective("work-smarter-exit", ["exit777"]) with { ConditionType = "CounterCreator" }],
+            new QuestZoneMapCatalog(fixture.Path),
+            canonicalMapIdsByAlias: canonicalMapIdsByAlias,
+            preferredZoneMapId: QuestTemplateMapper.ResolvePreferredZoneMapId(
+                nativeLocation, canonicalMapIdsByAlias));
+        var classified = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            nativeLocation,
+            resolved,
+            new Dictionary<string, string>(),
+            [],
+            locationsById);
+        var actualMaps = QuestTemplateMapper.BuildActualMaps(classified);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(resolved.Single().MapIds, Is.EqualTo(new[] { "bigmap" }));
+            Assert.That(classified.Single().TaskLocations.Select(map => map.Id), Is.EqualTo(new[] { "bigmap" }));
+            Assert.That(actualMaps.Maps.Select(map => map.Id), Is.EqualTo(new[] { "bigmap" }));
+        });
+    }
+
+    [Test]
     public void ActualMapsIgnoreNonSpatialTasksButRemainAnyForUnknownSpatialZones()
     {
         var nativeAny = new QuestLocationDto("any", null, true, null);
@@ -247,6 +310,42 @@ public sealed class QuestZoneMapCatalogTests
                 "65e5a9d6e41e5f0d19b17a5f",
             }));
             Assert.That(aliases.Keys, Does.Not.Contain("Sandbox_high"));
+        });
+    }
+
+    [Test]
+    public void NativeMongoAndDerivedInternalIdsCollapseToOneActualMap()
+    {
+        const string customsMongoId = "56f40101d2720b2a4d8b45d6";
+        var customs = Location("bigmap", customsMongoId, "Customs");
+        var shoreline = Location("Shoreline", "5704e554d2720bac5b8b456e", "Shoreline");
+        var locationsById = QuestTemplateMapper.BuildLocationLookup([customs, shoreline]);
+        var nativeLocation = QuestTemplateMapper.BuildLocation(customsMongoId, [], locationsById);
+        var objectives = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
+            nativeLocation,
+            [
+                Objective("native-fallback", []) with { ConditionType = "FindItem" },
+                Objective("derived", []) with
+                {
+                    ConditionType = "FindItem",
+                    MapIds = ["bigmap", customsMongoId, "Shoreline"],
+                },
+            ],
+            new Dictionary<string, string>(),
+            [],
+            locationsById);
+        var actualMaps = QuestTemplateMapper.BuildActualMaps(objectives);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                objectives.Single(objective => objective.Id == "native-fallback").TaskLocations.Select(map => map.Id),
+                Is.EqualTo(new[] { "bigmap" }));
+            Assert.That(
+                objectives.Single(objective => objective.Id == "derived").TaskLocations.Select(map => map.Id),
+                Is.EqualTo(new[] { "bigmap", "Shoreline" }));
+            Assert.That(actualMaps.Maps.Select(map => map.Id), Is.EqualTo(new[] { "bigmap", "Shoreline" }));
+            Assert.That(actualMaps.Maps.Select(map => map.Name), Is.EqualTo(new[] { "Customs", "Shoreline" }));
         });
     }
 

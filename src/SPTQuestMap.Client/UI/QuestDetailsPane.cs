@@ -700,7 +700,7 @@ internal sealed class QuestDetailsPane : IDisposable
                         buttonText.text = ClientLocale.Text("label.handOver");
                         button.interactable = true;
                         button.onClick.AddListener(() => RunNativeAction(
-                            objectiveHost.Execute, QuestDetailsActionKind.Handover, button));
+                            objectiveHost.Execute, QuestDetailsActionKind.Handover, button, objective.Id));
                     },
                     _workspace.Log,
                     node.Id,
@@ -948,10 +948,27 @@ internal sealed class QuestDetailsPane : IDisposable
             _workspace.Log);
     }
 
-    private async void RunNativeAction(Func<Task> action, QuestDetailsActionKind kind, Button button)
+    private async void RunNativeAction(
+        Func<Task> action,
+        QuestDetailsActionKind kind,
+        Button button,
+        string? objectiveId = null)
     {
         if (_disposed || !button.interactable || !_workspace.MutationsAllowed()) return;
         var questId = _selectedQuestId;
+        var protectedKind = kind switch
+        {
+            QuestDetailsActionKind.Accept or QuestDetailsActionKind.Restart => NativeQuestActionKind.Accept,
+            QuestDetailsActionKind.Complete => NativeQuestActionKind.Complete,
+            QuestDetailsActionKind.Handover => NativeQuestActionKind.Handover,
+            _ => (NativeQuestActionKind?)null,
+        };
+        var pressedAt = 0f;
+        if (protectedKind.HasValue
+            && (string.IsNullOrWhiteSpace(questId)
+                || !_workspace.TryBeginProtectedAction(questId, protectedKind.Value, objectiveId, out pressedAt)))
+            return;
+
         button.interactable = false;
         try
         {
@@ -968,6 +985,8 @@ internal sealed class QuestDetailsPane : IDisposable
         }
         finally
         {
+            if (protectedKind.HasValue)
+                await NativeQuestWorkspaceContext.WaitForProtectedActionCooldown(pressedAt);
             if (button != null) button.interactable = true;
         }
     }

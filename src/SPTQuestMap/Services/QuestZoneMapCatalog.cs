@@ -55,7 +55,9 @@ internal sealed class QuestZoneMapCatalog
             StringComparer.Ordinal);
     }
 
-    internal QuestZoneMapResolution Resolve(IEnumerable<string> zoneIds)
+    internal QuestZoneMapResolution Resolve(
+        IEnumerable<string> zoneIds,
+        string? preferredMapId = null)
     {
         var mapIds = new HashSet<string>(StringComparer.Ordinal);
         var unresolvedZoneIds = new HashSet<string>(StringComparer.Ordinal);
@@ -67,7 +69,12 @@ internal sealed class QuestZoneMapCatalog
                 continue;
             }
 
-            mapIds.UnionWith(resolvedMapIds);
+            var preferredMatch = resolvedMapIds.Length > 1 && !string.IsNullOrWhiteSpace(preferredMapId)
+                ? resolvedMapIds.FirstOrDefault(mapId => mapId.Equals(
+                    preferredMapId, StringComparison.OrdinalIgnoreCase))
+                : null;
+            if (preferredMatch is not null) mapIds.Add(preferredMatch);
+            else mapIds.UnionWith(resolvedMapIds);
         }
 
         return new QuestZoneMapResolution(

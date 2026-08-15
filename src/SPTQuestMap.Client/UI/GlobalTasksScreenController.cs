@@ -83,6 +83,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private GlobalOverlayMode _overlayMode;
     private GlobalQuestGraphMode _mode = GlobalQuestGraphMode.InProgress;
     private bool _raidInProgressOnly;
+    private string? _raidLocationId;
+    private AbstractQuestControllerClass? _raidQuestController;
     private bool _showAllFuture;
     private bool _hideFinished;
     private bool _levelEligibleOnly = true;
@@ -676,6 +678,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
     private void ApplyInRaidDefaults(InRaidQuestContext context)
     {
+        _raidLocationId = context.LocationId;
+        _raidQuestController = context.QuestController;
         _traderId = null;
         _inProgressLocationIds.Clear();
         _inProgressLocationIds.UnionWith(context.DefaultLocationIds(_topology!.MapAliases));
@@ -689,23 +693,29 @@ internal sealed class GlobalTasksScreenController : IDisposable
     {
         var priorMode = _mode;
         var wasRaidOnly = _raidInProgressOnly;
+        var raidContextChanged = false;
         if (InRaidQuestContext.TryCapture(out var raidContext))
         {
+            raidContextChanged = !wasRaidOnly
+                || !string.Equals(_raidLocationId, raidContext.LocationId, StringComparison.OrdinalIgnoreCase)
+                || !ReferenceEquals(_raidQuestController, raidContext.QuestController);
             if (!wasRaidOnly) PersistCurrentState();
             _raidInProgressOnly = true;
             _mode = GlobalQuestGraphMode.InProgress;
             _focusQuestId = null;
-            if (!wasRaidOnly) ApplyInRaidDefaults(raidContext);
+            if (raidContextChanged) ApplyInRaidDefaults(raidContext);
         }
         else if (wasRaidOnly)
         {
             _raidInProgressOnly = false;
+            _raidLocationId = null;
+            _raidQuestController = null;
             _inProgressLocationsInitialized = false;
             _inProgressLocationIds.Clear();
             LoadSettings();
             InitializeInProgressLocations();
         }
-        return priorMode != _mode || wasRaidOnly != _raidInProgressOnly;
+        return priorMode != _mode || wasRaidOnly != _raidInProgressOnly || raidContextChanged;
     }
 
     private IReadOnlyList<QuestGraphHeaderAction> BuildCanvasActions()

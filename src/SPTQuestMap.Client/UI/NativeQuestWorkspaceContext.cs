@@ -20,6 +20,7 @@ namespace SPTQuestMap.Client.UI;
 /// </summary>
 internal sealed class NativeQuestWorkspaceContext
 {
+    private static readonly NativeQuestActionPressGuard ActionPressGuard = new();
     private readonly QuestMapClientConfiguration _configuration;
 
     public NativeQuestWorkspaceContext(
@@ -62,6 +63,16 @@ internal sealed class NativeQuestWorkspaceContext
     public KeyboardShortcut TaskSkipModifier() => _configuration.TaskSkipModifier.Value;
 
     public bool MutationsAllowed() => !InRaidQuestContext.TryCapture(out _);
+
+    public bool TryBeginProtectedAction(
+        string questId,
+        NativeQuestActionKind action,
+        string? objectiveId,
+        out float pressedAt) =>
+        ActionPressGuard.TryBegin(questId, action, objectiveId, out pressedAt);
+
+    public static Task WaitForProtectedActionCooldown(float pressedAt) =>
+        NativeQuestActionPressGuard.WaitForCooldown(pressedAt);
 
     public bool Rebind(
         ISession session,

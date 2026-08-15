@@ -30,6 +30,8 @@ internal sealed class QuestRefreshCoordinator : IDisposable
     private AbstractQuestControllerClass? _currentController;
     private ReactiveQuestMonitor? _reactiveMonitor;
     private Coroutine? _refreshCoroutine;
+    private int _requiredTopologyRefreshGeneration;
+    private int _completedTopologyRefreshGeneration;
     private bool _disposed;
 
     public QuestRefreshCoordinator(
@@ -116,6 +118,8 @@ internal sealed class QuestRefreshCoordinator : IDisposable
     public void Request(string reason, string? questId, string? preferredObjectiveId)
     {
         if (_disposed) return;
+        if (string.Equals(reason, "raid-ended", StringComparison.Ordinal))
+            _requiredTopologyRefreshGeneration++;
         _reasons.Add(reason);
         if (!string.IsNullOrWhiteSpace(questId)) _questIds.Add(questId!);
         if (!string.IsNullOrWhiteSpace(questId) && !string.IsNullOrWhiteSpace(preferredObjectiveId))
@@ -158,6 +162,8 @@ internal sealed class QuestRefreshCoordinator : IDisposable
         var reasons = _reasons.OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var signaledQuestIds = _questIds.OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var preferredObjectiveIds = new Dictionary<string, string>(_preferredObjectiveIds, StringComparer.Ordinal);
+        var requiredTopologyRefreshGeneration = _requiredTopologyRefreshGeneration;
+        var forceFullTopologyReload = requiredTopologyRefreshGeneration > _completedTopologyRefreshGeneration;
         _reasons.Clear();
         _questIds.Clear();
         _preferredObjectiveIds.Clear();
@@ -174,14 +180,16 @@ internal sealed class QuestRefreshCoordinator : IDisposable
             CompleteRefresh();
             yield break;
         }
-        if (controller is null || oldOverlay is null || originalTopology is null || originalLayout is null)
+        if (originalTopology is null || originalLayout is null
+            || (!forceFullTopologyReload && (controller is null || oldOverlay is null)))
         {
             CompleteRefresh();
             yield break;
         }
 
         var inRaid = InRaidQuestContext.TryCapture(out _);
-        if (inRaid && IsTargetedRaidRefresh(reasons, signaledQuestIds)
+        if (inRaid && controller is not null && oldOverlay is not null
+            && IsTargetedRaidRefresh(reasons, signaledQuestIds)
             && TryApplyTargetedRaidRefresh(
                 controller,
                 originalTopology,
@@ -194,7 +202,8 @@ internal sealed class QuestRefreshCoordinator : IDisposable
             yield break;
         }
 
-        var topologyReloaded = !inRaid && RequiresTopologyReload(reasons, signaledQuestIds, originalTopology);
+        var topologyReloaded = !inRaid
+            && (forceFullTopologyReload || RequiresTopologyReload(reasons, signaledQuestIds, originalTopology));
         var topologyUpdate = QuestTopologyUpdateKind.None;
         if (inRaid)
         {
@@ -210,7 +219,9 @@ internal sealed class QuestRefreshCoordinator : IDisposable
             Task<QuestTopologyUpdateKind> topologyTask;
             try
             {
-                topologyTask = reasons.Contains("quest-details-replace") || reasons.Contains("repeatable-expired")
+                topologyTask = forceFullTopologyReload
+                    ? _adapter.LoadTopologyAsync()
+                    : reasons.Contains("quest-details-replace") || reasons.Contains("repeatable-expired")
                     ? _adapter.LoadRepeatableTopologyDeltaAsync()
                     : _adapter.LoadTopologyAsync();
             }
@@ -234,6 +245,10 @@ internal sealed class QuestRefreshCoordinator : IDisposable
                 yield break;
             }
             topologyUpdate = topologyTask.Result;
+            if (forceFullTopologyReload)
+                _completedTopologyRefreshGeneration = Math.Max(
+                    _completedTopologyRefreshGeneration,
+                    requiredTopologyRefreshGeneration);
         }
         else
         {
@@ -264,6 +279,17 @@ internal sealed class QuestRefreshCoordinator : IDisposable
             topologyUpdate = profileTask.Result;
         }
         topologyReloaded = topologyUpdate != QuestTopologyUpdateKind.None;
+
+        controller = _currentController;
+        if (controller is null || oldOverlay is null)
+        {
+            QuestMapDebugLog.Info(_log,
+                "QUESTMAP_M04_POST_RAID_TOPOLOGY " +
+                $"completed=True; topologyVersion={_adapter.Topology?.Version}; " +
+                "overlayDeferred=True; reason=no-menu-quest-controller");
+            CompleteRefresh();
+            yield break;
+        }
 
         QuestProfileOverlay newOverlay;
         try

@@ -123,7 +123,9 @@ internal sealed class QuestTopologyBuilder(
                     zoneMapCatalog,
                     conditionsById,
                     questItemSpawnMapIds,
-                    canonicalMapIdsByAlias),
+                    canonicalMapIdsByAlias,
+                    QuestTemplateMapper.ResolvePreferredZoneMapId(
+                        nativeLocation, canonicalMapIdsByAlias)),
                 ui,
                 locale,
                 locationsById);

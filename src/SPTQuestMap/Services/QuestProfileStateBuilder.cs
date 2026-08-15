@@ -333,7 +333,9 @@ internal sealed class QuestProfileStateBuilder(
                 zoneMapCatalog,
                 conditionsById,
                 preload.QuestItemSpawnMapIds,
-                canonicalMapIdsByAlias)
+                canonicalMapIdsByAlias,
+                QuestTemplateMapper.ResolvePreferredZoneMapId(
+                    location, canonicalMapIdsByAlias))
             .Select(objective => !objective.ContributesToProgress
                 ? objective
                 : objective with

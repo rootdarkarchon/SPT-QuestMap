@@ -1301,7 +1301,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
                         nativeActions.Add(action);
                         actionText.text = ClientLocale.Text("label.handIn");
                         actionButton.interactable = true;
-                        actionButton.onClick.AddListener(() => RunHandover(node.Id, action, actionButton));
+                        actionButton.onClick.AddListener(() =>
+                            RunHandover(node.Id, definition.Id, action, actionButton));
                     },
                     _log,
                     node.Id,
@@ -1506,9 +1507,15 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             _log);
     }
 
-    private async void RunHandover(string questId, NativeQuestHandoverAction action, Button button)
+    private async void RunHandover(
+        string questId,
+        string objectiveId,
+        NativeQuestHandoverAction action,
+        Button button)
     {
         if (_disposed || !_workspace.MutationsAllowed() || !button.interactable) return;
+        if (!_workspace.TryBeginProtectedAction(
+                questId, NativeQuestActionKind.Handover, objectiveId, out var pressedAt)) return;
         button.interactable = false;
         try
         {
@@ -1521,6 +1528,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         }
         finally
         {
+            await NativeQuestWorkspaceContext.WaitForProtectedActionCooldown(pressedAt);
             if (button != null) button.interactable = true;
         }
     }
@@ -1547,6 +1555,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private async void RunAccept(string questId, Button button)
     {
         if (_disposed || !_workspace.CanAccept(_topology, questId) || !button.interactable) return;
+        if (!_workspace.TryBeginProtectedAction(
+                questId, NativeQuestActionKind.Accept, null, out var pressedAt)) return;
         button.interactable = false;
         try
         {
@@ -1559,6 +1569,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         }
         finally
         {
+            await NativeQuestWorkspaceContext.WaitForProtectedActionCooldown(pressedAt);
             if (button != null) button.interactable = true;
         }
     }
@@ -1566,6 +1577,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private async void RunComplete(string questId, Button button)
     {
         if (_disposed || !_workspace.CanComplete(_topology, questId) || !button.interactable) return;
+        if (!_workspace.TryBeginProtectedAction(
+                questId, NativeQuestActionKind.Complete, null, out var pressedAt)) return;
         button.interactable = false;
         try
         {
@@ -1578,6 +1591,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         }
         finally
         {
+            await NativeQuestWorkspaceContext.WaitForProtectedActionCooldown(pressedAt);
             if (button != null) button.interactable = true;
         }
     }
