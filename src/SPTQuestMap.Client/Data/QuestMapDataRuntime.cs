@@ -69,6 +69,27 @@ internal sealed class QuestMapDataRuntime : IDisposable
 
     public void UpdateRaidMonitor() => _raid.Update();
 
+    public bool CanForceReloadTopology() => !_disposed
+        && !InRaidQuestContext.TryCapture(out _)
+        && _loadCoroutine is null
+        && !_refresh.TopologyReloadInProgress;
+
+    public void ForceReloadTopology()
+    {
+        if (!CanForceReloadTopology()) return;
+
+        _log.LogInfo(
+            "QUESTMAP_M08_FORCE_TOPOLOGY_RELOAD requested=True; trigger=f12; " +
+            $"topologyLoaded={_adapter.Topology is not null}");
+        if (_adapter.Topology is null)
+        {
+            WarmTopology();
+            return;
+        }
+
+        _refresh.Request("debug-force-topology-reload", null);
+    }
+
     public void WarmTopology()
     {
         if (_disposed || _adapter.Topology is not null || _loadCoroutine is not null) return;

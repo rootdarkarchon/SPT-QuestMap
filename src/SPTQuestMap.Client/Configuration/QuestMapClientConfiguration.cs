@@ -160,6 +160,7 @@ internal sealed class QuestMapClientConfiguration
 
     public static QuestMapClientConfiguration Bind(ConfigFile config)
     {
+        BindForceTopologyReloadAction(config);
         return new QuestMapClientConfiguration(
             config.ConfigFilePath,
             config.Bind(
@@ -309,6 +310,22 @@ internal sealed class QuestMapClientConfiguration
                 false,
                 "Write detailed topology, projection, rendering, lifecycle, performance, and raid-monitor diagnostics to the BepInEx log. Warnings and errors are always logged."));
     }
+
+    private static void BindForceTopologyReloadAction(ConfigFile config) =>
+        config.Bind(
+            "Diagnostics",
+            "Force reload server topology",
+            false,
+            new ConfigDescription(
+                "Force QuestMap to fetch and rebuild the complete server topology outside a raid. Use this to recover stale or missing quest data without restarting EFT.",
+                null,
+                new ConfigurationManagerAttributes
+                {
+                    CustomDrawer = QuestMapConfigurationManagerActions.DrawForceTopologyReload,
+                    HideDefaultButton = true,
+                    IsAdvanced = false,
+                    Order = 10,
+                }));
 
     private static ConfigEntry<Color> BindColor(
         ConfigFile config,

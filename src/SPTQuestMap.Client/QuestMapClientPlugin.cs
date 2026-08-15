@@ -34,6 +34,12 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
         _dataRuntime = new QuestMapDataRuntime(this, Logger, configuration);
         _patchRegistration = new PatchRegistration(PluginGuid);
         var registration = _patchRegistration.Register(compatibility, configuration, _dataRuntime);
+        if (registration.Active)
+        {
+            QuestMapConfigurationManagerActions.Configure(
+                _dataRuntime.ForceReloadTopology,
+                _dataRuntime.CanForceReloadTopology);
+        }
         if (registration.Active
             && (configuration.EnableTraderQuestGraph.Value || configuration.EnableGlobalTasksGraph.Value))
         {
@@ -68,6 +74,7 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
 
     private void OnDestroy()
     {
+        QuestMapConfigurationManagerActions.Clear();
         if (_topologyWarmupCoroutine is not null)
         {
             StopCoroutine(_topologyWarmupCoroutine);

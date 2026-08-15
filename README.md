@@ -159,6 +159,7 @@ Tracked quests can produce stacked, deduplicated in-raid progress notifications.
 | Tracked quest list hotkey | I | Toggles the raid quest list |
 | Minimal progress notifications | Off | Uses the full notification presentation |
 | Detailed diagnostics | Off | Enables verbose lifecycle/performance logging |
+| Force reload server topology | Action | Refetches and rebuilds QuestMap's server topology outside raids without restarting EFT |
 
 Notification timing and opacity, interface sounds, and highlight/state/route colors are also configurable. Warnings and errors are logged even when detailed diagnostics are disabled.
 
@@ -235,6 +236,7 @@ SPT 4.0.13 does not provide an authentication policy for this mod's Blazor page.
 - **Another task mod's row control is missing:** this is expected while QuestMap owns that replacement surface; disable the corresponding QuestMap toggle to restore native rows.
 - **QuestMap UI text falls back to English:** the native client uses a matching embedded language catalog when present and falls back to English per key.
 - **A quest state looks stale in the browser:** use the visible Refresh control. Browser QuestMap deliberately does not poll.
+- **Native QuestMap has stale or missing quests:** outside a raid, open F12 and press **Diagnostics → Force reload server topology → Reload now**. The result is written to `BepInEx/LogOutput.log`.
 - **A custom summary is ignored:** keep it directly inside lowercase `summaries/`, validate the JSON object shape, and restart the server.
 - **More diagnostics are needed:** enable **Diagnostics → Enable debug logging** in F12 and reproduce once; ordinary warnings and errors never require that toggle.
 

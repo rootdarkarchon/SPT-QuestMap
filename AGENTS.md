@@ -188,6 +188,13 @@ Do not create write endpoints in the first version.
 - Log unsupported or ambiguous quest conditions rather than silently misclassifying them.
 - Keep compatibility work for 4.1 out of scope unless it naturally costs almost nothing. The target is 4.0.13.
 
+## Development status files
+
+- `development-status.md` is the authoritative working status. Read and update this file as needed.
+- `docs/archive/development-status-full.md` is an immutable historical archive.
+- Do not read, search, summarize, cite, modify, or use the archived status as implementation context unless the user explicitly requests it.
+- Keep the working status concise and current. Update existing sections in place rather than appending a chronological account of every implementation attempt, build, deployment, hash, process ID, or visual iteration.
+
 ## Definition of done
 
 The project is done when the acceptance checklist in `docs/acceptance.md` passes on the user's installed SPT 4.0.13 server, the page is reachable at `/questmap`, profile selection and refresh work, quest state/objective/exclusion data is accurate, and pan/zoom remains responsive on the full graph.

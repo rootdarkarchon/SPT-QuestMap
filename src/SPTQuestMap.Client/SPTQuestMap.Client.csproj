@@ -36,6 +36,8 @@
            Text="Required Unity UI assembly is missing: $(ManagedRoot)\UnityEngine.UI.dll" />
     <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.UIModule.dll')"
            Text="Required Unity UI module is missing: $(ManagedRoot)\UnityEngine.UIModule.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.IMGUIModule.dll')"
+           Text="Required Unity IMGUI module is missing: $(ManagedRoot)\UnityEngine.IMGUIModule.dll" />
     <Error Condition="!Exists('$(ManagedRoot)\Unity.TextMeshPro.dll')"
            Text="Required TextMeshPro assembly is missing: $(ManagedRoot)\Unity.TextMeshPro.dll" />
     <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.TextRenderingModule.dll')"
@@ -99,6 +101,10 @@
     </Reference>
     <Reference Include="UnityEngine.UIModule">
       <HintPath>$(ManagedRoot)\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(ManagedRoot)\UnityEngine.IMGUIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Unity.TextMeshPro">

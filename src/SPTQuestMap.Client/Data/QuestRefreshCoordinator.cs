@@ -60,6 +60,9 @@ internal sealed class QuestRefreshCoordinator : IDisposable
 
     public AbstractQuestControllerClass? CurrentController => _currentController;
 
+    public bool TopologyReloadInProgress => _refreshCoroutine is not null
+        && _requiredTopologyRefreshGeneration > _completedTopologyRefreshGeneration;
+
     public void ObserveController(AbstractQuestControllerClass questController, bool enableReactiveMonitor)
     {
         if (_disposed) return;
@@ -118,7 +121,7 @@ internal sealed class QuestRefreshCoordinator : IDisposable
     public void Request(string reason, string? questId, string? preferredObjectiveId)
     {
         if (_disposed) return;
-        if (string.Equals(reason, "raid-ended", StringComparison.Ordinal))
+        if (reason is "raid-ended" or "debug-force-topology-reload")
             _requiredTopologyRefreshGeneration++;
         _reasons.Add(reason);
         if (!string.IsNullOrWhiteSpace(questId)) _questIds.Add(questId!);
@@ -164,6 +167,7 @@ internal sealed class QuestRefreshCoordinator : IDisposable
         var preferredObjectiveIds = new Dictionary<string, string>(_preferredObjectiveIds, StringComparer.Ordinal);
         var requiredTopologyRefreshGeneration = _requiredTopologyRefreshGeneration;
         var forceFullTopologyReload = requiredTopologyRefreshGeneration > _completedTopologyRefreshGeneration;
+        var debugForceTopologyReload = reasons.Contains("debug-force-topology-reload");
         _reasons.Clear();
         _questIds.Clear();
         _preferredObjectiveIds.Clear();
@@ -228,6 +232,10 @@ internal sealed class QuestRefreshCoordinator : IDisposable
             catch (Exception exception)
             {
                 _log.LogError($"QUESTMAP_M04_ERROR phase=topology-reload; reasons={string.Join(",", reasons)}; {exception}");
+                if (debugForceTopologyReload)
+                    _log.LogError(
+                        "QUESTMAP_M08_FORCE_TOPOLOGY_RELOAD completed=False; " +
+                        $"phase=request-start; error={exception.GetType().Name}: {exception.Message}");
                 CompleteRefresh();
                 yield break;
             }
@@ -240,7 +248,12 @@ internal sealed class QuestRefreshCoordinator : IDisposable
             }
             if (topologyTask.IsFaulted)
             {
-                _log.LogError($"QUESTMAP_M04_ERROR phase=topology-reload; reasons={string.Join(",", reasons)}; {topologyTask.Exception?.GetBaseException()}");
+                var exception = topologyTask.Exception?.GetBaseException();
+                _log.LogError($"QUESTMAP_M04_ERROR phase=topology-reload; reasons={string.Join(",", reasons)}; {exception}");
+                if (debugForceTopologyReload)
+                    _log.LogError(
+                        "QUESTMAP_M08_FORCE_TOPOLOGY_RELOAD completed=False; " +
+                        $"phase=request; error={exception?.GetType().Name ?? "Unknown"}: {exception?.Message ?? "Unknown topology load failure."}");
                 CompleteRefresh();
                 yield break;
             }
@@ -249,6 +262,10 @@ internal sealed class QuestRefreshCoordinator : IDisposable
                 _completedTopologyRefreshGeneration = Math.Max(
                     _completedTopologyRefreshGeneration,
                     requiredTopologyRefreshGeneration);
+            if (debugForceTopologyReload)
+                _log.LogInfo(
+                    "QUESTMAP_M08_FORCE_TOPOLOGY_RELOAD completed=True; " +
+                    $"topologyUpdate={topologyUpdate}; topologyVersion={_adapter.Topology?.Version}");
         }
         else
         {
@@ -281,7 +298,7 @@ internal sealed class QuestRefreshCoordinator : IDisposable
         topologyReloaded = topologyUpdate != QuestTopologyUpdateKind.None;
 
         controller = _currentController;
-        if (controller is null || oldOverlay is null)
+        if (controller is null)
         {
             QuestMapDebugLog.Info(_log,
                 "QUESTMAP_M04_POST_RAID_TOPOLOGY " +
@@ -306,12 +323,13 @@ internal sealed class QuestRefreshCoordinator : IDisposable
             yield break;
         }
 
-        var changedQuestIds = QuestOverlayChangeDetector.FindChangedQuestIds(oldOverlay, newOverlay);
+        var previousOverlay = oldOverlay ?? newOverlay;
+        var changedQuestIds = QuestOverlayChangeDetector.FindChangedQuestIds(previousOverlay, newOverlay);
         var topology = _adapter.Topology!;
-        _tracking.ApplyNewQuestTransitions(oldOverlay, newOverlay, changedQuestIds, topology.NodesById);
+        _tracking.ApplyNewQuestTransitions(previousOverlay, newOverlay, changedQuestIds, topology.NodesById);
         var layout = _adapter.Layout!;
         if (inRaid)
-            _raid.PublishProgressChanges(topology, oldOverlay, newOverlay, changedQuestIds, preferredObjectiveIds);
+            _raid.PublishProgressChanges(topology, previousOverlay, newOverlay, changedQuestIds, preferredObjectiveIds);
         if (inRaid) _raid.RefreshTrackedListIfVisible();
         var refreshAllNativeControls = !reasons.Contains("quest-details-action-settled");
         var repeatableTopologyDelta = topologyUpdate == QuestTopologyUpdateKind.ProfileGeneratedDelta;
@@ -353,7 +371,7 @@ internal sealed class QuestRefreshCoordinator : IDisposable
 
         if (_configuration.EnableDebugLogging.Value)
         {
-            LogTransitions(oldOverlay, newOverlay, changedQuestIds);
+            LogTransitions(previousOverlay, newOverlay, changedQuestIds);
             QuestMapDebugLog.Info(_log,
                 "QUESTMAP_M04_REFRESH " +
                 $"reasons={string.Join(",", reasons)}; signaledQuests={string.Join(",", signaledQuestIds)}; " +
