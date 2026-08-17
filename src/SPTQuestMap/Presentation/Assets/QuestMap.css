@@ -299,6 +299,7 @@ h1 { margin: 0; font: 700 1.55rem/1 Georgia, serif; letter-spacing: -.02em; }
 .rewards { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
 .reward-row { display: grid; grid-template-columns: 20px 1fr; gap: .42rem; color: #d8d3bd; }
 .reward-marker { padding-top: .03rem; color: #b89b53; font-size: .72rem; }
+.penalties .reward-marker { color: #b66f67; }
 .reward-body strong, .reward-body small { display: block; }
 .reward-description { color: #d8d3bd; font-size: .78rem; font-weight: 600; line-height: 1.35; }
 .reward-description + .reward-description { margin-top: .18rem; }

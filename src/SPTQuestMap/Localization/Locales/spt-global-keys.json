@@ -24,6 +24,7 @@
   "details.collapse": "collapse",
   "details.objectives": "Achievements/Tooltip/Conditions",
   "details.rewards": "Achievements/Tooltip/Task rewards",
+  "details.penalties": "Penalties",
   "reward.unknown": "Unknown reward",
   "reward.experience": "GAINED EXPERIENCE",
   "reward.skill": "arena/career/tabs/skills",

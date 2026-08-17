@@ -7,7 +7,7 @@ using SPTarkov.Server.Core.Services;
 
 namespace SPTQuestMap.Services;
 
-[Injectable(InjectionType.Singleton, TypePriority = OnLoadOrder.PostDBModLoader + 1)]
+[Injectable(InjectionType.Singleton, TypePriority = OnLoadOrder.PostSptModLoader + 1)]
 public sealed class QuestMapDataService : IOnLoad
 {
     private readonly DatabaseService _databaseService;

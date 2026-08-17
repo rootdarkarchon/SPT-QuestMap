@@ -78,7 +78,7 @@ internal static class QuestTemplateMapper
         IEnumerable<ObjectiveDefinitionDto> objectives,
         QuestZoneMapCatalog zoneMapCatalog,
         IReadOnlyDictionary<string, QuestCondition>? sourceConditionsById = null,
-        IReadOnlyDictionary<string, string[]>? questItemSpawnMapIds = null,
+        IReadOnlyDictionary<MongoId, string[]>? questItemSpawnMapIds = null,
         IReadOnlyDictionary<string, string>? canonicalMapIdsByAlias = null,
         string? preferredZoneMapId = null
     ) => objectives
@@ -98,7 +98,8 @@ internal static class QuestTemplateMapper
                 {
                     foreach (var targetId in GetTargets(sourceCondition))
                     {
-                        if (!questItemSpawnMapIds.TryGetValue(targetId, out var spawnMapIds)) continue;
+                        if (!MongoId.IsValidMongoId(targetId)
+                            || !questItemSpawnMapIds.TryGetValue(new MongoId(targetId), out var spawnMapIds)) continue;
                         mapIds.UnionWith(spawnMapIds);
                     }
                 }
@@ -112,41 +113,69 @@ internal static class QuestTemplateMapper
         })
         .ToArray();
 
-    internal static IReadOnlyDictionary<string, string[]> BuildQuestItemSpawnMapLookup(
-        IEnumerable<Location> locations,
-        IReadOnlyDictionary<MongoId, TemplateItem> items)
-    {
-        var questItemIds = items
+    internal static IReadOnlySet<MongoId> BuildQuestItemIdSet(
+        IReadOnlyDictionary<MongoId, TemplateItem> items) => items
             .Where(pair => pair.Value.IsQuestItem())
-            .Select(pair => pair.Key.ToString())
-            .ToHashSet(StringComparer.Ordinal);
-        var mapIdsByItem = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        foreach (var location in locations.Where(IsApplicableTaskMapLocation))
-        {
-            var mapId = location.Base?.Id;
-            if (string.IsNullOrWhiteSpace(mapId)) continue;
-            foreach (var spawnPoint in location.LooseLoot?.Value?.SpawnpointsForced ?? [])
-            {
-                foreach (var item in spawnPoint.Template?.Items ?? [])
-                {
-                    var itemId = item.Template.ToString();
-                    if (!questItemIds.Contains(itemId)) continue;
-                    if (!mapIdsByItem.TryGetValue(itemId, out var mapIds))
-                    {
-                        mapIds = new HashSet<string>(StringComparer.Ordinal);
-                        mapIdsByItem[itemId] = mapIds;
-                    }
+            .Select(pair => pair.Key)
+            .ToHashSet();
 
-                    mapIds.Add(CanonicalizeVariantMapId(mapId));
+    internal static IReadOnlyDictionary<MongoId, string[]> BuildQuestItemSpawnMapLookup(
+        IEnumerable<Location> locations,
+        IReadOnlySet<MongoId> questItemIds)
+    {
+        var applicableLocations = locations.Where(IsApplicableTaskMapLocation).ToArray();
+        if (applicableLocations.Length == 0) return new Dictionary<MongoId, string[]>();
+
+        var locationResults = new QuestItemSpawnLocationResult?[applicableLocations.Length];
+        var maxDegreeOfParallelism = Math.Min(
+            applicableLocations.Length,
+            Math.Max(1, Environment.ProcessorCount));
+        Parallel.For(
+            0,
+            applicableLocations.Length,
+            new ParallelOptions { MaxDegreeOfParallelism = maxDegreeOfParallelism },
+            index =>
+            {
+                var location = applicableLocations[index];
+                var mapId = location.Base?.Id;
+                if (string.IsNullOrWhiteSpace(mapId)) return;
+
+                var itemIds = new HashSet<MongoId>();
+                foreach (var spawnPoint in location.LooseLoot?.Value?.SpawnpointsForced ?? [])
+                {
+                    foreach (var item in spawnPoint.Template?.Items ?? [])
+                    {
+                        if (questItemIds.Contains(item.Template)) itemIds.Add(item.Template);
+                    }
                 }
+
+                locationResults[index] = new QuestItemSpawnLocationResult(
+                    CanonicalizeVariantMapId(mapId),
+                    itemIds);
+            });
+
+        var mapIdsByItem = new Dictionary<MongoId, HashSet<string>>();
+        foreach (var result in locationResults)
+        {
+            if (result is null) continue;
+            foreach (var itemId in result.ItemIds)
+            {
+                if (!mapIdsByItem.TryGetValue(itemId, out var mapIds))
+                {
+                    mapIds = new HashSet<string>(StringComparer.Ordinal);
+                    mapIdsByItem[itemId] = mapIds;
+                }
+
+                mapIds.Add(result.MapId);
             }
         }
 
         return mapIdsByItem.ToDictionary(
             pair => pair.Key,
-            pair => pair.Value.Order(StringComparer.Ordinal).ToArray(),
-            StringComparer.Ordinal);
+            pair => pair.Value.Order(StringComparer.Ordinal).ToArray());
     }
+
+    private sealed record QuestItemSpawnLocationResult(string MapId, HashSet<MongoId> ItemIds);
 
     internal static ObjectiveDefinitionDto[] ClassifyObjectiveTaskLocations(
         QuestLocationDto nativeLocation,

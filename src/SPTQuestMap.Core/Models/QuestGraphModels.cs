@@ -133,6 +133,8 @@ public sealed record QuestGraphNode(
     bool ProfileGenerated,
     string? RepeatableKind)
 {
+    public IReadOnlyList<QuestReward> Penalties { get; init; } = [];
+
     public QuestMapReference TaskLocation { get; init; } = new(
         QuestObjectiveMapRules.NoLocationFilterId,
         "Out of Raid",

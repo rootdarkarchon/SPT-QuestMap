@@ -1496,9 +1496,8 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         NativeQuestObjectiveSkip.ShowConfirmation(
             _workspace.QuestController,
             quest,
-            objective.Id,
+            objective,
             node.Name,
-            objective.Text,
             () => !_disposed && _workspace.TaskSkippingEnabled() && _workspace.MutationsAllowed(),
             () =>
             {

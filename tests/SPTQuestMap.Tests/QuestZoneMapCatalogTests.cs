@@ -382,7 +382,7 @@ public sealed class QuestZoneMapCatalogTests
             {
                 [safeCorridor.Id.ToString()] = safeCorridor,
             },
-            new Dictionary<string, string[]>(StringComparer.Ordinal),
+            new Dictionary<MongoId, string[]>(),
             canonicalMapIdsByAlias);
         var classified = QuestTemplateMapper.ClassifyObjectiveTaskLocations(
             QuestTemplateMapper.BuildLocation(reserveMongoId, [], locationsById),
@@ -447,9 +447,10 @@ public sealed class QuestZoneMapCatalogTests
     {
         using var fixture = new CatalogFixture(new Dictionary<string, string[]>());
         var catalog = new QuestZoneMapCatalog(fixture.Path);
+        var questItemId = new MongoId("000000000000000000000030");
         var findQuestItem = Condition("000000000000000000000031", "FindItem") with
         {
-            Target = new ListOrT<string>(null, "quest-item"),
+            Target = new ListOrT<string>(null, questItemId.ToString()),
         };
         var streets = Condition("000000000000000000000032", "CounterCreator") with
         {
@@ -471,7 +472,7 @@ public sealed class QuestZoneMapCatalogTests
             definitions,
             catalog,
             source.ToDictionary(condition => condition.Id.ToString(), StringComparer.Ordinal),
-            new Dictionary<string, string[]>(StringComparer.Ordinal) { ["quest-item"] = ["bigmap"] },
+            new Dictionary<MongoId, string[]> { [questItemId] = ["bigmap"] },
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["TarkovStreets"] = "TarkovStreets" });
 
         Assert.Multiple(() =>
@@ -496,10 +497,12 @@ public sealed class QuestZoneMapCatalogTests
     public void ForcedQuestItemSpawnMapsUseCanonicalVariantIds()
     {
         var questItemId = new MongoId("000000000000000000000041");
+        var ordinaryItemId = new MongoId("000000000000000000000044");
         var locations = new[]
         {
             ForcedSpawnLocation("factory4_night", questItemId, "000000000000000000000042"),
             ForcedSpawnLocation("Sandbox_high", questItemId, "000000000000000000000043"),
+            ForcedSpawnLocation("Woods", ordinaryItemId, "000000000000000000000045"),
         };
         var items = new Dictionary<MongoId, TemplateItem>
         {
@@ -508,11 +511,32 @@ public sealed class QuestZoneMapCatalogTests
                 Id = questItemId,
                 Properties = new TemplateItemProperties { QuestItem = true },
             },
+            [ordinaryItemId] = new TemplateItem
+            {
+                Id = ordinaryItemId,
+                Properties = new TemplateItemProperties { QuestItem = false },
+            },
         };
 
-        var lookup = QuestTemplateMapper.BuildQuestItemSpawnMapLookup(locations, items);
+        var lookup = QuestTemplateMapper.BuildQuestItemSpawnMapLookup(
+            locations,
+            QuestTemplateMapper.BuildQuestItemIdSet(items));
 
-        Assert.That(lookup[questItemId.ToString()], Is.EqualTo(new[] { "Sandbox", "factory4_day" }));
+        Assert.Multiple(() =>
+        {
+            Assert.That(lookup[questItemId], Is.EqualTo(new[] { "Sandbox", "factory4_day" }));
+            Assert.That(lookup.ContainsKey(ordinaryItemId), Is.False);
+        });
+    }
+
+    [Test]
+    public void ForcedQuestItemSpawnLookupHandlesNoApplicableLocations()
+    {
+        var lookup = QuestTemplateMapper.BuildQuestItemSpawnMapLookup(
+            [],
+            new HashSet<MongoId>());
+
+        Assert.That(lookup, Is.Empty);
     }
 
     [Test]

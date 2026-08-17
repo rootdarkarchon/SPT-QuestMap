@@ -131,18 +131,25 @@ internal sealed class NativeQuestWorkspaceContext
     {
         if (!MutationsAllowed() || !topology.NodesById.TryGetValue(questId, out var node)
             || NativeQuestTableActions.IsRaidOnlyTrader(node.TraderId)) return false;
-        return FindLiveQuest(questId)?.QuestStatus == EQuestStatus.AvailableForFinish;
+        var quest = FindLiveQuest(questId);
+        return quest?.QuestStatus == EQuestStatus.AvailableForFinish
+            || quest is not null && NativeQuestCompletionRecovery.CanRecover(QuestController, node, quest);
     }
+
+    public bool TryPrepareForCompletion(QuestGraphNode node, QuestClass quest) =>
+        NativeQuestCompletionRecovery.TryPrepare(QuestController, node, quest, Log);
 
     public async Task CompleteAsync(RectTransform parent, QuestGraphTopology topology, string questId)
     {
         if (!CanComplete(topology, questId)) return;
+        var quest = FindLiveQuest(questId)!;
+        if (!TryPrepareForCompletion(topology.NodesById[questId], quest)) return;
         await NativeQuestTableActions.CompleteAsync(
             parent,
             Session,
             InventoryController,
             QuestController,
-            FindLiveQuest(questId)!,
+            quest,
             topology.NodesById[questId].TraderId,
             Log);
     }

@@ -32,7 +32,38 @@ public static class RaidTrackedQuestListProjectionBuilder
             .ThenBy(entry => entry.Quest.Id, StringComparer.Ordinal)
             .ToArray();
 
-        var groups = entries.GroupBy(entry => entry.Quest.TraderId, StringComparer.Ordinal)
+        var currentMapEntries = entries
+            .Where(entry => HasCurrentMapObjective(entry, currentMapIds))
+            .ToArray();
+        var currentMapQuestIds = currentMapEntries
+            .Select(entry => entry.Quest.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        var anyMapEntries = entries
+            .Where(entry => !currentMapQuestIds.Contains(entry.Quest.Id) && HasAnyMapObjective(entry))
+            .ToArray();
+
+        var sections = new List<RaidTrackedQuestListSection>(2);
+        if (currentMapEntries.Length > 0)
+        {
+            sections.Add(new RaidTrackedQuestListSection(
+                RaidTrackedQuestListScope.CurrentMap,
+                ResolveCurrentMapName(currentMapEntries, currentMapIds),
+                BuildTraderGroups(topology, currentMapEntries)));
+        }
+        if (anyMapEntries.Length > 0)
+        {
+            sections.Add(new RaidTrackedQuestListSection(
+                RaidTrackedQuestListScope.Any,
+                ResolveAnyMapName(anyMapEntries),
+                BuildTraderGroups(topology, anyMapEntries)));
+        }
+        return new RaidTrackedQuestListProjection(sections);
+    }
+
+    private static IReadOnlyList<RaidTrackedTraderGroup> BuildTraderGroups(
+        QuestGraphTopology topology,
+        IReadOnlyCollection<RaidTrackedQuestEntry> entries) =>
+        entries.GroupBy(entry => entry.Quest.TraderId, StringComparer.Ordinal)
             .Select(group =>
             {
                 var first = group.First().Quest;
@@ -41,8 +72,39 @@ public static class RaidTrackedQuestListProjectionBuilder
                 return new RaidTrackedTraderGroup(trader, group.ToArray());
             })
             .ToArray();
-        return new RaidTrackedQuestListProjection(groups);
-    }
+
+    private static bool HasCurrentMapObjective(
+        RaidTrackedQuestEntry entry,
+        IReadOnlyCollection<string> currentMapIds) =>
+        entry.Objectives.Any(objective => objective.Definition.TaskLocations.Any(map =>
+            !map.Id.Equals(QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase)
+            && !map.Id.Equals(QuestObjectiveMapRules.TransitionFilterId, StringComparison.OrdinalIgnoreCase)
+            && currentMapIds.Contains(map.Id, StringComparer.OrdinalIgnoreCase)));
+
+    private static bool HasAnyMapObjective(RaidTrackedQuestEntry entry) =>
+        entry.Objectives.Any(objective => objective.Definition.TaskLocations.Any(map =>
+            map.Id.Equals(QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase)));
+
+    private static string ResolveCurrentMapName(
+        IReadOnlyCollection<RaidTrackedQuestEntry> entries,
+        IReadOnlyCollection<string> currentMapIds) =>
+        entries.SelectMany(entry => entry.Objectives)
+            .SelectMany(objective => objective.Definition.TaskLocations)
+            .FirstOrDefault(map =>
+                !map.Id.Equals(QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase)
+                && !map.Id.Equals(QuestObjectiveMapRules.TransitionFilterId, StringComparison.OrdinalIgnoreCase)
+                && currentMapIds.Contains(map.Id, StringComparer.OrdinalIgnoreCase))
+            ?.Name
+        ?? currentMapIds.FirstOrDefault()
+        ?? string.Empty;
+
+    private static string ResolveAnyMapName(IReadOnlyCollection<RaidTrackedQuestEntry> entries) =>
+        entries.SelectMany(entry => entry.Objectives)
+            .SelectMany(objective => objective.Definition.TaskLocations)
+            .FirstOrDefault(map => map.Id.Equals(
+                QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase))
+            ?.Name
+        ?? "Any";
 
     private static IReadOnlyList<RaidTrackedObjectiveEntry> OpenObjectives(
         QuestGraphNode node,
@@ -80,8 +142,19 @@ public sealed record RaidTrackedTraderGroup(
     QuestTrader Trader,
     IReadOnlyList<RaidTrackedQuestEntry> Quests);
 
+public enum RaidTrackedQuestListScope
+{
+    CurrentMap,
+    Any,
+}
+
+public sealed record RaidTrackedQuestListSection(
+    RaidTrackedQuestListScope Scope,
+    string Name,
+    IReadOnlyList<RaidTrackedTraderGroup> Groups);
+
 public sealed record RaidTrackedQuestListProjection(
-    IReadOnlyList<RaidTrackedTraderGroup> Groups)
+    IReadOnlyList<RaidTrackedQuestListSection> Sections)
 {
     public static RaidTrackedQuestListProjection Empty { get; } = new([]);
 }

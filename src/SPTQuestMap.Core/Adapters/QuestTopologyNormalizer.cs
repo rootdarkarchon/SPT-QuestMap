@@ -223,17 +223,7 @@ public static class QuestTopologyNormalizer
             (node.ExclusionRules ?? []).Select(rule => new QuestExclusionRule(
                 rule.CausedByQuestId,
                 rule.RequiredStatuses ?? [])).ToArray(),
-            (node.Rewards ?? []).Select(reward => new QuestReward(
-                reward.Id,
-                reward.Type,
-                reward.TargetId,
-                reward.TargetName,
-                reward.Value,
-                reward.LoyaltyLevel,
-                reward.TraderName,
-                reward.Unknown,
-                reward.Hidden,
-                (reward.Items ?? []).Select(item => new QuestRewardItem(item.TemplateId, item.Name, item.Count)).ToArray())).ToArray(),
+            MapRewards(node.Rewards),
             (node.UnknownConditions ?? []).Select(condition => new QuestUnknownCondition(
                 condition.Stage,
                 condition.ConditionType,
@@ -241,6 +231,7 @@ public static class QuestTopologyNormalizer
             profileGenerated,
             repeatableKind)
         {
+            Penalties = MapRewards(node.Penalties),
             TaskLocation = new QuestMapReference(
                 string.IsNullOrWhiteSpace(node.TaskLocation?.Id)
                     ? QuestObjectiveMapRules.NoLocationFilterId
@@ -269,4 +260,17 @@ public static class QuestTopologyNormalizer
 
     private static QuestRequirement MapRequirement(QuestRequirementPayload requirement) =>
         new(requirement.Kind, requirement.TraderId, requirement.Compare, requirement.Value);
+
+    private static QuestReward[] MapRewards(IEnumerable<QuestRewardPayload>? rewards) =>
+        (rewards ?? []).Select(reward => new QuestReward(
+            reward.Id,
+            reward.Type,
+            reward.TargetId,
+            reward.TargetName,
+            reward.Value,
+            reward.LoyaltyLevel,
+            reward.TraderName,
+            reward.Unknown,
+            reward.Hidden,
+            (reward.Items ?? []).Select(item => new QuestRewardItem(item.TemplateId, item.Name, item.Count)).ToArray())).ToArray();
 }

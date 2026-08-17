@@ -128,6 +128,10 @@
         }
         <section class="detail-section"><h3>@Localizer["details.objectives"]</h3>@(State.CompareMode ? ComparisonObjectiveList(node, questState, comparisonState) : ObjectiveList(node, questState))</section>
         <section class="detail-section"><h3>@Localizer["details.rewards"]</h3>@RewardList(node.Rewards)</section>
+        @if (node.Penalties.Length > 0)
+        {
+            <section class="detail-section penalties-section"><h3>@Localizer["details.penalties"]</h3>@RewardList(node.Penalties, true)</section>
+        }
         <section class="detail-section"><h3>@Localizer["details.prerequisites"]</h3>@RelationList(State.Incoming(node.Id).Select(item => item.Edge.SourceId))</section>
         <section class="detail-section"><h3>@Localizer["details.successors"]</h3>@RelationList(State.Outgoing(node.Id).Select(item => item.Edge.TargetId))</section>
     }
@@ -362,10 +366,10 @@
 
     internal static string RelevantItemMarkup(string name) => QuestRichTextSanitizer.Sanitize(name);
 
-    private RenderFragment RewardList(IReadOnlyList<QuestRewardDto> rewards) => builder =>
+    private RenderFragment RewardList(IReadOnlyList<QuestRewardDto> rewards, bool penalties = false) => builder =>
     {
         if (rewards.Count == 0) { builder.OpenElement(0, "p"); builder.AddAttribute(1, "class", "muted"); builder.AddContent(2, Localizer["common.none"]); builder.CloseElement(); return; }
-        builder.OpenElement(3, "ul"); builder.AddAttribute(4, "class", "rewards"); var sequence = 5;
+        builder.OpenElement(3, "ul"); builder.AddAttribute(4, "class", penalties ? "rewards penalties" : "rewards"); var sequence = 5;
         foreach (var reward in rewards)
         {
             builder.OpenElement(sequence++, "li"); builder.AddAttribute(sequence++, "class", "reward-row");

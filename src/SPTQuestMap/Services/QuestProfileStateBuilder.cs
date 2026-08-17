@@ -362,6 +362,12 @@ internal sealed class QuestProfileStateBuilder(
             items,
             traders
         );
+        var penalties = QuestTemplateMapper.BuildRewards(
+            quest.Rewards?.GetValueOrDefault("Fail") ?? [],
+            locale,
+            items,
+            traders
+        );
         var node = new QuestNodeDto(
             questId,
             typeName,
@@ -381,6 +387,7 @@ internal sealed class QuestProfileStateBuilder(
             rewards
         )
         {
+            Penalties = penalties,
             TaskLocation = QuestTemplateMapper.BuildTaskLocation(location, objectives, ui),
             ActualMaps = actualMaps.Maps,
             ActualMapsComplete = actualMaps.Complete,

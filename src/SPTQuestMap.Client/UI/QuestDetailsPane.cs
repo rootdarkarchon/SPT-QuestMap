@@ -224,6 +224,12 @@ internal sealed class QuestDetailsPane : IDisposable
         BuildObjectives(body, node, liveState, liveQuest, future, objectivesHeight);
         AddStackDivider(body);
         var rewardsHeight = BuildRewards(body, node, liveQuest, future);
+        var penaltiesHeight = 0f;
+        if (node.Penalties.Any(reward => _workspace.ShowHiddenRewards() || !reward.Hidden))
+        {
+            AddStackDivider(body);
+            penaltiesHeight = BuildPenalties(body, node, liveQuest, future);
+        }
         Canvas.ForceUpdateCanvases();
         LayoutRebuilder.ForceRebuildLayoutImmediate(body);
         bodyViewport.GetComponent<ScrollRect>().verticalNormalizedPosition = 1f;
@@ -231,8 +237,8 @@ internal sealed class QuestDetailsPane : IDisposable
         QuestMapDebugLog.Info(_workspace.Log,
             "QUESTMAP_M07_DETAILS " +
             $"quest={node.Id}; live={!future}; actionBound={actionBound}; raidOnlyTrader={raidOnlyTrader}; objectives={node.Objectives.Count}; " +
-            $"rewards={node.Rewards.Count}; summary={!string.IsNullOrWhiteSpace(node.Summary)}; hiddenRewards={_workspace.ShowHiddenRewards()}; " +
-            $"descriptionHeight={descriptionHeight:0.#}; objectivesHeight={objectivesHeight:0.#}; rewardsHeight={rewardsHeight:0.#}; fixedHeaderAndActions=True; nestedScroll=False");
+            $"rewards={node.Rewards.Count}; penalties={node.Penalties.Count}; summary={!string.IsNullOrWhiteSpace(node.Summary)}; hiddenRewards={_workspace.ShowHiddenRewards()}; " +
+            $"descriptionHeight={descriptionHeight:0.#}; objectivesHeight={objectivesHeight:0.#}; rewardsHeight={rewardsHeight:0.#}; penaltiesHeight={penaltiesHeight:0.#}; fixedHeaderAndActions=True; nestedScroll=False");
     }
 
     private float DesiredDescriptionHeight(QuestGraphNode node)
@@ -383,20 +389,21 @@ internal sealed class QuestDetailsPane : IDisposable
         }
 
         var actions = new List<(string Label, QuestDetailsActionKind Kind, Func<Task> Action)>();
-        switch (liveQuest.QuestStatus)
+        if (liveQuest.QuestStatus == EQuestStatus.AvailableForStart)
         {
-            case EQuestStatus.AvailableForStart:
-                actions.Add((ClientLocale.Text("label.accept"), QuestDetailsActionKind.Accept, () => _actionHost!.Accept(liveQuest)));
-                break;
-            case EQuestStatus.FailRestartable:
-                actions.Add((ClientLocale.Text("label.restart"), QuestDetailsActionKind.Restart, () => _actionHost!.Accept(liveQuest)));
-                break;
-            case EQuestStatus.AvailableForFinish:
-                // Tarkov's quest-level FinishQuest path is the native TURN IN
-                // operation. Objective HAND OVER remains the separate
-                // QuestObjectiveView/HandoverItem path below.
-                actions.Add((ClientLocale.Text("label.turnIn"), QuestDetailsActionKind.Complete, () => _actionHost!.Complete(liveQuest)));
-                break;
+            actions.Add((ClientLocale.Text("label.accept"), QuestDetailsActionKind.Accept, () => _actionHost!.Accept(liveQuest)));
+        }
+        else if (liveQuest.QuestStatus == EQuestStatus.FailRestartable)
+        {
+            actions.Add((ClientLocale.Text("label.restart"), QuestDetailsActionKind.Restart, () => _actionHost!.Accept(liveQuest)));
+        }
+        else if (_topology is not null && _workspace.CanComplete(_topology, node.Id))
+        {
+            // Tarkov's quest-level FinishQuest path is the native TURN IN
+            // operation. Objective HAND OVER remains the separate
+            // QuestObjectiveView/HandoverItem path below.
+            actions.Add((ClientLocale.Text("label.turnIn"), QuestDetailsActionKind.Complete,
+                () => CompleteQuest(node, liveQuest)));
         }
         if (liveQuest.IsChangeAllowed)
             actions.Add((ClientLocale.Text("label.replace"), QuestDetailsActionKind.Replace, () => _actionHost!.Replace()));
@@ -434,6 +441,13 @@ internal sealed class QuestDetailsPane : IDisposable
             }, ClientLocale.Arg("quest", node.Name)));
             x += width + gap;
         }
+    }
+
+    private Task CompleteQuest(QuestGraphNode node, QuestClass quest)
+    {
+        return _workspace.TryPrepareForCompletion(node, quest)
+            ? _actionHost!.Complete(quest)
+            : Task.CompletedTask;
     }
 
     private void BuildDescription(RectTransform parent, QuestGraphNode node, float height)
@@ -627,12 +641,9 @@ internal sealed class QuestDetailsPane : IDisposable
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         var conditions = LiveConditions(liveQuest);
         var y = 0f;
-        var orderedObjectives = node.Objectives.Any(objective => !objective.ContributesToProgress)
-            ? node.Objectives.ToArray()
-            : node.Objectives
-                .OrderBy(value => value.Index ?? int.MaxValue)
-                .ThenBy(value => value.Id, StringComparer.Ordinal)
-                .ToArray();
+        // The topology feed already carries the dependency-aware native order.
+        // Do not re-sort here or handover objectives can move ahead of their find objectives.
+        var orderedObjectives = node.Objectives.ToArray();
         var contentHeight = orderedObjectives.Length == 0
             ? 42f
             : orderedObjectives.Select((objective, index) =>
@@ -779,19 +790,37 @@ internal sealed class QuestDetailsPane : IDisposable
         }
     }
 
-    private float BuildRewards(RectTransform parent, QuestGraphNode node, QuestClass? liveQuest, bool future)
+    private float BuildRewards(RectTransform parent, QuestGraphNode node, QuestClass? liveQuest, bool future) =>
+        BuildRewardSection(parent, node.Rewards, liveQuest, future,
+            "RewardsSection", "RewardsContent", "label.rewards", EQuestStatus.Success, true);
+
+    private float BuildPenalties(RectTransform parent, QuestGraphNode node, QuestClass? liveQuest, bool future) =>
+        BuildRewardSection(parent, node.Penalties, liveQuest, future,
+            "PenaltiesSection", "PenaltiesContent", "label.penalties", EQuestStatus.Fail, false);
+
+    private float BuildRewardSection(
+        RectTransform parent,
+        IReadOnlyList<QuestReward> sourceRewards,
+        QuestClass? liveQuest,
+        bool future,
+        string sectionName,
+        string contentName,
+        string titleKey,
+        EQuestStatus nativeStatus,
+        bool showEmpty)
     {
-        var rewards = node.Rewards.Where(reward => _workspace.ShowHiddenRewards() || !reward.Hidden).ToArray();
+        var rewards = sourceRewards.Where(reward => _workspace.ShowHiddenRewards() || !reward.Hidden).ToArray();
+        if (!showEmpty && rewards.Length == 0) return 0f;
         var fallbackContentHeight = rewards.Length == 0 ? 42f : rewards.Length * 47f;
-        var section = StackRect("RewardsSection", parent, 32f + fallbackContentHeight);
-        var title = UnityUiFactory.AddText(section.gameObject, ClientLocale.Text("label.rewards"), 14,
+        var section = StackRect(sectionName, parent, 32f + fallbackContentHeight);
+        var title = UnityUiFactory.AddText(section.gameObject, ClientLocale.Text(titleKey), 14,
             TextAlignmentOptions.TopLeft, Color.white);
         title.margin = new Vector4(10, 5, 10, 0);
         title.fontStyle = FontStyles.Bold;
-        var content = CreateExpandedRegion(section, "RewardsContent", 28, fallbackContentHeight);
+        var content = CreateExpandedRegion(section, contentName, 28, fallbackContentHeight);
 
         if (!future && liveQuest is not null
-            && TryBuildNativeRewards(node, liveQuest, section, parent, content, out var nativeHeight))
+            && TryBuildNativeRewards(sourceRewards, liveQuest, nativeStatus, section, parent, content, out var nativeHeight))
         {
             content.sizeDelta = new Vector2(content.sizeDelta.x, nativeHeight);
             SetPreferredHeight(section, 32f + nativeHeight);
@@ -821,8 +850,9 @@ internal sealed class QuestDetailsPane : IDisposable
     }
 
     private bool TryBuildNativeRewards(
-        QuestGraphNode node,
+        IReadOnlyList<QuestReward> mappedRewards,
         QuestClass quest,
+        EQuestStatus status,
         RectTransform section,
         RectTransform layoutRoot,
         RectTransform content,
@@ -831,9 +861,9 @@ internal sealed class QuestDetailsPane : IDisposable
         height = 0;
         var source = NativeQuestViewSource.FindForDetails();
         var prefab = source is null ? null : NativeQuestViewSource.GetRewardListPrefab(source);
-        if (prefab is null || !quest.Template.Rewards.TryGetValue(EQuestStatus.Success, out var rawRewards)) return false;
+        if (prefab is null || !quest.Template.Rewards.TryGetValue(status, out var rawRewards)) return false;
         var rewards = rawRewards.Where((_, index) =>
-            _workspace.ShowHiddenRewards() || index >= node.Rewards.Count || !node.Rewards[index].Hidden).ToArray();
+            _workspace.ShowHiddenRewards() || index >= mappedRewards.Count || !mappedRewards[index].Hidden).ToArray();
         var instance = UnityEngine.Object.Instantiate(prefab, content, false);
         instance.name = "NativeRewardHost";
         instance.SetActive(true);
@@ -937,9 +967,8 @@ internal sealed class QuestDetailsPane : IDisposable
         NativeQuestObjectiveSkip.ShowConfirmation(
             _questController,
             quest,
-            objective.Id,
+            objective,
             node.Name,
-            objective.Text,
             () => !_disposed && _workspace.TaskSkippingEnabled() && _workspace.MutationsAllowed(),
             () =>
             {

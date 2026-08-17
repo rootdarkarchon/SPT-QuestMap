@@ -1,6 +1,6 @@
 # Development status — current operational handoff
 
-> Last consolidated: 2026-08-15. This is a current-state handoff for Codex, not an append-only development diary.
+> Last consolidated: 2026-08-17. This is a current-state handoff for Codex, not an append-only development diary.
 >
 > **Maintenance rule:** update existing sections in place. Keep at most 8 short entries under **Recent M8 changes**. Do not accumulate old PIDs, superseded hashes, screenshot-by-screenshot refinements, or full implementation narratives here. Git history and the archived long status are the source for archaeology.
 
@@ -12,9 +12,9 @@
 - **Scope:** frozen at the completed server-authoritative multi-map/task-location integration. Do not add discretionary features. A new behavior is allowed only when required to fix a regression or fulfill an already-frozen requirement safely.
 - **Blockers:** none.
 - **Next work:** complete `M08-packaging-release-hardening.md`, finish the live release matrix, reconcile release configuration/documentation, audit compatibility/fallback paths, and publish the final combined deliverable.
-- **Current validation:** zero compiler warnings/errors; **88/88 shared-core tests** and **165/165 server/browser tests**.
-- **Current combined package:** `artifacts/release/SPT-QuestMap-2.0.0.zip`, 15 entries / 12 files, 823,880 bytes, SHA-256 `83F037D7041602181D5E3FD5D228BE862A6055E2798EBC99B0493AC6F62560BC`. Root inspection found zero escaping files, zero `.js`/`.ts` files, and only the four expected QuestMap project DLL entries. Package DLLs are client `A0D689590683FC96AB0EC3306810F232F77CF0DDD2C72EC18F8361DA66BDD8A7` and server `B44013399DEBF3AE677B17F5A0B2098713611D4CBD836BD2E98EA58D4A98F4B9`.
-- **Deployment state:** the latest client and client Core are deployed and hash-matched at `A0D689590683FC96AB0EC3306810F232F77CF0DDD2C72EC18F8361DA66BDD8A7` and `DCA2BD86BC6BC283CC634888A90AE5DDC0C31F954F04A7DCB5E2B19D87EA2770`. The server was not changed because no restart command was supplied; its installed DLL/Core remain `DFF278CE60F050070EC7C374C705BC86B15748F50CA53FB00C96DE8A367F6AF8` and `27724B9DC9A8E3A551B155A5205909D8ED59BCE42580B6829B4B4B5BD794C66D`.
+- **Current validation:** zero compiler warnings/errors; **90/90 shared-core tests** and **166/166 server/browser tests**.
+- **Current combined package:** `artifacts/release/SPT-QuestMap-2.0.0.zip`, 15 entries / 12 files, 832,466 bytes, SHA-256 `F1BB4832598BBDEE797186F923875468BB2F876E08A32CAD148EC86B3B216FFA`. Root inspection found zero escaping files, zero `.js`/`.ts` files, and only the four expected QuestMap project DLL entries. Package DLLs are client `CBE22CCCE45BD3FCE09855BDD01DE59B00E345A2B14557EC1D453F8F170FF209` and server `5DCB10026F899E9C35B276A0CD1ECC986AD4EAD2CAA605679D962EC01854C285`.
+- **Deployment state:** the latest client and client Core are deployed and hash-matched at `CBE22CCCE45BD3FCE09855BDD01DE59B00E345A2B14557EC1D453F8F170FF209` and `4F3FC21968C4B40A17A957D0863A8D02840F25FA2A7FF40B723A442796B3E8FC`. The server was not changed because no restart command was supplied; its installed DLL/Core remain `DFF278CE60F050070EC7C374C705BC86B15748F50CA53FB00C96DE8A367F6AF8` and `27724B9DC9A8E3A551B155A5205909D8ED59BCE42580B6829B4B4B5BD794C66D`.
 
 Every source-changing M8 slice must create a **fresh** combined archive with `scripts/package-release.ps1 -Target Both`; record entry/file count, byte size, SHA-256, and root-containment inspection. Never cite an archive generated before the latest source change.
 
@@ -99,6 +99,7 @@ Important accepted cases:
 
 - Profile truth is `PmcData.Quests`, `CompletedConditions`, and `TaskConditionCounters`; live client checkers take precedence for in-raid changes.
 - Objective completion uses the actual comparator and caps displayed current values at the configured requirement. Boolean `1 / 1` objectives do not show redundant numbers/bars.
+- Server dependency/source order is authoritative for objective display; native details, the Tasks table, and the browser must not independently re-sort it.
 - `oneSessionOnly` and `doNotResetIfCounterCompleted` are transported. A resettable active counter can correctly downgrade stale completion after death.
 - Unknown future/modded objective types default to **in-raid relevant** to avoid silently hiding work.
 - WTT CommonLib `CounterCreator` + nested `Salvage` / `LeaveItemAtLocation` children are display-compatible. Only the outer counter contributes to overall quest percentage; nested rows remain non-actionable.
@@ -127,7 +128,7 @@ Rules:
 
 ## Accepted browser behavior
 
-- Profile-aware dependency graph with deterministic layout, culling/spatial hit testing, pan/zoom/fit/focus, selection chains, trader/search/future/finished/level filters, repeatable bands, Collector/Lightkeeper routes, map artwork, terminal/completion markers, rich details, rewards, summaries, Wiki links, relevant items, and persistence.
+- Profile-aware dependency graph with deterministic layout, culling/spatial hit testing, pan/zoom/fit/focus, selection chains, trader/search/future/finished/level filters, repeatable bands, Collector/Lightkeeper routes, map artwork, terminal/completion markers, rich details, success rewards, failure penalties, summaries, Wiki links, relevant items, and persistence.
 - Difference-first profile comparison with symmetric A/B state/objective/gate differences and category filters.
 - Server-owned localization for all installed locales: English plus 16 non-English catalogs. QuestMap branding is invariant.
 - Sanitized rich text supports the accepted safe HTML/Tarkov tag set; executable/embedded markup and event attributes are rejected.
@@ -168,7 +169,7 @@ Native location-strip order is:
 
 ### Details and actions
 
-- Quest/location banners, Description/Summary/Relevant Items tabs, objective progress, native reward cards, Wiki/Flea actions, route markers, and fixed action strip are accepted.
+- Quest/location banners, Description/Summary/Relevant Items tabs, authoritative objective order/progress, native success-reward and failure-penalty cards, Wiki/Flea actions, route markers, and fixed action strip are accepted.
 - Accept/Restart, Turn In, Replace, and objective Hand In continue through native EFT views/controllers. Lightkeeper and BTR Driver remain read-only outside their raid-only interaction context.
 - Accept/restart, turn-in, and objective hand-in share a one-second real-time duplicate-press guard across table and details controls. Repeatable replacement is intentionally outside that narrow guard.
 - Handover eligibility is resolved progressively through initialized native objective hosts; do not synchronously scan every objective during table construction.
@@ -208,7 +209,7 @@ Native location-strip order is:
 Do not regress these accepted design choices:
 
 - Server graph propagation uses indexes/queues and a topological pass, with bounded fallback for malformed cycles; do not restore graph-depth-dependent fixed-point scans.
-- Base loose-loot/quest-item map data is materialized once during startup at `PostDBModLoader + 0`, before Lots of Loot Redux's `+6` transformer registration. Requests must not enumerate locations, dereference `LooseLoot.Value`, or rebuild the item-to-map index.
+- Loose-loot/quest-item map data is materialized once during startup by `QuestMapTopologyPreload`; applicable locations are scanned in parallel into isolated results and merged deterministically, while the item-to-map index remains keyed by `MongoId` through objective resolution. Requests must not enumerate locations, dereference `LooseLoot.Value`, or rebuild that index.
 - The native topology route serializes its valid JSON directly; do not run the multi-megabyte payload through redundant response regex replacement.
 - Ordinary out-of-raid refreshes use the smaller profile/repeatable feed, reuse static topology/layout, batch changed quest IDs, and rebuild geometry only when membership changes.
 - In Progress filters/sorts/expansion are incremental; table rows and artwork are reused.
@@ -270,12 +271,12 @@ Keep this list short and replace/collapse older entries instead of extending it 
 
 - Raid exit now schedules one retry-safe, coalesced server-topology reload; the F12 Diagnostics section also exposes that full reload manually for stale/missing native data without an EFT restart.
 - New-raid identity includes canonical map plus EFT quest controller, so every new raid restores raid filter defaults even on the same map while same-raid suspend/resume preserves the user's filters.
-- Task-map aliases are canonicalized before deduplication, preventing Mongo/internal aliases from producing duplicate map banners such as Customs/Customs.
-- Ambiguous zone IDs use native quest location only when it is one of that zone's candidates; unrelated zones remain additive and unresolved ambiguity remains multi-map.
-- Accept/restart, turn-in, and objective hand-in now share a one-second cross-surface press guard and matching temporary control disablement; repeatable replacement remains outside it.
-- Server-authoritative per-objective relevance/task scopes and finalized Any/Transition/mixed-map semantics drive every browser/native filter, task, tracking, and raid surface.
+- Task-map aliases are canonicalized before deduplication, preventing Mongo/internal aliases from producing duplicate map banners such as Customs/Customs; quest-item spawn inference retains `MongoId` keys end-to-end and parallelizes independent location materialization before a deterministic merge.
+- Quest details now preserve the server's dependency-aware objective order, and both browser/native details transport and render SPT `Fail` rewards as a distinct **Penalties for failure** section below success rewards.
+- Accept/restart, turn-in, and objective hand-in share a one-second cross-surface press guard and matching temporary control disablement; repeatable replacement remains outside it.
+- Server-authoritative per-objective relevance/task scopes and finalized Any/Transition/mixed-map semantics drive every browser/native filter, task, tracking, and raid surface; the hotkey raid list uses full available screen height and current-map-first/Any-second task bands without splitting mixed-scope quests.
 - Main-menu warm-up and server topology construction were hardened against visible first-open delay and large-modded-graph regressions; Russian/fixed-width localization and raid text sizing were also stabilized.
-- Compatibility hardening covers WTT, prestige/external gates, repeatable wording, reset objectives, malformed/duplicate mod data, Arena exclusion, and the **Out of Raid** presentation.
+- Failed one-session objectives now reset stale native completion through EFT's initialized checker/controller before they can be skipped again; a narrowly stuck `Started` quest whose necessary conditions are all effectively complete can replay one satisfied condition before the ordinary native Turn In flow. Compatibility hardening otherwise retains WTT, prestige/external gates, malformed mod data, Arena exclusion, and **Out of Raid** presentation.
 
 ## Milestone summary
 

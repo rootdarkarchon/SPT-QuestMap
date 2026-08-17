@@ -8,6 +8,8 @@ using EFT;
 using EFT.Quests;
 using EFT.UI;
 using SPTQuestMap.Client.Diagnostics;
+using SPTQuestMap.Core.Models;
+using SPTQuestMap.Core.Rules;
 using UnityEngine;
 
 namespace SPTQuestMap.Client.UI;
@@ -21,13 +23,13 @@ internal static class NativeQuestObjectiveSkip
     public static void ShowConfirmation(
         AbstractQuestControllerClass questController,
         QuestClass quest,
-        string objectiveId,
+        QuestObjectiveDefinition objective,
         string questName,
-        string objectiveText,
         Func<bool> stillAllowed,
         Action completed,
         ManualLogSource log)
     {
+        var objectiveId = objective.Id;
         if (!stillAllowed())
         {
             QuestMapDebugLog.Info(log,
@@ -35,7 +37,7 @@ internal static class NativeQuestObjectiveSkip
             return;
         }
 
-        if (!TryResolve(questController, quest, objectiveId, out _, out _, out var reason))
+        if (!TryResolve(questController, quest, objective, out _, out _, out _, out var reason))
         {
             QuestMapDebugLog.Info(log,
                 $"QUESTMAP_OBJECTIVE_SKIP_AVAILABLE quest={quest.Id}; objective={objectiveId}; available=False; reason={reason}");
@@ -52,7 +54,7 @@ internal static class NativeQuestObjectiveSkip
 
         context.ShowMessageWindow(
             description: ClientLocale.Format("skip.confirmation",
-                ClientLocale.Arg("quest", questName), ClientLocale.Arg("objective", objectiveText)),
+                ClientLocale.Arg("quest", questName), ClientLocale.Arg("objective", objective.Text)),
             acceptAction: () =>
             {
                 if (!stillAllowed())
@@ -62,7 +64,7 @@ internal static class NativeQuestObjectiveSkip
                     return;
                 }
 
-                if (!TrySkip(questController, quest, objectiveId, log)) return;
+                if (!TrySkip(questController, quest, objective, log)) return;
                 completed();
             },
             cancelAction: () => { },
@@ -72,10 +74,12 @@ internal static class NativeQuestObjectiveSkip
     private static bool TrySkip(
         AbstractQuestControllerClass questController,
         QuestClass quest,
-        string objectiveId,
+        QuestObjectiveDefinition objective,
         ManualLogSource log)
     {
-        if (!TryResolve(questController, quest, objectiveId, out var condition, out var checker, out var reason))
+        var objectiveId = objective.Id;
+        if (!TryResolve(questController, quest, objective, out var condition, out var checker,
+                out var resetStaleCompletion, out var reason))
         {
             log.LogWarning(
                 $"QUESTMAP_OBJECTIVE_SKIP quest={quest.Id}; objective={objectiveId}; completed=False; reason={reason}");
@@ -84,6 +88,21 @@ internal static class NativeQuestObjectiveSkip
 
         try
         {
+            // EFT's supported reset event removes the stale completed-condition
+            // marker and zeros its task counter through the initialized quest
+            // controller. This is required after a failed one-session objective:
+            // the profile can retain the marker while the live counter is reset.
+            if (resetStaleCompletion)
+            {
+                checker.Reset();
+                if (quest.IsConditionDone(condition))
+                {
+                    log.LogWarning(
+                        $"QUESTMAP_OBJECTIVE_SKIP quest={quest.Id}; objective={objectiveId}; completed=False; reason=native reset retained stale completion");
+                    return false;
+                }
+            }
+
             // SPT-Skipper 1.1.4 uses the same two-part operation. The getter
             // override is required because many objective types derive their
             // value from inventory/game state instead of the task counter.
@@ -118,14 +137,17 @@ internal static class NativeQuestObjectiveSkip
     private static bool TryResolve(
         AbstractQuestControllerClass questController,
         QuestClass quest,
-        string objectiveId,
+        QuestObjectiveDefinition objective,
         out Condition condition,
         out ConditionProgressChecker checker,
+        out bool resetStaleCompletion,
         out string reason)
     {
         condition = null!;
         checker = null!;
+        resetStaleCompletion = false;
         reason = string.Empty;
+        var objectiveId = objective.Id;
 
         if (questController is not GClass4005 exactController || exactController.GClass4024_0 is null)
         {
@@ -159,11 +181,22 @@ internal static class NativeQuestObjectiveSkip
             return false;
         }
 
-        if (quest.IsConditionDone(condition))
+        var recordedComplete = quest.IsConditionDone(condition);
+        var counterStateAuthoritative = objective.OneSessionOnly
+            && !objective.DoNotResetIfCounterCompleted;
+        var effectivelyComplete = QuestProgressRules.IsComplete(
+            recordedComplete,
+            checker.CurrentValue,
+            objective.RequiredValue ?? condition.value,
+            objective.Compare,
+            counterStateAuthoritative);
+        if (effectivelyComplete)
         {
             reason = "objective already complete";
             return false;
         }
+
+        resetStaleCompletion = recordedComplete && counterStateAuthoritative;
 
         return true;
     }

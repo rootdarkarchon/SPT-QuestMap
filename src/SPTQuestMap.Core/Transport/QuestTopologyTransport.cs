@@ -98,6 +98,7 @@ public sealed class QuestNodePayload
     public QuestObjectivePayload[] Objectives { get; set; } = [];
     public QuestExclusionPayload[] ExclusionRules { get; set; } = [];
     public QuestRewardPayload[] Rewards { get; set; } = [];
+    public QuestRewardPayload[] Penalties { get; set; } = [];
     public QuestUnknownConditionPayload[] UnknownConditions { get; set; } = [];
     public QuestMapReferencePayload TaskLocation { get; set; } = new();
     public QuestMapReferencePayload[] ActualMaps { get; set; } = [];

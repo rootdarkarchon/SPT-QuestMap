@@ -309,6 +309,23 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
+    public void Normalize_PreservesSuccessRewardsAndFailurePenalties()
+    {
+        var node = Node("quest", "Prapor", "Any");
+        node.Rewards = [new QuestRewardPayload { Id = "success", Type = "Experience", Value = 100 }];
+        node.Penalties = [new QuestRewardPayload { Id = "failure", Type = "TraderStanding", Value = -0.1, TraderName = "Prapor" }];
+
+        var normalized = QuestTopologyNormalizer.Normalize(Feed([node], [])).NodesById["quest"];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(normalized.Rewards.Single().Id, Is.EqualTo("success"));
+            Assert.That(normalized.Penalties.Single().Id, Is.EqualTo("failure"));
+            Assert.That(normalized.Penalties.Single().Value, Is.EqualTo(-0.1));
+        });
+    }
+
+    [Test]
     public void NormalizeRetainsAuthoritativeQuestAndObjectiveMapAssignments()
     {
         var node = Node("mapped", "Prapor", "Any");
@@ -1361,19 +1378,24 @@ public sealed class QuestGraphCoreTests
             topology,
             overlay,
             ["current-zulu", "transit-alpha", "any-bravo", "other-map"],
-            ["any", "marathon", "customs"]);
+            ["customs"]);
 
         Assert.Multiple(() =>
         {
-            Assert.That(projection.Groups.Select(group => group.Trader.Id),
+            Assert.That(projection.Sections.Select(section => section.Scope),
+                Is.EqualTo(new[] { RaidTrackedQuestListScope.CurrentMap }));
+            Assert.That(projection.Sections[0].Name, Is.EqualTo("Customs"));
+            Assert.That(projection.Sections[0].Groups.Select(group => group.Trader.Id),
                 Is.EqualTo(new[] { praporId }));
-            Assert.That(projection.Groups[0].Quests.Select(quest => quest.Quest.Id),
+            Assert.That(projection.Sections[0].Groups[0].Quests.Select(quest => quest.Quest.Id),
                 Is.EqualTo(new[] { "transit-alpha", "current-zulu" }));
-            Assert.That(projection.Groups.SelectMany(group => group.Quests).Select(quest => quest.Quest.Id),
+            Assert.That(projection.Sections.SelectMany(section => section.Groups)
+                .SelectMany(group => group.Quests).Select(quest => quest.Quest.Id),
                 Does.Not.Contain("other-map"));
-            Assert.That(projection.Groups.SelectMany(group => group.Quests).Select(quest => quest.Quest.Id),
+            Assert.That(projection.Sections.SelectMany(section => section.Groups)
+                .SelectMany(group => group.Quests).Select(quest => quest.Quest.Id),
                 Does.Not.Contain("any-bravo"));
-            Assert.That(projection.Groups[0].Quests[1].Objectives.Select(objective => objective.Definition.Id),
+            Assert.That(projection.Sections[0].Groups[0].Quests[1].Objectives.Select(objective => objective.Definition.Id),
                 Is.EqualTo(new[] { "open" }));
         });
     }
@@ -1433,18 +1455,63 @@ public sealed class QuestGraphCoreTests
             nodes.Select(node => node.Id).ToArray(),
             ["customs-mongo"],
             smartTracking: true);
-        var quests = projection.Groups.SelectMany(group => group.Quests)
+        var currentSection = projection.Sections.Single(section =>
+            section.Scope == RaidTrackedQuestListScope.CurrentMap);
+        var currentQuests = currentSection.Groups.SelectMany(group => group.Quests)
             .ToDictionary(entry => entry.Quest.Id, StringComparer.Ordinal);
 
         Assert.Multiple(() =>
         {
-            Assert.That(quests.Keys, Is.EquivalentTo(new[] { "mixed-any", "specific", "transition" }));
-            Assert.That(quests["mixed-any"].Objectives.Select(entry => entry.Definition.Id),
+            Assert.That(projection.Sections.Select(section => section.Scope),
+                Is.EqualTo(new[] { RaidTrackedQuestListScope.CurrentMap }));
+            Assert.That(currentQuests.Keys, Is.EquivalentTo(new[] { "mixed-any", "specific", "transition" }));
+            Assert.That(currentQuests["mixed-any"].Objectives.Select(entry => entry.Definition.Id),
                 Is.EqualTo(new[] { "global", "matching" }));
-            Assert.That(quests["specific"].Objectives.Select(entry => entry.Definition.Id),
+            Assert.That(currentQuests["specific"].Objectives.Select(entry => entry.Definition.Id),
                 Is.EqualTo(new[] { "specific-zone" }));
-            Assert.That(quests["transition"].Objectives.Select(entry => entry.Definition.Id),
+            Assert.That(currentQuests["transition"].Objectives.Select(entry => entry.Definition.Id),
                 Is.EqualTo(new[] { "transition-matching" }));
+        });
+    }
+
+    [Test]
+    public void RaidTrackedList_PutsAnyOnlyQuestsAfterCurrentMapWithoutSplittingMixedQuest()
+    {
+        var mixed = Node("mixed", "Prapor", "Any");
+        mixed.Objectives =
+        [
+            new QuestObjectivePayload { Id = "any", Text = "Any", TaskLocations = [Map("any", "Any")] },
+            new QuestObjectivePayload { Id = "current", Text = "Current", TaskLocations = [Map("customs", "Customs")] },
+        ];
+        var anyOnly = Node("any-only", "Therapist", "Any");
+        anyOnly.Objectives =
+        [
+            new QuestObjectivePayload { Id = "any-only-task", Text = "Any", TaskLocations = [Map("any", "Any")] },
+        ];
+        var nodes = new[] { mixed, anyOnly };
+        var feed = Feed(nodes, []);
+        feed.DefaultVisibleQuestIds = nodes.Select(node => node.Id).ToArray();
+        feed.AllApplicableQuestIds = nodes.Select(node => node.Id).ToArray();
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("mixed", "Started"), Quest("any-only", "Started"))) with
+        {
+            ApplicableQuestIds = nodes.Select(node => node.Id).ToArray(),
+        };
+
+        var projection = RaidTrackedQuestListProjectionBuilder.Build(
+            topology, overlay, nodes.Select(node => node.Id).ToArray(), ["customs"], smartTracking: true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(projection.Sections.Select(section => section.Scope),
+                Is.EqualTo(new[] { RaidTrackedQuestListScope.CurrentMap, RaidTrackedQuestListScope.Any }));
+            Assert.That(projection.Sections[0].Groups.SelectMany(group => group.Quests).Select(quest => quest.Quest.Id),
+                Is.EqualTo(new[] { "mixed" }));
+            Assert.That(projection.Sections[0].Groups.SelectMany(group => group.Quests).Single().Objectives
+                .Select(objective => objective.Definition.Id), Is.EqualTo(new[] { "any", "current" }));
+            Assert.That(projection.Sections[1].Groups.SelectMany(group => group.Quests).Select(quest => quest.Quest.Id),
+                Is.EqualTo(new[] { "any-only" }));
         });
     }
 

@@ -43,6 +43,7 @@
   "label.summary": "SUMMARY",
   "label.relevantItems": "RELEVANT ITEMS",
   "label.rewards": "REWARDS",
+  "label.penalties": "PENALTIES FOR FAILURE",
   "label.accept": "ACCEPT",
   "label.restart": "RESTART",
   "label.turnIn": "TURN IN",

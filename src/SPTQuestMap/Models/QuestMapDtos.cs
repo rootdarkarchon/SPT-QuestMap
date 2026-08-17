@@ -37,6 +37,8 @@ public sealed record QuestNodeDto(
     QuestRewardDto[] Rewards
 )
 {
+    public QuestRewardDto[] Penalties { get; init; } = [];
+
     public QuestMapReferenceDto TaskLocation { get; init; } = new(
         QuestObjectiveMapRules.NoLocationFilterId,
         "Out of Raid",

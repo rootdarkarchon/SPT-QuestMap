@@ -155,6 +155,12 @@ internal sealed class QuestTopologyBuilder(
                 )
             )
             {
+                Penalties = QuestTemplateMapper.BuildRewards(
+                    quest.Rewards?.GetValueOrDefault(QuestStatusEnum.Fail.ToString()) ?? [],
+                    locale,
+                    items,
+                    traders
+                ),
                 TaskLocation = QuestTemplateMapper.BuildTaskLocation(nativeLocation, objectives, ui),
                 ActualMaps = actualMaps.Maps,
                 ActualMapsComplete = actualMaps.Complete,

@@ -17,7 +17,7 @@ namespace SPTQuestMap.Client.UI;
 internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
 {
     private const float Width = 430f;
-    private const float MaximumHeight = 760f;
+    private const float ScreenEdgeMargin = 24f;
     private const float QuestColumnLeft = 48f;
 
     private ManualLogSource? _log;
@@ -28,6 +28,7 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
     private Func<float>? _displayDuration;
     private Func<RaidTrackedQuestListProjection>? _projection;
     private QuestAssetSpriteCache? _assetCache;
+    private Canvas? _canvas;
     private RectTransform? _panel;
     private Image? _panelBackground;
     private RectTransform? _content;
@@ -96,9 +97,9 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
 
     private void Build()
     {
-        var canvas = gameObject.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 31990;
+        _canvas = gameObject.AddComponent<Canvas>();
+        _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        _canvas.sortingOrder = 31990;
         var scaler = gameObject.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
@@ -192,25 +193,34 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
         {
             var projection = _projection();
             var y = 0f;
-            if (projection.Groups.Count == 0)
+            if (projection.Sections.Count == 0)
             {
                 AddTextRow("NoTrackedQuests", ClientLocale.Text("label.noTrackedQuests"), ref y, 30, 11,
                     TextAlignmentOptions.Center, new Color(0.72f, 0.74f, 0.72f, 1));
             }
-            foreach (var group in projection.Groups)
+            foreach (var section in projection.Sections)
             {
-                var groupTop = y;
-                foreach (var quest in group.Quests) BuildQuest(quest, ref y, QuestColumnLeft);
-                y = Math.Max(y, groupTop + 34f);
-                BuildTraderColumn(group, groupTop, y - groupTop, version);
-                y += 6f;
+                if (y > 0) y += 5f;
+                BuildLocationHeader(section, ref y);
+                foreach (var group in section.Groups)
+                {
+                    var groupTop = y;
+                    foreach (var quest in group.Quests) BuildQuest(quest, ref y, QuestColumnLeft);
+                    y = Math.Max(y, groupTop + 34f);
+                    BuildTraderColumn(group, groupTop, y - groupTop, version);
+                    y += 6f;
+                }
             }
 
             ApplyContentGeometry(y);
+            var groups = projection.Sections.Sum(section => section.Groups.Count);
+            var quests = projection.Sections.Sum(section => section.Groups.Sum(group => group.Quests.Count));
+            var objectives = projection.Sections.Sum(section =>
+                section.Groups.Sum(group => group.Quests.Sum(quest => quest.Objectives.Count)));
             QuestMapDebugLog.Info(_log,
                 "QUESTMAP_M06_RAID_TRACKED_LIST " +
-                $"groups={projection.Groups.Count}; quests={projection.Groups.Sum(group => group.Quests.Count)}; " +
-                $"objectives={projection.Groups.Sum(group => group.Quests.Sum(quest => quest.Objectives.Count))}; " +
+                $"sections={projection.Sections.Count}; groups={groups}; quests={quests}; " +
+                $"objectives={objectives}; " +
                 $"contentHeight={y:0.#}; visible=True");
         }
         catch (Exception exception)
@@ -228,12 +238,37 @@ internal sealed class RaidTrackedQuestListView : MonoBehaviour, IDisposable
     {
         if (_panel is null || _content is null) return;
         _content.sizeDelta = new Vector2(0, contentHeight);
-        _panel.sizeDelta = new Vector2(Width, Mathf.Clamp(contentHeight + 16f, 40f, MaximumHeight));
+        Canvas.ForceUpdateCanvases();
+        var scaleFactor = Mathf.Max(_canvas?.scaleFactor ?? 1f, 0.001f);
+        var screenHeight = (_canvas?.pixelRect.height ?? Screen.height) / scaleFactor;
+        var availableHeight = Mathf.Max(40f, screenHeight - ScreenEdgeMargin);
+        _panel.sizeDelta = new Vector2(Width, Mathf.Clamp(contentHeight + 16f, 40f, availableHeight));
         if (_scroll is not null)
         {
-            Canvas.ForceUpdateCanvases();
             _scroll.verticalNormalizedPosition = 1f;
         }
+    }
+
+    private void BuildLocationHeader(RaidTrackedQuestListSection section, ref float y)
+    {
+        var row = TopRect($"Location-{section.Scope}", y, 24f);
+        row.gameObject.AddComponent<Image>().color = new Color(0.10f, 0.115f, 0.115f, 0.96f);
+        var textRoot = UnityUiFactory.CreateRect("Text", row);
+        UnityUiFactory.Stretch(textRoot, 8, 8, 0, 0);
+        var sectionName = section.Scope == RaidTrackedQuestListScope.Any
+            ? ClientLocale.Text("common.any")
+            : section.Name;
+        var label = UnityUiFactory.AddText(textRoot.gameObject, sectionName, 11,
+            TextAlignmentOptions.MidlineLeft, new Color(0.84f, 0.81f, 0.68f, 1f));
+        label.enableWordWrapping = false;
+        label.overflowMode = TextOverflowModes.Ellipsis;
+        var divider = UnityUiFactory.CreateRect("Divider", row);
+        divider.anchorMin = new Vector2(0, 0);
+        divider.anchorMax = new Vector2(1, 0);
+        divider.pivot = new Vector2(0.5f, 0);
+        divider.sizeDelta = new Vector2(0, 1);
+        divider.gameObject.AddComponent<Image>().color = new Color(0.42f, 0.39f, 0.27f, 0.85f);
+        y += 24f;
     }
 
     private void BuildTraderColumn(RaidTrackedTraderGroup group, float top, float height, int version)
