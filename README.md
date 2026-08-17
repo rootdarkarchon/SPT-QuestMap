@@ -44,6 +44,12 @@ The native client validates the installed identity and required UI/action target
 
 When either in-game Tasks replacement is enabled, QuestMap renders a completely custom task table rather than extending EFT's native task-list rows. Mods that patch or decorate the native list—most notably **DrakiaXYZ Quest Tracker** and **Task List Fixes**—cannot apply their task-list integration to QuestMap's replacement. QuestMap provides its own profile-scoped pin/tracking controls, in-raid progress notifications, tracked-quest overlay, sorting, filtering, and corrected task presentation; the corresponding Quest Tracker and Task List Fixes behavior is therefore largely redundant. Do not expect those mods' native-list additions to appear inside QuestMap.
 
+### Server-startup performance
+
+QuestMap materializes SPT's loose-loot location data once during server startup to build its quest-item spawn-map lookup. SPT also runs every loose-loot transformer registered by installed mods as part of that same lazy materialization, so a slow transformer can extend server startup substantially even though QuestMap's own lookup scan remains negligible.
+
+In one measured heavily modded setup, the preload processed **9,309 items**, **252 quest items**, and **19 locations** into **176 quest-item spawn mappings** in **4.01 seconds** total using 12 workers. The parallel materialization wall time was **4.00 seconds**, while QuestMap's combined location scan took only **0.56 ms** and its item filtering took **2.01 ms**. These measurements confirm that order-of-magnitude startup delays in this phase can come from other SPT loose-loot transformers rather than QuestMap's scanning or mapping work.
+
 ## Installation
 
 The combined archive is the recommended installation. For a server/browser-only setup, install only `SPT/user/mods/SPT-QuestMap/`; the BepInEx client is not required. A client-only installation is not supported: `BepInEx/plugins/SPTQuestMap/` requires the matching server component to be installed and running.
