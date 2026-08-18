@@ -259,19 +259,7 @@ public static class GlobalQuestGraphProjectionBuilder
         var visible = topology.Nodes
             .Where(node => applicable.Contains(node.Id)
                 && string.Equals(node.TraderId, options.TraderId, StringComparison.Ordinal))
-            .Where(node => !QuestGraphRules.HasUnmetPrerequisiteGate(topology, node.Id, overlay))
-            .Where(node => QuestGraphRules.ClassifyProfileDisplayState(topology, node, overlay) is
-                QuestMapDisplayStateKind.ReadyToFinish or
-                QuestMapDisplayStateKind.Available or
-                QuestMapDisplayStateKind.InProgress or
-                QuestMapDisplayStateKind.RestartableFailure or
-                QuestMapDisplayStateKind.PrestigeGated or
-                QuestMapDisplayStateKind.LevelGated or
-                QuestMapDisplayStateKind.TraderGated or
-                QuestMapDisplayStateKind.TraderUnavailable or
-                QuestMapDisplayStateKind.Pending or
-                QuestMapDisplayStateKind.Locked or
-                QuestMapDisplayStateKind.Unknown)
+            .Where(node => IsVisibleTraderTask(topology, node, overlay))
             .Select(node => node.Id)
             .ToHashSet(StringComparer.Ordinal);
 
@@ -299,6 +287,42 @@ public static class GlobalQuestGraphProjectionBuilder
         }
 
         return visible;
+    }
+
+    private static bool IsVisibleTraderTask(
+        QuestGraphTopology topology,
+        QuestGraphNode node,
+        QuestProfileOverlay overlay)
+    {
+        var state = QuestGraphRules.ClassifyProfileDisplayState(topology, node, overlay);
+        if (state is not (
+            QuestMapDisplayStateKind.ReadyToFinish or
+            QuestMapDisplayStateKind.Available or
+            QuestMapDisplayStateKind.InProgress or
+            QuestMapDisplayStateKind.RestartableFailure or
+            QuestMapDisplayStateKind.PrestigeGated or
+            QuestMapDisplayStateKind.LevelGated or
+            QuestMapDisplayStateKind.TraderGated or
+            QuestMapDisplayStateKind.TraderUnavailable or
+            QuestMapDisplayStateKind.Pending or
+            QuestMapDisplayStateKind.Locked or
+            QuestMapDisplayStateKind.Unknown))
+        {
+            return false;
+        }
+
+        // AvailableForStart prerequisites decide whether a quest can be accepted.
+        // Once the live quest has started, advanced to hand-in, or failed in a
+        // restartable state, a predecessor may legitimately have advanced beyond
+        // the exact status that originally unlocked it. Do not hide that live quest.
+        if (state is QuestMapDisplayStateKind.InProgress or
+            QuestMapDisplayStateKind.ReadyToFinish or
+            QuestMapDisplayStateKind.RestartableFailure)
+        {
+            return true;
+        }
+
+        return !QuestGraphRules.HasUnmetPrerequisiteGate(topology, node.Id, overlay);
     }
 
     private static bool MatchesActiveStatus(QuestMapDisplayStateKind status, string filter) => filter switch

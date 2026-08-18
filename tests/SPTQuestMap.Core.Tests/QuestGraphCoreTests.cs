@@ -1287,6 +1287,35 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
+    public void TraderTasksProjection_DoesNotReapplyStartGateToReadyQuest()
+    {
+        var nodes = new[]
+        {
+            Node("forced-alliance", "Prapor", "Any"),
+            Node("tarkov-butcher", "Prapor", "Any"),
+        };
+        var feed = Feed(nodes, [Edge("forced-alliance", "tarkov-butcher", "Started")]);
+        feed.DefaultVisibleQuestIds = nodes.Select(node => node.Id).ToArray();
+        feed.AllApplicableQuestIds = nodes.Select(node => node.Id).ToArray();
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var overlay = QuestOverlayBuilder.Build(topology, Snapshot(
+            Quest("forced-alliance", "Success"),
+            Quest("tarkov-butcher", "AvailableForFinish"))) with
+        {
+            ApplicableQuestIds = nodes.Select(node => node.Id).ToArray(),
+        };
+
+        Assert.That(QuestGraphRules.HasUnmetPrerequisiteGate(topology, "tarkov-butcher", overlay), Is.True,
+            "The predecessor has legitimately advanced beyond the Started status that unlocked the live quest.");
+
+        var projection = GlobalQuestGraphProjectionBuilder.Build(topology, DeterministicGraphLayout.Build(topology), overlay,
+            new GlobalQuestGraphOptions(GlobalQuestGraphMode.InProgress, false, false, false, null, "prapor", null, null,
+                QuestRouteFilter.None, TraderTasksContext: true));
+
+        Assert.That(projection.Nodes.Select(node => node.Id), Is.EqualTo(new[] { "tarkov-butcher" }));
+    }
+
+    [Test]
     public void TraderGraphContext_AddsOnlyDirectSuccessorsOfInProgressTraderQuests()
     {
         var nodes = new[]
