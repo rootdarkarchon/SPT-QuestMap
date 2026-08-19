@@ -1,22 +1,22 @@
 # Development status — current operational handoff
 
-> Last consolidated: 2026-08-17. This is a current-state handoff for Codex, not an append-only development diary.
+> Last consolidated: 2026-08-19. This is a current-state handoff for Codex, not an append-only development diary.
 >
-> **Maintenance rule:** update existing sections in place. Keep at most 8 short entries under **Recent M8 changes**. Do not accumulate old PIDs, superseded hashes, screenshot-by-screenshot refinements, or full implementation narratives here. Git history and the archived long status are the source for archaeology.
+> **Maintenance rule:** update existing sections in place. Keep at most 8 short entries under **Final M8 changes**. Do not accumulate old PIDs, superseded hashes, screenshot-by-screenshot refinements, or full implementation narratives here. Git history and the archived long status are the source for archaeology.
 
 ## Status at a glance
 
 - **Release:** `2.0.0` combined server/web + in-game client.
 - **Accepted browser baseline:** the server/Blazor Milestone 4 application and difference-first profile comparison originally completed as `1.3.0`, retained in the `2.0.0` product.
-- **Milestones:** in-game M0–M7 are complete and user-accepted. **M8 is active** for stabilization, validation, compatibility/fallback review, packaging, and release hardening.
-- **Scope:** frozen at the completed server-authoritative multi-map/task-location integration. Do not add discretionary features. A new behavior is allowed only when required to fix a regression or fulfill an already-frozen requirement safely.
+- **Milestones:** in-game M0–M8 are complete and user-accepted. The `ingame-ui` work has been merged into `main` and is closed as the completed 2.0 in-game implementation.
+- **Scope:** the 2.0 feature scope is complete and remains frozen at the server-authoritative multi-map/task-location integration. Further 2.0 work is maintenance: verified regressions, compatibility corrections, and release servicing only. New feature work belongs in a separately approved post-2.0 scope.
 - **Blockers:** none.
-- **Next work:** complete `M08-packaging-release-hardening.md`, finish the live release matrix, reconcile release configuration/documentation, audit compatibility/fallback paths, and publish the final combined deliverable.
+- **Next work:** no M8 or `ingame-ui` milestone work remains. Future work begins from `main` as post-2.0 maintenance or as a separately scoped compatibility/feature milestone.
 - **Current validation:** zero compiler warnings/errors; **91/91 shared-core tests** and **166/166 server/browser tests**.
 - **Current combined package:** `artifacts/release/SPT-QuestMap-2.0.0.zip`, 15 entries / 12 files, 832,549 bytes, SHA-256 `4C48F8B2C3D269F7116F2DD2A4EACA7DE3F1FA3BB398BACCD8C9ABDA7665BFA1`. Root inspection found zero escaping files, zero `.js`/`.ts` files, and only the four expected QuestMap project DLL entries. Package DLLs are client `CE60E9E5085530E80716372E75278431F157F8F2954C0EDBF374138ADE23D894` and server `7FD6993486F71A306C94479361921E2C1C7103DEF6E55C2C00C81F5DDA104BAB`.
-- **Deployment state:** the latest client and client Core are deployed and hash-matched at `CBE22CCCE45BD3FCE09855BDD01DE59B00E345A2B14557EC1D453F8F170FF209` and `4F3FC21968C4B40A17A957D0863A8D02840F25FA2A7FF40B723A442796B3E8FC`. The server was not changed because no restart command was supplied; its installed DLL/Core remain `DFF278CE60F050070EC7C374C705BC86B15748F50CA53FB00C96DE8A367F6AF8` and `27724B9DC9A8E3A551B155A5205909D8ED59BCE42580B6829B4B4B5BD794C66D`.
+- **Last recorded automated deployment state:** the installed client/client Core were hash-matched at `CBE22CCCE45BD3FCE09855BDD01DE59B00E345A2B14557EC1D453F8F170FF209` and `4F3FC21968C4B40A17A957D0863A8D02840F25FA2A7FF40B723A442796B3E8FC`. The installed server DLL/Core remained `DFF278CE60F050070EC7C374C705BC86B15748F50CA53FB00C96DE8A367F6AF8` and `27724B9DC9A8E3A551B155A5205909D8ED59BCE42580B6829B4B4B5BD794C66D` because no restart command was supplied. This records the last automated local deployment only; the combined artifact above is the final M8 release evidence.
 
-Every source-changing M8 slice must create a **fresh** combined archive with `scripts/package-release.ps1 -Target Both`; record entry/file count, byte size, SHA-256, and root-containment inspection. Never cite an archive generated before the latest source change.
+Every source-changing 2.0 maintenance slice must create a **fresh** combined archive with `scripts/package-release.ps1 -Target Both`; record entry/file count, byte size, SHA-256, and root-containment inspection. Never cite an archive generated before the latest source change.
 
 ## Exact runtime target
 
@@ -250,9 +250,9 @@ scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.0.0
 - Never poll or wait for server readiness after restart. The user confirms runtime readiness.
 - Compare staged and installed SHA-256 values after copy. Do not restart an unchanged server package.
 
-## Current M8 release matrix
+## Final M8 acceptance record
 
-These are pending confirmations, not known blockers or presumed defects:
+The user accepted the integrated 2.0 in-game UI and closed M8 on 2026-08-19. The following uncommon or environment-dependent cases remain useful post-release smoke/regression coverage, but they are not unfinished milestone work or known blockers:
 
 1. **Task-location semantics:** live Safe Corridor must retain Reserve while excluding Arena; Chemical - Part 1 must not show duplicate Customs; Work Smarter must not inherit Labyrinth from its ambiguous `exit777` zone. Confirm `Out of Raid` labels/tooltips and stable `no-location` transport behavior.
 2. **Mixed scopes:** verify one quest containing concrete map + Any + Out of Raid across global table membership, objective visibility, omission summary, headers, and tracked raid list.
@@ -263,9 +263,9 @@ These are pending confirmations, not known blockers or presumed defects:
 7. **Native lifecycle/actions:** recheck Fika handover/turn-in, post-raid details reopening, one-second duplicate-press rejection, hidden-host cleanup, the mandatory post-raid topology refresh after repeatables change during a raid, and the manual F12 force-reload action.
 8. **Modded content:** opportunistically validate WTT Doom Arcade Salvage/Block and Content Backport Prestige templates on installations that actually contain them.
 
-Release closure then requires final documentation/config reconciliation, compatibility/fallback audit, combined packaging, root inspection, hashes, and the acceptance matrix record.
+M8 closure retained the successful combined build/test/package evidence above. Future releases should reuse this matrix proportionally to the affected code instead of reopening the completed milestone.
 
-## Recent M8 changes
+## Final M8 changes
 
 Keep this list short and replace/collapse older entries instead of extending it indefinitely.
 
@@ -289,7 +289,7 @@ Keep this list short and replace/collapse older entries instead of extending it 
 - **Client M5:** shared core and production pooled/batched graph renderer. Complete.
 - **Client M6:** global replacement, Tasks table, filters, pinning/tracking, retained screen lifecycle, targeted raid monitor, notifications, and tracked list. Complete and accepted.
 - **Client M7:** reusable details/native actions, transaction reconciliation, repeatable deltas, trader full workspace, relevant items/Wiki/Flea, and final interaction polish. Complete and accepted.
-- **M8:** stabilization, multi-map/task-scope finalization, compatibility fixes, performance, validation, and release hardening. Active.
+- **M8:** stabilization, multi-map/task-scope finalization, compatibility fixes, performance, validation, and release hardening. Complete and user-accepted on 2026-08-19; `ingame-ui` is merged into `main`.
 
 ## Superseded designs — do not resurrect
 
@@ -318,6 +318,6 @@ Use these for detail rather than expanding this status again:
 - `docs/quest-actions-plan.md` — server-only action design audit; native client now owns actual live actions.
 - `docs/ingame-map/M06-native-web-parity-audit.md` — native/browser parity decisions.
 - `docs/ingame-ui-branch-changes.md` — exhaustive player-facing branch summary.
-- M8 plan/checklist documents — current release-hardening work.
+- M8 plan/checklist documents — closed 2.0 release-hardening record.
 
 Historical implementation narratives, old release hashes, PIDs, failed candidates, and superseded UI geometry belong in Git history or the archived long status, not in this operational handoff.

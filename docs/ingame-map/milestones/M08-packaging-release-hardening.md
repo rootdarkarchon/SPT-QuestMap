@@ -14,7 +14,9 @@ M08 does not accept discretionary feature expansion. A regression may expose a m
 
 ## Status
 
-**Active.** Implementation scope is frozen and stabilization is ongoing. A prior M07 runtime pass remains useful evidence, but it does not substitute for current-build validation after the later action, refresh, performance, tracking, localization, metadata, and multi-map changes.
+**Complete and user-accepted on 2026-08-19.** The integrated `ingame-ui` implementation is merged into `main`. M8 closed after the frozen-scope action, refresh, performance, tracking, localization, metadata, multi-map, compatibility, and release-hardening corrections were incorporated and the final combined build/test/package evidence was recorded in `docs/development-status.md`.
+
+Uncommon environment-specific cases retained in the working status are post-release smoke/regression coverage, not unfinished milestone work. Further 2.0 changes are maintenance; discretionary features require a separately approved post-2.0 scope.
 
 ## Compatibility handling
 
@@ -176,9 +178,11 @@ Using disposable profile backups, verify:
 - no duplicate actions;
 - no client/server inventory divergence.
 
-## Release gate
+## Release gate — passed
 
-The project is release-ready when:
+The user accepted the integrated in-game UI and closed this gate on 2026-08-19. The criteria below remain the durable release definition for future maintenance packages.
+
+The durable release definition remains:
 
 - server and client build from documented commands;
 - exact SPT 4.0.13 compatibility is enforced;
@@ -194,4 +198,4 @@ The project is release-ready when:
 
 ## Final report
 
-Use `templates/final-report-template.md` and record the final result in repository documentation or the delivery response.
+The final milestone result, validation totals, artifact structure, hashes, acceptance decision, and remaining non-blocking regression coverage are recorded in `docs/development-status.md`. Use `templates/final-report-template.md` only when a future release needs a separate delivery report.

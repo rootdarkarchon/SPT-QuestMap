@@ -1,8 +1,10 @@
-# `ingame-ui` branch changes compared with `main`
+# `ingame-ui` implementation — merged into `main`
+
+> **Final status:** completed, user-accepted, and merged into `main` on 2026-08-19. This document is retained as the historical player-facing summary of the branch that produced QuestMap 2.0's native in-game UI; it no longer describes an active branch or milestone.
 
 ## Comparison basis
 
-This document describes the repository state on branch `ingame-ui` at commit `0d1af9e`, compared with `main` at merge base `9b9912f`. It covers the 17 branch commits and the tracked branch contents. Local untracked reference checkouts under `reference/` are not product changes and are excluded.
+This document describes the historical repository state on branch `ingame-ui` at commit `0d1af9e`, compared with its original `main` merge base `9b9912f`. It covers the initial 17-commit branch snapshot and its tracked contents; later M8 stabilization changes were subsequently merged with the complete implementation. Local untracked reference checkouts under `reference/` are not product changes and are excluded.
 
 At this snapshot the branch changes 115 tracked files, adds approximately 23,646 lines, and removes approximately 295 lines. The dominant change is a new native BepInEx/EFT client and a runtime-neutral shared graph library; the existing server-hosted `/questmap` application remains supported and gains several parity and metadata features.
 

@@ -52,6 +52,8 @@ and report exact blockers instead of guessing.
 | 7 | `M07-custom-detail-pane.md` | Add the QuestMap-owned detail pane while retaining native action controllers. |
 | 8 | `M08-packaging-release-hardening.md` | Compatibility handling, packaging, docs, regression testing, and release readiness. |
 
+All milestones M0–M8 are complete and user-accepted as of 2026-08-19. The resulting `ingame-ui` implementation is merged into `main`; this bundle is retained as the implementation and acceptance record rather than an active work queue.
+
 ## Milestone transition rule
 
 A milestone is complete only when its acceptance gate is met and recorded in `docs/development-status.md`.

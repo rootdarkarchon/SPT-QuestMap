@@ -12,7 +12,7 @@ Milestone 6 global and trader graph screens must be stable. M06 was user-accepte
 
 The original M07 implementation checkpoint was user-accepted on 2026-08-09. The reusable pane is implemented on both the global Tasks workspace and the trader-scoped replacement. Trader Tasks/Quest Map composition uses the same table, graph, selection, detail, tracking, asset-cache, and native-action components as the global screen. That checkpoint covered multiple quest accept, fulfillment, handover, turn-in, successor-unlock, and presentation transitions together with workspace bounds, filters, grouping, shared selection/detail synchronization, pinning, notification opacity, and trader objective expansion.
 
-That acceptance is historical evidence for the reviewed build, not final acceptance of the current 2.0 candidate. Substantial planned 2.0 work followed it, including changes that cross M07's detail, action, reconciliation, and presentation boundaries. Feature scope is now frozen at the completed multi-map integration boundary. Current-build regression correction, performance work, validation, and any narrowly necessary corrective additions are owned by active Milestone 8 rather than reopening M07 as an ongoing feature milestone.
+That acceptance is historical evidence for the reviewed build, while final acceptance of the integrated 2.0 implementation was recorded when M8 closed on 2026-08-19. Substantial planned 2.0 work followed the original M7 checkpoint, including changes that crossed M7's detail, action, reconciliation, and presentation boundaries. Those corrections were completed under M8 without reopening M7 as an ongoing feature milestone.
 
 ### Release-facing UI polish
 
