@@ -20,7 +20,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.ref_name }}
       SPT_VERSION: 4.0.13
-      SPT_RELEASE_REPOSITORY: sp-tarkov/build
+      SPT_RELEASE_REPOSITORY: sp-tushonka/build
 
     steps:
       - name: Check out tagged source
