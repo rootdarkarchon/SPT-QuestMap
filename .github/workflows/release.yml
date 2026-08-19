@@ -40,10 +40,23 @@ jobs:
               throw "Release tag '$env:RELEASE_TAG' is not a semantic version such as 1.1.0."
           }
 
-          [xml]$project = Get-Content -LiteralPath 'src/SPTQuestMap/SPTQuestMap.csproj' -Raw
-          $projectVersion = @($project.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
-          if ($projectVersion.Count -ne 1 -or $projectVersion[0] -ne $env:RELEASE_TAG) {
-              throw "Tag '$env:RELEASE_TAG' does not match project version '$($projectVersion[0])'."
+          $projects = @(
+              'src/SPTQuestMap/SPTQuestMap.csproj',
+              'src/SPTQuestMap.Core/SPTQuestMap.Core.csproj',
+              'src/SPTQuestMap.Client/SPTQuestMap.Client.csproj'
+          )
+          foreach ($projectPath in $projects) {
+              [xml]$project = Get-Content -LiteralPath $projectPath -Raw
+              $projectVersion = @($project.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
+              if ($projectVersion.Count -ne 1 -or $projectVersion[0] -ne $env:RELEASE_TAG) {
+                  throw "Tag '$env:RELEASE_TAG' does not match $projectPath version '$($projectVersion[0])'."
+              }
+          }
+
+          $pluginVersion = Select-String -LiteralPath 'src/SPTQuestMap.Client/QuestMapClientPlugin.cs' `
+              -Pattern 'PluginVersion\s*=\s*"([^"]+)"' | Select-Object -First 1
+          if (-not $pluginVersion -or $pluginVersion.Matches[0].Groups[1].Value -ne $env:RELEASE_TAG) {
+              throw "Tag '$env:RELEASE_TAG' does not match the client BepInEx plugin version."
           }
 
       - name: Download official SPT build references
@@ -82,20 +95,44 @@ jobs:
 
           "SPT_INSTALL_ROOT=$sptInstallRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Download access-controlled EFT build references
+        shell: pwsh
+        env:
+          EFT_REFERENCE_ARCHIVE_URL: ${{ secrets.EFT_REFERENCE_ARCHIVE_URL }}
+          EFT_REFERENCE_ARCHIVE_SHA256: ${{ secrets.EFT_REFERENCE_ARCHIVE_SHA256 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:EFT_REFERENCE_ARCHIVE_URL) -or
+              [string]::IsNullOrWhiteSpace($env:EFT_REFERENCE_ARCHIVE_SHA256)) {
+              throw 'Configure EFT_REFERENCE_ARCHIVE_URL and EFT_REFERENCE_ARCHIVE_SHA256 repository secrets for the private EFT 40087 build-reference ZIP.'
+          }
+
+          $archive = Join-Path $env:RUNNER_TEMP 'eft-40087-build-references.zip'
+          Invoke-WebRequest -Uri $env:EFT_REFERENCE_ARCHIVE_URL -OutFile $archive
+          $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
+          if ($actualHash -ne $env:EFT_REFERENCE_ARCHIVE_SHA256.ToUpperInvariant()) {
+              throw "Private EFT reference archive hash mismatch. Expected $env:EFT_REFERENCE_ARCHIVE_SHA256, found $actualHash."
+          }
+
+          Expand-Archive -LiteralPath $archive -DestinationPath $env:SPT_INSTALL_ROOT -Force
+          $assemblyCSharp = Join-Path $env:SPT_INSTALL_ROOT 'EscapeFromTarkov_Data/Managed/Assembly-CSharp.dll'
+          $assemblyHash = (Get-FileHash -LiteralPath $assemblyCSharp -Algorithm SHA256).Hash
+          if ($assemblyHash -ne 'FAEF6F0B9F142F9D047495EC3DCCFD5D6974AC048368DC7045955CF54B117982') {
+              throw "Assembly-CSharp.dll does not match EFT build 40087: $assemblyHash"
+          }
+
       - name: Build and test
         shell: pwsh
         run: |
-          dotnet test 'src/SPTQuestMap/SPTQuestMap.slnx' `
-              --configuration Release `
-              "-p:SptInstallRoot=$env:SPT_INSTALL_ROOT"
-          if ($LASTEXITCODE -ne 0) {
-              throw "Build or tests failed with exit code $LASTEXITCODE."
-          }
+          ./scripts/build.ps1 `
+              -Target Both `
+              -Configuration Release `
+              -SptRoot $env:SPT_INSTALL_ROOT
 
       - name: Package install-ready archive
         shell: pwsh
         run: |
           ./scripts/package-release.ps1 `
+              -Target Both `
               -Configuration Release `
               -Version $env:RELEASE_TAG `
               -OutputDirectory 'artifacts/release'

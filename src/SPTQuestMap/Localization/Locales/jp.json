@@ -69,6 +69,7 @@
   "legend.requiresStarted": "開始が必要",
   "legend.requiresOutcome": "いずれかの結果",
   "state.PrerequisiteGated": "前提クエストでロック",
+  "state.PrestigeGated": "プレステージでロック",
   "state.LevelGated": "レベルでロック",
   "state.TraderGated": "トレーダーでロック",
   "state.TraderUnavailable": "トレーダー利用不可",
@@ -87,5 +88,6 @@
   "details.branchAlternatives": "代替分岐",
   "details.prerequisites": "前提条件",
   "details.successors": "直接の後続クエスト",
-  "profile.aria": "プロフィール"
+  "profile.aria": "プロフィール",
+  "location.none": "レイド外"
 }

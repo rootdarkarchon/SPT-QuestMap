@@ -1,0 +1,153 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using SPTQuestMap.Client.Data;
+using SPTQuestMap.Client.Localization;
+using SPTQuestMap.Core.Models;
+using SPTQuestMap.Core.Rules;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace SPTQuestMap.Client.UI;
+
+internal static class QuestMapLocationVisuals
+{
+    public static IReadOnlyList<QuestMapReference> DisplayMaps(
+        QuestGraphNode node,
+        string fallbackBannerUrl)
+    {
+        if (QuestObjectiveMapRules.UsesActualMaps(node))
+        {
+            if (node.TaskLocation.Id.Equals(
+                    QuestObjectiveMapRules.TransitionFilterId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return
+                [
+                    node.TaskLocation,
+                    .. node.ActualMaps,
+                ];
+            }
+
+            return node.ActualMaps;
+        }
+
+        return
+        [
+            node.TaskLocation with
+            {
+                BannerImageUrl = node.TaskLocation.BannerImageUrl ?? fallbackBannerUrl,
+            },
+        ];
+    }
+
+    public static TMP_Text AddCompactMapText(
+        RectTransform parent,
+        IReadOnlyList<QuestMapReference> maps,
+        int maximumLines,
+        float fontSize,
+        TextAlignmentOptions alignment,
+        Color color)
+    {
+        if (maximumLines < 1) throw new ArgumentOutOfRangeException(nameof(maximumLines));
+        if (parent.GetComponent<Graphic>() is null)
+        {
+            var hitTarget = parent.gameObject.AddComponent<Image>();
+            hitTarget.color = Color.clear;
+            hitTarget.raycastTarget = true;
+        }
+        var names = maps.Select(map => map.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var truncated = names.Length > maximumLines;
+        var visible = truncated
+            ? names.Take(maximumLines - 1).Concat(["…"])
+            : names.AsEnumerable();
+        var text = UnityUiFactory.AddText(parent.gameObject, string.Join("\n", visible), fontSize, alignment, color);
+        text.fontStyle = FontStyles.Bold;
+        text.enableWordWrapping = false;
+        text.lineSpacing = -10;
+        text.alpha = 1f;
+        text.faceColor = new Color32(255, 255, 255, 255);
+        AddTextShadow(text.gameObject);
+        if (truncated)
+            QuestMapNativeTooltips.Bind(parent.gameObject, () => string.Join("\n", names));
+        return text;
+    }
+
+    public static IReadOnlyList<string> MapNames(IEnumerable<QuestMapReference> maps)
+    {
+        return maps
+            .Where(map => !string.IsNullOrWhiteSpace(map.Id) && !string.IsNullOrWhiteSpace(map.Name))
+            .GroupBy(map => map.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(MapSortGroup)
+            .ThenBy(map => map.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(map => map.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(map => map.Name)
+            .ToArray();
+    }
+
+    private static int MapSortGroup(QuestMapReference map)
+    {
+        if (map.Id.Equals(QuestObjectiveMapRules.NoLocationFilterId, StringComparison.OrdinalIgnoreCase)) return 0;
+        if (map.Id.Equals(QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase)) return 1;
+        if (map.Id.Equals(QuestObjectiveMapRules.TransitionFilterId, StringComparison.OrdinalIgnoreCase)) return 2;
+        return 3;
+    }
+
+    public static void AddArtworkSlices(
+        RectTransform parent,
+        IReadOnlyList<QuestMapReference> maps,
+        string fallbackBannerUrl,
+        Color fallback,
+        float shadeAlpha,
+        QuestAssetSpriteCache assetCache)
+    {
+        var background = parent.GetComponent<Image>() ?? parent.gameObject.AddComponent<Image>();
+        background.color = fallback;
+        if (parent.GetComponent<RectMask2D>() is null) parent.gameObject.AddComponent<RectMask2D>();
+        var count = Math.Max(1, maps.Count);
+        for (var index = 0; index < maps.Count; index++)
+        {
+            var map = maps[index];
+            var slice = UnityUiFactory.CreateRect($"MapArtwork-{index}", parent);
+            slice.anchorMin = new Vector2(index / (float)count, 0);
+            slice.anchorMax = new Vector2((index + 1) / (float)count, 1);
+            slice.offsetMin = Vector2.zero;
+            slice.offsetMax = Vector2.zero;
+            slice.gameObject.AddComponent<RectMask2D>();
+
+            var imageRect = UnityUiFactory.CreateRect("Artwork", slice);
+            UnityUiFactory.Stretch(imageRect);
+            var image = imageRect.gameObject.AddComponent<Image>();
+            image.preserveAspect = false;
+            image.raycastTarget = false;
+            var fitter = imageRect.gameObject.AddComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+            imageRect.gameObject.SetActive(false);
+            var url = map.BannerImageUrl ?? fallbackBannerUrl;
+            assetCache.Request(url, sprite =>
+            {
+                if (image == null || sprite is null) return;
+                image.sprite = sprite;
+                fitter.aspectRatio = sprite.rect.width / sprite.rect.height;
+                imageRect.gameObject.SetActive(true);
+            });
+        }
+
+        var shade = UnityUiFactory.CreateRect("Shade", parent);
+        UnityUiFactory.Stretch(shade);
+        shade.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, shadeAlpha);
+    }
+
+    private static void AddTextShadow(GameObject target)
+    {
+        var outline = target.AddComponent<Outline>();
+        outline.effectColor = new Color(0, 0, 0, 0.98f);
+        outline.effectDistance = new Vector2(1.25f, -1.25f);
+        outline.useGraphicAlpha = true;
+        var shadow = target.AddComponent<Shadow>();
+        shadow.effectColor = new Color(0, 0, 0, 0.92f);
+        shadow.effectDistance = new Vector2(2, -2);
+    }
+}

@@ -69,6 +69,7 @@
   "legend.requiresStarted": "시작 필요",
   "legend.requiresOutcome": "어느 결과든",
   "state.PrerequisiteGated": "선행 퀘스트로 잠김",
+  "state.PrestigeGated": "프레스티지로 잠김",
   "state.LevelGated": "레벨로 잠김",
   "state.TraderGated": "상인으로 잠김",
   "state.TraderUnavailable": "상인 이용 불가",
@@ -87,5 +88,6 @@
   "details.branchAlternatives": "대체 분기",
   "details.prerequisites": "선행 조건",
   "details.successors": "직접 후속 퀘스트",
-  "profile.aria": "프로필"
+  "profile.aria": "프로필",
+  "location.none": "레이드 외부"
 }

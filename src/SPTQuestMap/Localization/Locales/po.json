@@ -69,6 +69,7 @@
   "legend.requiresStarted": "Requer início",
   "legend.requiresOutcome": "Qualquer resultado",
   "state.PrerequisiteGated": "Bloqueada por missão anterior",
+  "state.PrestigeGated": "Bloqueada por prestígio",
   "state.LevelGated": "Bloqueada por nível",
   "state.TraderGated": "Bloqueada por comerciante",
   "state.TraderUnavailable": "Comerciante indisponível",
@@ -87,5 +88,6 @@
   "details.branchAlternatives": "Ramificações alternativas",
   "details.prerequisites": "Pré-requisitos",
   "details.successors": "Sucessoras diretas",
-  "profile.aria": "Perfil"
+  "profile.aria": "Perfil",
+  "location.none": "Fora da incursão"
 }

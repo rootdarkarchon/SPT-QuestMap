@@ -3,12 +3,31 @@ using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Enums;
+using SPTarkov.Server.Core.Utils.Json;
+using SPTQuestMap.Routers;
 using SPTQuestMap.Services;
+using CoreProgressRules = SPTQuestMap.Core.Rules.QuestProgressRules;
 
 namespace SPTQuestMap.Tests;
 
 public sealed class QuestMapDataServiceTests
 {
+    [TestCase("/questmap/client/topology/ge", "/questmap/client/topology", "ge")]
+    [TestCase("/questmap/client/topology/es-mx", "/questmap/client/topology", "es-mx")]
+    [TestCase("/questmap/client/repeatables/ru", "/questmap/client/repeatables", "ru")]
+    public void ClientRouteExtractsRequestedEftLanguage(string url, string route, string expected)
+    {
+        Assert.That(QuestMapClientStaticRouter.GetRequestedLanguage(url, route), Is.EqualTo(expected));
+    }
+
+    [TestCase("/questmap/client/topology", "/questmap/client/topology")]
+    [TestCase("/questmap/client/topology/", "/questmap/client/topology")]
+    [TestCase("/questmap/client/topology/ge/extra", "/questmap/client/topology")]
+    public void ClientRouteFallsBackWhenLanguageSegmentIsAbsentOrInvalid(string url, string route)
+    {
+        Assert.That(QuestMapClientStaticRouter.GetRequestedLanguage(url, route), Is.Null);
+    }
+
     [Test]
     public void BuildLocation_UsesSptLocaleNameForSpecificMap()
     {
@@ -64,14 +83,18 @@ public sealed class QuestMapDataServiceTests
     public void BuildLocationLookup_MapsQuestMongoIdToInternalLocation()
     {
         const string questLocationId = "56f40101d2720b2a4d8b45d6";
-        var customs = new SPTarkov.Server.Core.Models.Eft.Common.Location { Base = new LocationBase { Id = "bigmap" } };
+        var customs = new SPTarkov.Server.Core.Models.Eft.Common.Location
+        {
+            Base = new LocationBase { Id = "bigmap", IdField = new MongoId(questLocationId) },
+        };
 
-        var result = QuestTemplateMapper.BuildLocationLookup(
-            [customs],
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["bigmap"] = questLocationId }
-        );
+        var result = QuestTemplateMapper.BuildLocationLookup([customs]);
 
-        Assert.That(result[questLocationId], Is.SameAs(customs));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result["bigmap"], Is.SameAs(customs));
+            Assert.That(result[questLocationId], Is.SameAs(customs));
+        });
     }
 
     [Test]
@@ -145,7 +168,7 @@ public sealed class QuestMapDataServiceTests
             "legend.priorGate", "legend.levelGate", "legend.traderRequirement", "legend.failedExcluded",
             "legend.collectorRoute", "legend.lightkeeperRoute", "legend.requiresSuccess", "legend.requiresFailure",
             "legend.requiresStarted", "legend.requiresOutcome",
-            "state.PrerequisiteGated", "state.LevelGated", "state.TraderGated", "state.TraderUnavailable",
+            "state.PrerequisiteGated", "state.PrestigeGated", "state.LevelGated", "state.TraderGated", "state.TraderUnavailable",
             "state.InProgress", "state.ReadyToFinish", "state.Excluded", "state.RestartableFailure", "state.Expired",
             "state.Pending", "state.FailRestartable", "state.AvailableAfter", "details.effectiveGates",
             "details.availableAfter", "details.currentBlockers", "details.mutualExclusion", "details.branchAlternatives",
@@ -198,6 +221,8 @@ public sealed class QuestMapDataServiceTests
     public void EdgeRequirementClassificationPreservesMixedStatusMeaning(string[] statuses, string expected)
     {
         Assert.That(QuestGraphRules.ClassifyEdgeRequirement(statuses), Is.EqualTo(expected));
+        var coreExpected = expected == "Other" ? "Unknown" : expected;
+        Assert.That(SPTQuestMap.Core.Rules.QuestGraphRules.ClassifyEdgeRequirement(statuses).ToString(), Is.EqualTo(coreExpected));
     }
 
     [Test]
@@ -243,6 +268,94 @@ public sealed class QuestMapDataServiceTests
         Assert.That(result, Has.Length.EqualTo(2));
         Assert.That(result.Single(item => item.Kind == "Level").Value, Is.EqualTo(20));
         Assert.That(result.Single(item => item.Kind == "TraderStanding").Value, Is.EqualTo(-2));
+    }
+
+    [Test]
+    public void EffectiveRequirementPropagationHandlesLargeReverseOrderedChain()
+    {
+        const int questCount = 1258;
+        var nodes = Enumerable.Range(0, questCount)
+            .Select(index => Node($"q{index:D4}", null) with
+            {
+                DirectRequirements = index == 0 ? [new RequirementDto("Level", null, ">=", 79)] : [],
+            })
+            .ToArray();
+        var edges = Enumerable.Range(0, questCount - 1)
+            .Reverse()
+            .Select(index => new QuestEdgeDto($"q{index:D4}", $"q{index + 1:D4}", ["Success"], 0))
+            .ToArray();
+
+        var result = QuestGraphRules.PropagateEffectiveRequirements(nodes, edges);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Has.Count.EqualTo(questCount));
+            Assert.That(result[$"q{questCount - 1:D4}"], Has.Length.EqualTo(1));
+            Assert.That(result[$"q{questCount - 1:D4}"][0], Is.EqualTo(new RequirementDto("Level", null, ">=", 79)));
+        });
+    }
+
+    [Test]
+    public void EffectiveRequirementPropagationConvergesModdedCycleBeforeContinuingDownstream()
+    {
+        var nodes = new[]
+        {
+            Node("cycle-a", null) with { DirectRequirements = [new RequirementDto("Level", null, ">=", 20)] },
+            Node("cycle-b", null) with { DirectRequirements = [new RequirementDto("TraderStanding", "trader", ">=", 0.2)] },
+            Node("downstream", null),
+        };
+        QuestEdgeDto[] edges =
+        [
+            new("cycle-a", "cycle-b", ["Success"], 0),
+            new("cycle-b", "cycle-a", ["Success"], 0),
+            new("cycle-b", "downstream", ["Success"], 0),
+        ];
+
+        var result = QuestGraphRules.PropagateEffectiveRequirements(nodes, edges);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result["cycle-a"], Is.EquivalentTo(result["cycle-b"]));
+            Assert.That(result["downstream"], Is.EquivalentTo(result["cycle-a"]));
+            Assert.That(result["downstream"], Has.Length.EqualTo(2));
+        });
+    }
+
+    [Test]
+    public void EffectiveRequirementPropagationCombinesEveryDirectPredecessorOnceBeforeContinuing()
+    {
+        var nodes = new[]
+        {
+            Node("root", null) with { DirectRequirements = [new RequirementDto("Level", null, ">=", 10)] },
+            Node("left", null) with { DirectRequirements = [new RequirementDto("Level", null, ">=", 20)] },
+            Node("right", null) with { DirectRequirements = [new RequirementDto("TraderLoyalty", "trader", ">=", 2)] },
+            Node("merge", null) with { DirectRequirements = [new RequirementDto("TraderStanding", "trader", ">=", 0.2)] },
+            Node("downstream", null),
+        };
+        QuestEdgeDto[] edges =
+        [
+            new("root", "left", ["Success"], 0),
+            new("root", "right", ["Success"], 0),
+            new("left", "merge", ["Success"], 0),
+            new("right", "merge", ["Success"], 0),
+            new("merge", "downstream", ["Success"], 0),
+        ];
+
+        var result = QuestGraphRules.PropagateEffectiveRequirements(nodes, edges);
+
+        RequirementDto[] expected =
+        [
+            new("Level", null, ">=", 20),
+            new("TraderLoyalty", "trader", ">=", 2),
+            new("TraderStanding", "trader", ">=", 0.2),
+        ];
+        Assert.Multiple(() =>
+        {
+            Assert.That(result["merge"], Is.EquivalentTo(expected));
+            Assert.That(result["downstream"], Is.EquivalentTo(expected));
+            Assert.That(result["downstream"].Single(requirement => requirement.Kind == "Level").Value, Is.EqualTo(20),
+                "the strongest bound from all predecessor paths must be retained");
+        });
     }
 
     [TestCase(5, 5, ">=", true)]
@@ -400,6 +513,154 @@ public sealed class QuestMapDataServiceTests
     }
 
     [Test]
+    public void RepeatableEliminationUsesSpecificBossRoleInsteadOfGenericScavTarget()
+    {
+        var objective = RepeatableEliminationCondition("Savage", ["bossKilla"]);
+        var result = QuestProfileStateBuilder.RepeatableObjectiveText(
+            objective,
+            "Elimination",
+            AnyLocation(),
+            EliminationLocale(),
+            new Dictionary<MongoId, TemplateItem>());
+
+        Assert.That(result, Is.EqualTo("Eliminate the target: Killa"));
+    }
+
+    [Test]
+    public void RepeatableEliminationCanonicalizesAnyPmcLocaleKey()
+    {
+        var objective = RepeatableEliminationCondition("AnyPmc", []);
+        var result = QuestProfileStateBuilder.RepeatableObjectiveText(
+            objective,
+            "Elimination",
+            AnyLocation(),
+            EliminationLocale(),
+            new Dictionary<MongoId, TemplateItem>());
+
+        Assert.That(result, Is.EqualTo("Eliminate any PMC operatives"));
+        Assert.That(result, Does.Not.Contain("AnyPmc"));
+    }
+
+    [Test]
+    public void RepeatableExplorationUsesNativeSurviveTemplateAndLocalizedExitName()
+    {
+        var objective = RepeatableExplorationCondition("Scav_Coastal_South");
+        var locale = ExplorationLocale();
+        locale["Scav_Coastal_South"] = "Southern Road Landslide";
+
+        var result = QuestProfileStateBuilder.RepeatableObjectiveText(
+            objective,
+            "Exit the location",
+            new QuestLocationDto("shoreline", "Shoreline", false, null),
+            locale,
+            new Dictionary<MongoId, TemplateItem>());
+
+        Assert.That(result, Is.EqualTo("Survive on the location by extracting through the \"Southern Road Landslide\""));
+        Assert.That(result, Does.Not.Contain("Exit the location: Shoreline"));
+    }
+
+    [Test]
+    public void RepeatableExplorationWithoutSpecificExitUsesNativeLocationText()
+    {
+        var objective = RepeatableExplorationCondition(null);
+
+        var result = QuestProfileStateBuilder.RepeatableObjectiveText(
+            objective,
+            "Exit the location",
+            new QuestLocationDto("woods", "Woods", false, null),
+            ExplorationLocale(),
+            new Dictionary<MongoId, TemplateItem>());
+
+        Assert.That(result, Is.EqualTo("Survive on the location"));
+    }
+
+    [Test]
+    public void WttSalvageCounterExposesNestedTasksWithoutReplacingAggregateProgressOwner()
+    {
+        const string parentId = "6a050718b79a994add4fba60";
+        const string salvageId = "69ae0c8e82a9a4823651f520";
+        const string leaveItemId = "6a0506ed519727382c36084b";
+        var condition = Condition(parentId, 0) with
+        {
+            Value = 1,
+            OneSessionOnly = true,
+            DoNotResetIfCounterCompleted = true,
+            Counter = new QuestConditionCounter
+            {
+                Conditions =
+                [
+                    new QuestConditionCounterCondition
+                    {
+                        Id = new MongoId(salvageId),
+                        ConditionType = "Salvage",
+                        Value = "1",
+                        Target = new ListOrT<string>(null, "544fb5454bdc2df8738b456a"),
+                        Zones = ["doom_machine_1"],
+                    },
+                    new QuestConditionCounterCondition
+                    {
+                        Id = new MongoId(leaveItemId),
+                        ConditionType = "LeaveItemAtLocation",
+                        Value = "1",
+                        Target = new ListOrT<string>(null, "69b951584846d9bb6c062133"),
+                        Zones = ["doom_parts_dropoff_1"],
+                    },
+                ],
+            },
+        };
+        var locale = new Dictionary<string, string>
+        {
+            [parentId] = "Complete the following tasks in a single raid.",
+            [salvageId] = "Salvage an arcade machine control board.",
+            [leaveItemId] = "Leave the parts at the drop-off.",
+        };
+
+        var result = QuestTemplateMapper.OrderObjectives([condition], locale).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Select(objective => objective.Id), Is.EqualTo(new[] { parentId, salvageId, leaveItemId }));
+            Assert.That(result[0].ContributesToProgress, Is.True);
+            Assert.That(result[1].Text, Is.EqualTo(locale[salvageId]));
+            Assert.That(result[1].ConditionType, Is.EqualTo("Salvage"));
+            Assert.That(result[1].ParentId, Is.EqualTo(parentId));
+            Assert.That(result[1].RequiredValue, Is.EqualTo(1));
+            Assert.That(result[1].ZoneIds, Is.EqualTo(new[] { "doom_machine_1" }));
+            Assert.That(result[1].ContributesToProgress, Is.False);
+            Assert.That(result[2].Text, Is.EqualTo(locale[leaveItemId]));
+            Assert.That(result[2].ParentId, Is.EqualTo(parentId));
+            Assert.That(result[2].ContributesToProgress, Is.False);
+        });
+    }
+
+    [Test]
+    public void SeasonalEventPropagationHandlesLargeReverseOrderedChain()
+    {
+        const int questCount = 1258;
+        var nodes = Enumerable.Range(0, questCount)
+            .Select(index => Node($"q{index:D4}", index == 0 ? "Halloween" : null))
+            .ToArray();
+        var edges = Enumerable.Range(0, questCount - 1)
+            .Reverse()
+            .Select(index => new QuestEdgeDto($"q{index:D4}", $"q{index + 1:D4}", ["Success"], 0))
+            .ToArray();
+
+        var result = QuestGraphRules.PropagateSeasonalEventTypes(nodes, edges).ToDictionary(node => node.Id);
+
+        Assert.That(result[$"q{questCount - 1:D4}"].EventSeason, Is.EqualTo("Halloween"));
+    }
+
+    [Test]
+    public void BlockIsRecognizedAsAnOpaqueAuthoritativeStartCondition()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(QuestTopologyBuilder.IsSupportedStartConditionType("Block"), Is.True);
+            Assert.That(QuestTopologyBuilder.IsSupportedStartConditionType("UnexpectedCustomGate"), Is.False);
+        });
+    }
+
+    [Test]
     public void DuplicateObjectiveIdsUseFirstDefinitionWithoutThrowing()
     {
         var first = Condition("6917c82760dbbed68c3cc90f", 2) with { Value = 10 };
@@ -439,6 +700,151 @@ public sealed class QuestMapDataServiceTests
             Assert.That(duplicates[0].Id, Is.EqualTo(questId.ToString()));
             Assert.That(duplicates[0].Kept, Is.SameAs(first));
             Assert.That(duplicates[0].Ignored, Is.SameAs(duplicate));
+        });
+    }
+
+    [Test]
+    public void AvailabilityProjection_MatchesSpt4013VisibilityDecisionOrder()
+    {
+        var traderId = new MongoId("aaaaaaaaaaaaaaaaaaaaaaaa");
+        var missingTraderId = new MongoId("bbbbbbbbbbbbbbbbbbbbbbbb");
+        var priorId = new MongoId("000000000000000000000001");
+        var accepted = QuestTemplate("000000000000000000000002", missingTraderId,
+            AvailabilityCondition("Level", "100000000000000000000001", value: 99));
+        var open = QuestTemplate("000000000000000000000003", traderId);
+        var levelLocked = QuestTemplate("000000000000000000000004", traderId,
+            AvailabilityCondition("Level", "100000000000000000000002", value: 20));
+        var prerequisiteMet = QuestTemplate("000000000000000000000005", traderId,
+            AvailabilityCondition("Quest", "100000000000000000000003", priorId.ToString(), statuses: [QuestStatusEnum.Success]));
+        var prerequisiteMissing = QuestTemplate("000000000000000000000006", traderId,
+            AvailabilityCondition("Quest", "100000000000000000000004", "000000000000000000000099", statuses: [QuestStatusEnum.Success]));
+        var missingTrader = QuestTemplate("000000000000000000000007", missingTraderId);
+        var loyaltyMet = QuestTemplate("000000000000000000000008", traderId,
+            AvailabilityCondition("TraderLoyalty", "100000000000000000000005", traderId.ToString(), 2));
+        var standingMet = QuestTemplate("000000000000000000000009", traderId,
+            AvailabilityCondition("TraderStanding", "100000000000000000000006", traderId.ToString(), 0.2));
+        var otherFaction = QuestTemplate("00000000000000000000000a", traderId);
+        var inactiveEvent = QuestTemplate("00000000000000000000000b", traderId);
+        var customCondition = QuestTemplate("00000000000000000000000c", traderId,
+            AvailabilityCondition("WTTCustomObjective", "100000000000000000000007"));
+        Quest[] databaseQuests =
+        [
+            accepted, open, levelLocked, prerequisiteMet, prerequisiteMissing, missingTrader,
+            loyaltyMet, standingMet, otherFaction, inactiveEvent, customCondition,
+        ];
+        QuestStatus[] profileRows =
+        [
+            ProfileQuest(accepted.Id, QuestStatusEnum.Started),
+            ProfileQuest(priorId, QuestStatusEnum.Success),
+        ];
+        var profileLookup = QuestProfileStateBuilder.BuildProfileQuestLookup(profileRows);
+
+        var result = QuestAvailabilityProjection.Build(
+            databaseQuests,
+            profileRows,
+            profileLookup,
+            "Usec",
+            10,
+            [traderId],
+            (_, questId) => questId == otherFaction.Id,
+            questId => questId != inactiveEvent.Id,
+            (level, condition) => level >= condition.Value,
+            condition => condition.Value <= 2,
+            condition => condition.Value <= 0.2);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result[accepted.Id.ToString()], Is.EqualTo(QuestStatusEnum.Started),
+                "accepted quests must bypass normal availability gates");
+            Assert.That(result.Keys, Is.EquivalentTo(new[]
+            {
+                accepted.Id.ToString(),
+                open.Id.ToString(),
+                prerequisiteMet.Id.ToString(),
+                loyaltyMet.Id.ToString(),
+                standingMet.Id.ToString(),
+                customCondition.Id.ToString(),
+            }));
+            Assert.That(result.Where(pair => pair.Key != accepted.Id.ToString()).Select(pair => pair.Value),
+                Has.All.EqualTo(QuestStatusEnum.AvailableForStart));
+            Assert.That(databaseQuests.Select(quest => quest.SptStatus), Has.All.Null,
+                "the projection must not stamp shared database templates");
+        });
+    }
+
+    [Test]
+    public void AvailabilityProjection_BlockRequiresExplicitProfileState()
+    {
+        var traderId = new MongoId("aaaaaaaaaaaaaaaaaaaaaaaa");
+        var blocked = QuestTemplate("00000000000000000000000d", traderId,
+            AvailabilityCondition("Block", "100000000000000000000008"));
+        var externallyUnlocked = QuestTemplate("00000000000000000000000e", traderId,
+            AvailabilityCondition("Block", "100000000000000000000009"));
+        var explicitlyLocked = QuestTemplate("00000000000000000000000f", traderId,
+            AvailabilityCondition("Block", "10000000000000000000000a"));
+        QuestStatus[] profileRows =
+        [
+            ProfileQuest(externallyUnlocked.Id, QuestStatusEnum.AvailableForStart),
+            ProfileQuest(explicitlyLocked.Id, QuestStatusEnum.Locked),
+        ];
+
+        var result = QuestAvailabilityProjection.Build(
+            [blocked, externallyUnlocked, explicitlyLocked],
+            profileRows,
+            QuestProfileStateBuilder.BuildProfileQuestLookup(profileRows),
+            "Usec",
+            79,
+            [traderId],
+            (_, _) => false,
+            _ => true,
+            (_, _) => true,
+            _ => true,
+            _ => true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Does.Not.ContainKey(blocked.Id.ToString()),
+                "an opaque Block condition must prevent synthesized availability");
+            Assert.That(result[externallyUnlocked.Id.ToString()], Is.EqualTo(QuestStatusEnum.AvailableForStart),
+                "an external unlock recorded in the profile must remain authoritative");
+            Assert.That(result[explicitlyLocked.Id.ToString()], Is.EqualTo(QuestStatusEnum.Locked),
+                "an explicit locked profile row must not be promoted to available");
+        });
+    }
+
+    [Test]
+    public void AvailabilityProjection_HandlesLargeModdedQuestSetWithBoundedChecks()
+    {
+        const int questCount = 1258;
+        var traderId = new MongoId("aaaaaaaaaaaaaaaaaaaaaaaa");
+        var quests = Enumerable.Range(1, questCount)
+            .Select(index => QuestTemplate(index.ToString("x24"), traderId,
+                AvailabilityCondition("WTTCustomObjective", (index + questCount).ToString("x24"))))
+            .ToArray();
+        var factionChecks = 0;
+        var eventChecks = 0;
+        var levelChecks = 0;
+
+        var result = QuestAvailabilityProjection.Build(
+            quests,
+            [],
+            new Dictionary<string, QuestStatus>(StringComparer.Ordinal),
+            "Usec",
+            79,
+            [traderId],
+            (_, _) => { factionChecks++; return false; },
+            _ => { eventChecks++; return true; },
+            (_, _) => { levelChecks++; return true; },
+            _ => true,
+            _ => true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Count, Is.EqualTo(questCount));
+            Assert.That(factionChecks, Is.EqualTo(questCount));
+            Assert.That(eventChecks, Is.EqualTo(questCount));
+            Assert.That(levelChecks, Is.Zero, "custom condition types must not enter level evaluation");
+            Assert.That(quests.Select(quest => quest.SptStatus), Has.All.Null);
         });
     }
 
@@ -483,6 +889,14 @@ public sealed class QuestMapDataServiceTests
     public void ExactStatusesHaveDistinctDisplayStates(QuestStatusEnum status, string expected)
     {
         Assert.That(QuestProfileRules.Classify(Node("q", null), status, false, null, []), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void ExplicitLockedProfileStateRemainsLockedWhenPresentInClientPayload()
+    {
+        Assert.That(
+            QuestProfileRules.Classify(Node("q", null), QuestStatusEnum.Locked, true, null, []),
+            Is.EqualTo("Locked"));
     }
 
     [Test]
@@ -546,7 +960,7 @@ public sealed class QuestMapDataServiceTests
         };
         QuestEdgeDto[] edges = [new("prior-quest", quest.Id, [nameof(QuestStatusEnum.Success)], 0)];
 
-        var blockers = QuestProfileRules.GetBlockers(quest, 9, traders, [], edges, Availability(traders, new Dictionary<string, string>()));
+        var blockers = QuestProfileRules.GetBlockers(quest, 9, 0, traders, [], edges, Availability(traders, new Dictionary<string, string>()));
 
         Assert.Multiple(() =>
         {
@@ -563,6 +977,45 @@ public sealed class QuestMapDataServiceTests
         var result = QuestProfileRules.Classify(Node("q", null), QuestStatusEnum.Locked, false, null, blockers);
 
         Assert.That(result, Is.EqualTo("TraderGated"));
+    }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    public void ContentBackportPrestigeQuestUsesExactPrestigeGate(int requiredPrestige)
+    {
+        var condition = Condition("695030570ff3a824dca38f0f", 1) with
+        {
+            ConditionType = "PrestigeLevel",
+            CompareMethod = "==",
+            Value = requiredPrestige,
+        };
+        var requirement = QuestTemplateMapper.ToRequirement(condition);
+        var quest = Node($"prestige-{requiredPrestige}", null) with
+        {
+            EffectiveRequirements = [requirement!],
+        };
+        var traders = new Dictionary<MongoId, TraderInfo>();
+
+        var matching = QuestProfileRules.GetBlockers(
+            quest, 60, requiredPrestige, traders, [], [],
+            Availability(traders, new Dictionary<string, string>()));
+        var mismatching = QuestProfileRules.GetBlockers(
+            quest, 60, (requiredPrestige + 1) % 6, traders, [], [],
+            Availability(traders, new Dictionary<string, string>()));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(requirement, Is.EqualTo(new RequirementDto("PrestigeLevel", null, "==", requiredPrestige)));
+            Assert.That(matching, Is.Empty);
+            Assert.That(mismatching.Select(blocker => blocker.Kind), Is.EqualTo(new[] { "PrestigeLevel" }));
+            Assert.That(
+                QuestProfileRules.Classify(quest, QuestStatusEnum.Locked, false, null, mismatching),
+                Is.EqualTo("PrestigeGated"));
+        });
     }
 
     [Test]
@@ -676,14 +1129,14 @@ public sealed class QuestMapDataServiceTests
             new("tushonka", false, 0, 2, true),
         ];
 
-        var partial = QuestProfileRules.CalculateObjectiveProgress(objectives);
+        var partial = CalculateObjectiveProgress(objectives);
         ObjectiveProgressDto[] completedFirstStage =
         [
             objectives[0] with { Complete = true, Current = 10 },
             objectives[1],
             objectives[2],
         ];
-        var firstStageComplete = QuestProfileRules.CalculateObjectiveProgress(completedFirstStage);
+        var firstStageComplete = CalculateObjectiveProgress(completedFirstStage);
 
         Assert.Multiple(() =>
         {
@@ -695,12 +1148,12 @@ public sealed class QuestMapDataServiceTests
     [Test]
     public void ObjectiveProgressClampsOverCompletionAndHandlesNoObjectives()
     {
-        var clamped = QuestProfileRules.CalculateObjectiveProgress([new("over", false, 15, 10, true)]);
+        var clamped = CalculateObjectiveProgress([new("over", false, 15, 10, true)]);
 
         Assert.Multiple(() =>
         {
             Assert.That(clamped, Is.EqualTo(100));
-            Assert.That(QuestProfileRules.CalculateObjectiveProgress([]), Is.Null);
+            Assert.That(CalculateObjectiveProgress([]), Is.Null);
         });
     }
 
@@ -709,14 +1162,14 @@ public sealed class QuestMapDataServiceTests
     {
         Assert.Multiple(() =>
         {
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(0, 1), Is.EqualTo(0));
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(1, 1), Is.EqualTo(1));
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(2, 1), Is.EqualTo(1));
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(1.25, 1), Is.EqualTo(1));
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(2, 0), Is.EqualTo(0));
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(-1, 1), Is.EqualTo(-1));
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(null, 1), Is.Null);
-            Assert.That(QuestProfileRules.CapObjectiveCurrent(2, null), Is.EqualTo(2));
+            Assert.That(CoreProgressRules.CapCurrent(0, 1), Is.EqualTo(0));
+            Assert.That(CoreProgressRules.CapCurrent(1, 1), Is.EqualTo(1));
+            Assert.That(CoreProgressRules.CapCurrent(2, 1), Is.EqualTo(1));
+            Assert.That(CoreProgressRules.CapCurrent(1.25, 1), Is.EqualTo(1));
+            Assert.That(CoreProgressRules.CapCurrent(2, 0), Is.EqualTo(0));
+            Assert.That(CoreProgressRules.CapCurrent(-1, 1), Is.EqualTo(-1));
+            Assert.That(CoreProgressRules.CapCurrent(null, 1), Is.Null);
+            Assert.That(CoreProgressRules.CapCurrent(2, null), Is.EqualTo(2));
         });
     }
 
@@ -725,13 +1178,148 @@ public sealed class QuestMapDataServiceTests
     {
         Assert.Multiple(() =>
         {
-            Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 3, 3, null), Is.True);
-            Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 2, 3, null), Is.False);
-            Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 3, 3, ">"), Is.False);
-            Assert.That(QuestProfileRules.ObjectiveIsComplete(false, 2, 1, "=="), Is.False);
-            Assert.That(QuestProfileRules.ObjectiveIsComplete(true, null, 3, null), Is.True);
+            Assert.That(CoreProgressRules.IsComplete(false, 3, 3, null), Is.True);
+            Assert.That(CoreProgressRules.IsComplete(false, 2, 3, null), Is.False);
+            Assert.That(CoreProgressRules.IsComplete(false, 3, 3, ">"), Is.False);
+            Assert.That(CoreProgressRules.IsComplete(false, 2, 1, "=="), Is.False);
+            Assert.That(CoreProgressRules.IsComplete(true, null, 3, null), Is.True);
+            Assert.That(CoreProgressRules.IsComplete(true, 0, 1, null, true), Is.False);
+            Assert.That(CoreProgressRules.IsComplete(true, 1, 1, null, true), Is.True);
+            Assert.That(CoreProgressRules.IsComplete(true, 0, 1, null, false), Is.True);
         });
     }
+
+    [Test]
+    public void ObjectiveMappingPreservesSessionResetMetadata()
+    {
+        var resettable = Condition("000000000000000000000024", 0) with
+        {
+            OneSessionOnly = true,
+            DoNotResetIfCounterCompleted = false,
+        };
+        var retained = Condition("000000000000000000000025", 1) with
+        {
+            OneSessionOnly = true,
+            DoNotResetIfCounterCompleted = true,
+        };
+
+        var result = QuestTemplateMapper.OrderObjectives([resettable, retained], []).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result[0].OneSessionOnly, Is.True);
+            Assert.That(result[0].DoNotResetIfCounterCompleted, Is.False);
+            Assert.That(result[1].OneSessionOnly, Is.True);
+            Assert.That(result[1].DoNotResetIfCounterCompleted, Is.True);
+        });
+    }
+
+    [Test]
+    public void StartedProfileUsesResettableCounterInsteadOfStaleCompletedCondition()
+    {
+        var resettable = new ObjectiveDefinitionDto(
+            "reset",
+            "Locate the temporary USEC camp on Woods",
+            "CounterCreator",
+            0,
+            null,
+            1,
+            ">=",
+            [],
+            [],
+            OneSessionOnly: true,
+            DoNotResetIfCounterCompleted: false);
+        var retained = resettable with { DoNotResetIfCounterCompleted = true };
+        var resetCounter = new TaskConditionCounter { Value = 0 };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                QuestProfileStateBuilder.IsObjectiveComplete(
+                    resettable,
+                    QuestStatusEnum.Started,
+                    conditionRecorded: true,
+                    counter: resetCounter),
+                Is.False);
+            Assert.That(
+                QuestProfileStateBuilder.IsObjectiveComplete(
+                    resettable,
+                    QuestStatusEnum.Started,
+                    conditionRecorded: true,
+                    counter: new TaskConditionCounter { Value = 1 }),
+                Is.True);
+            Assert.That(
+                QuestProfileStateBuilder.IsObjectiveComplete(
+                    retained,
+                    QuestStatusEnum.Started,
+                    conditionRecorded: true,
+                    counter: resetCounter),
+                Is.True);
+            Assert.That(
+                QuestProfileStateBuilder.IsObjectiveComplete(
+                    resettable,
+                    QuestStatusEnum.AvailableForFinish,
+                    conditionRecorded: true,
+                    counter: resetCounter),
+                Is.True);
+        });
+    }
+
+    [Test]
+    public void ObjectiveZonesIncludeDirectVisitAndNestedCounterZones()
+    {
+        var direct = Condition("000000000000000000000021", 0) with
+        {
+            ConditionType = "LeaveItemAtLocation",
+            ZoneId = "zone-direct",
+        };
+        var visit = Condition("000000000000000000000022", 1) with
+        {
+            ConditionType = "VisitPlace",
+            Target = new ListOrT<string>(null, "zone-visit"),
+        };
+        var counter = Condition("000000000000000000000023", 2) with
+        {
+            Counter = new QuestConditionCounter
+            {
+                Conditions =
+                [
+                    new QuestConditionCounterCondition
+                    {
+                        ConditionType = "InZone",
+                        Zones = ["zone-counter-b", "zone-counter-a"],
+                    },
+                    new QuestConditionCounterCondition
+                    {
+                        ConditionType = "VisitPlace",
+                        Target = new ListOrT<string>(null, "zone-counter-visit"),
+                    },
+                ],
+            },
+        };
+
+        var result = QuestTemplateMapper.OrderObjectives([direct, visit, counter], [])
+            .ToDictionary(objective => objective.Id, StringComparer.Ordinal);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result[direct.Id.ToString()].ZoneIds, Is.EqualTo(new[] { "zone-direct" }));
+            Assert.That(result[visit.Id.ToString()].ZoneIds, Is.EqualTo(new[] { "zone-visit" }));
+            Assert.That(result[counter.Id.ToString()].ZoneIds, Is.EqualTo(new[]
+            {
+                "zone-counter-a",
+                "zone-counter-b",
+                "zone-counter-visit",
+            }));
+        });
+    }
+
+    private static double? CalculateObjectiveProgress(IReadOnlyCollection<ObjectiveProgressDto> objectives) =>
+        CoreProgressRules.CalculateObjectiveProgressPercent(
+            objectives,
+            objective => objective.Complete,
+            objective => objective.Current,
+            objective => objective.Required);
 
     private static QuestCondition Condition(string id, int index) => new()
     {
@@ -739,6 +1327,119 @@ public sealed class QuestMapDataServiceTests
         Index = index,
         DynamicLocale = false,
         ConditionType = "CounterCreator",
+    };
+
+    private static QuestCondition RepeatableEliminationCondition(string target, List<string> savageRoles) =>
+        Condition("000000000000000000000030", 0) with
+        {
+            DynamicLocale = true,
+            Value = 6,
+            Counter = new QuestConditionCounter
+            {
+                Conditions =
+                [
+                    new QuestConditionCounterCondition
+                    {
+                        Id = new MongoId("000000000000000000000031"),
+                        DynamicLocale = true,
+                        ConditionType = "Kills",
+                        Target = new ListOrT<string>(null, target),
+                        SavageRole = savageRoles,
+                        Value = 1,
+                    },
+                ],
+            },
+        };
+
+    private static QuestCondition RepeatableExplorationCondition(string? exitName)
+    {
+        List<QuestConditionCounterCondition> conditions =
+        [
+            new QuestConditionCounterCondition
+            {
+                Id = new MongoId("000000000000000000000041"),
+                DynamicLocale = true,
+                ConditionType = "ExitStatus",
+                Status = ["Survived"],
+            },
+            new QuestConditionCounterCondition
+            {
+                Id = new MongoId("000000000000000000000042"),
+                DynamicLocale = true,
+                ConditionType = "Location",
+                Target = new ListOrT<string>(null, "Shoreline"),
+            },
+        ];
+        if (exitName is not null)
+        {
+            conditions.Add(new QuestConditionCounterCondition
+            {
+                Id = new MongoId("000000000000000000000043"),
+                DynamicLocale = true,
+                ConditionType = "ExitName",
+                ExitName = exitName,
+            });
+        }
+
+        return Condition("000000000000000000000040", 0) with
+        {
+            DynamicLocale = true,
+            Value = 4,
+            Counter = new QuestConditionCounter { Conditions = conditions },
+        };
+    }
+
+    private static QuestLocationDto AnyLocation() => new("any", null, true, null);
+
+    private static Dictionary<string, string> EliminationLocale() => new(StringComparer.Ordinal)
+    {
+        ["QuestCondition/Elimination"] = "Eliminate{kill}{zone}{enemyPreset}{playerPreset}{resetOnSessionEnd}",
+        ["QuestCondition/Elimination/Kill"] = " {target}{botrole}{bodypart}{distance}{weapon}{weapontype}{onesession}",
+        ["QuestCondition/Elimination/Kill/BotRole"] = "the target: {0}",
+        ["QuestCondition/Elimination/Kill/BotRole/bossKilla"] = "Killa",
+        ["QuestCondition/Elimination/Kill/Target/Savage"] = "Scavs",
+        ["QuestCondition/Elimination/Kill/Target/AnyPMC"] = "any PMC operatives",
+    };
+
+    private static Dictionary<string, string> ExplorationLocale() => new(StringComparer.Ordinal)
+    {
+        ["QuestCondition/SurviveOnLocation"] = "Survive on {location}{exitName}",
+        ["QuestCondition/SurviveOnLocation/Any"] = "any location",
+        ["QuestCondition/SurviveOnLocation/Location"] = "the location",
+        ["QuestCondition/SurviveOnLocation/ExitName"] = " by extracting through the \"{0}\"",
+    };
+
+    private static Quest QuestTemplate(string id, MongoId traderId, params QuestCondition[] startConditions) => new()
+    {
+        Id = new MongoId(id),
+        CanShowNotificationsInGame = true,
+        Conditions = new QuestConditionTypes { AvailableForStart = startConditions.ToList() },
+        Description = $"Quest {id}",
+        Name = $"Quest {id}",
+        TraderId = traderId,
+        Location = "any",
+        Image = string.Empty,
+        Type = QuestTypeEnum.Completion,
+        Restartable = false,
+        Side = "Pmc",
+        AcceptPlayerMessage = string.Empty,
+        AcceptanceAndFinishingSource = string.Empty,
+    };
+
+    private static QuestCondition AvailabilityCondition(
+        string conditionType,
+        string id,
+        string? target = null,
+        double? value = null,
+        HashSet<QuestStatusEnum>? statuses = null) => new()
+    {
+        Id = new MongoId(id),
+        DynamicLocale = false,
+        ConditionType = conditionType,
+        Target = target is null ? null : new ListOrT<string>(null, target),
+        Value = value,
+        CompareMethod = ">=",
+        Status = statuses,
     };
 
     private static QuestStatus ProfileQuest(MongoId id, QuestStatusEnum status) => new()

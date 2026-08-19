@@ -1,0 +1,128 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>SPTQuestMap.Client</AssemblyName>
+    <RootNamespace>SPTQuestMap.Client</RootNamespace>
+    <Version>2.0.0</Version>
+    <DebugType>portable</DebugType>
+    <Deterministic>true</Deterministic>
+    <EftInstallRoot Condition="'$(EftInstallRoot)' == ''">$(SPT_ROOT)</EftInstallRoot>
+    <ManagedRoot>$(EftInstallRoot)\EscapeFromTarkov_Data\Managed</ManagedRoot>
+    <BepInExCoreRoot>$(EftInstallRoot)\BepInEx\core</BepInExCoreRoot>
+  </PropertyGroup>
+
+  <Target Name="ValidateEftInstallRoot" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="'$(EftInstallRoot)' == ''"
+           Text="Set EftInstallRoot or SPT_ROOT to the Tarkov directory containing BepInEx and SPT." />
+    <Error Condition="!Exists('$(EftInstallRoot)\EscapeFromTarkov.exe')"
+           Text="EftInstallRoot does not contain EscapeFromTarkov.exe: $(EftInstallRoot)" />
+    <Error Condition="!Exists('$(ManagedRoot)\Assembly-CSharp.dll')"
+           Text="Required client assembly is missing: $(ManagedRoot)\Assembly-CSharp.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\Comfort.dll')"
+           Text="Required EFT assembly is missing: $(ManagedRoot)\Comfort.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\Sirenix.Serialization.dll')"
+           Text="Required EFT serialization assembly is missing: $(ManagedRoot)\Sirenix.Serialization.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\Newtonsoft.Json.dll')"
+           Text="Required EFT JSON assembly is missing: $(ManagedRoot)\Newtonsoft.Json.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.dll')"
+           Text="Required Unity assembly is missing: $(ManagedRoot)\UnityEngine.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.CoreModule.dll')"
+           Text="Required Unity assembly is missing: $(ManagedRoot)\UnityEngine.CoreModule.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.UI.dll')"
+           Text="Required Unity UI assembly is missing: $(ManagedRoot)\UnityEngine.UI.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.UIModule.dll')"
+           Text="Required Unity UI module is missing: $(ManagedRoot)\UnityEngine.UIModule.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.IMGUIModule.dll')"
+           Text="Required Unity IMGUI module is missing: $(ManagedRoot)\UnityEngine.IMGUIModule.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\Unity.TextMeshPro.dll')"
+           Text="Required TextMeshPro assembly is missing: $(ManagedRoot)\Unity.TextMeshPro.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.TextRenderingModule.dll')"
+           Text="Required Unity text rendering module is missing: $(ManagedRoot)\UnityEngine.TextRenderingModule.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.ImageConversionModule.dll')"
+           Text="Required Unity image conversion module is missing: $(ManagedRoot)\UnityEngine.ImageConversionModule.dll" />
+    <Error Condition="!Exists('$(ManagedRoot)\UnityEngine.InputLegacyModule.dll')"
+           Text="Required Unity legacy input module is missing: $(ManagedRoot)\UnityEngine.InputLegacyModule.dll" />
+    <Error Condition="!Exists('$(BepInExCoreRoot)\BepInEx.dll')"
+           Text="Required BepInEx assembly is missing: $(BepInExCoreRoot)\BepInEx.dll" />
+    <Error Condition="!Exists('$(BepInExCoreRoot)\0Harmony.dll')"
+           Text="Required Harmony assembly is missing: $(BepInExCoreRoot)\0Harmony.dll" />
+    <Error Condition="!Exists('$(EftInstallRoot)\BepInEx\plugins\spt\spt-core.dll')"
+           Text="SPT client core is missing: $(EftInstallRoot)\BepInEx\plugins\spt\spt-core.dll" />
+    <Error Condition="!Exists('$(EftInstallRoot)\BepInEx\plugins\spt\spt-common.dll')"
+           Text="SPT client HTTP assembly is missing: $(EftInstallRoot)\BepInEx\plugins\spt\spt-common.dll" />
+  </Target>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\Locales\*.json" />
+    <ProjectReference Include="..\SPTQuestMap.Core\SPTQuestMap.Core.csproj" />
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExCoreRoot)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(ManagedRoot)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExCoreRoot)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Comfort">
+      <HintPath>$(ManagedRoot)\Comfort.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Sirenix.Serialization">
+      <HintPath>$(ManagedRoot)\Sirenix.Serialization.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(ManagedRoot)\Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="spt-common">
+      <HintPath>$(EftInstallRoot)\BepInEx\plugins\spt\spt-common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(ManagedRoot)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ManagedRoot)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(ManagedRoot)\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(ManagedRoot)\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(ManagedRoot)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(ManagedRoot)\Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(ManagedRoot)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>$(ManagedRoot)\UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(ManagedRoot)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

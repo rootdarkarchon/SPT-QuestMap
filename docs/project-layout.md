@@ -22,6 +22,7 @@ Internal product and implementation records live in this `docs/` directory:
 - `acceptance.md` — acceptance checklist.
 - `development-status.md` — detailed chronological development record.
 - `quest-actions-plan.md` — possible future write-capable extension; not implemented.
+- `client-localization.md` — embedded in-game catalog, named-placeholder, and native-tooltip contract.
 - `deployment.md` and `testing.md` — contributor workflows.
 - `milestones.md`, `open-questions.md`, and `visual-reference.md` — original planning and reference material.
 - `project-context.json` — compact machine-readable project facts.

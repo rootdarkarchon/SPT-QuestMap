@@ -69,6 +69,7 @@
   "legend.requiresStarted": "Necesită începere",
   "legend.requiresOutcome": "Orice rezultat",
   "state.PrerequisiteGated": "Blocată de misiunea anterioară",
+  "state.PrestigeGated": "Blocată de prestigiu",
   "state.LevelGated": "Blocată de nivel",
   "state.TraderGated": "Blocată de comerciant",
   "state.TraderUnavailable": "Comerciant indisponibil",
@@ -87,5 +88,6 @@
   "details.branchAlternatives": "Ramuri alternative",
   "details.prerequisites": "Cerințe preliminare",
   "details.successors": "Succesoare directe",
-  "profile.aria": "Profil"
+  "profile.aria": "Profil",
+  "location.none": "În afara raidului"
 }

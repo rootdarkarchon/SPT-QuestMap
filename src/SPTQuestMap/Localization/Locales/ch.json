@@ -69,6 +69,7 @@
   "legend.requiresStarted": "需要开始",
   "legend.requiresOutcome": "任一结果",
   "state.PrerequisiteGated": "前置任务限制",
+  "state.PrestigeGated": "威望等级限制",
   "state.LevelGated": "等级限制",
   "state.TraderGated": "商人等级限制",
   "state.TraderUnavailable": "商人不可用",
@@ -87,5 +88,6 @@
   "details.branchAlternatives": "分支选项",
   "details.prerequisites": "前置任务",
   "details.successors": "直接后续任务",
-  "profile.aria": "档案"
+  "profile.aria": "档案",
+  "location.none": "战局外"
 }

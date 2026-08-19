@@ -12,6 +12,7 @@ using SPTarkov.Server.Core.Models.Enums;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using CoreProgressRules = SPTQuestMap.Core.Rules.QuestProgressRules;
 
 namespace SPTQuestMap.Tests;
 
@@ -29,6 +30,15 @@ public sealed class BlazorMigrationTests
     {
         var controllerTypes = typeof(QuestMap).Assembly.GetTypes().Where(type => typeof(ControllerBase).IsAssignableFrom(type));
         Assert.That(controllerTypes, Is.Empty);
+    }
+
+    [Test]
+    public void QuestMetadataResolutionUsesThePostDatabaseStartupBoundary()
+    {
+        Assert.That(
+            typeof(SPTarkov.Server.Core.DI.IOnLoad).IsAssignableFrom(typeof(QuestMapDataService)),
+            Is.True,
+            "Quest metadata must resolve only after SPT's database and post-DB mod loaders have run.");
     }
 
     [Test]
@@ -66,6 +76,23 @@ public sealed class BlazorMigrationTests
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("comparisonStateById"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("comparisonById"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("comparisonReason"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("displayMapReferences"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("node.taskLocation?.id"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("scope==='transition'"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("if(node.actualMaps?.length)"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Not.Contain("node.actualMapsComplete"),
+                "The web renderer must consume the server's authoritative display-map precedence without an old Any-only completeness gate.");
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("drawAngledMapSlices"));
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("mapLeft=preserveQuestArtwork?layer.width*.6:0"),
+                "Quest artwork must remain visible while map banners occupy angled slices in only the right 40 percent of a card.");
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("ctx.moveTo(leftTop,0)"),
+                "Card slice boundaries must run from bottom-left to top-right.");
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("rightTop=index===maps.length-1?outerRight"),
+                "The final map slice must meet the card's full right edge without exposing the quest artwork in either corner.");
+            Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Not.Contain("fadeOverQuest"),
+                "A single inferred map must use an explicit right-side slice rather than an unreliable soft fade.");
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".location-detail-images"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain("--location-map-count"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Contain("dimmed?dimAlpha"));
             Assert.That(QuestMapEmbeddedAssets.RendererSource, Does.Not.Contain("drawDifferenceMarker"));
             Assert.That(QuestMapEmbeddedAssets.RendererModuleDataUrl, Does.StartWith("data:text/javascript;base64,"));
@@ -283,14 +310,14 @@ public sealed class BlazorMigrationTests
         var primaryObjective = new ObjectiveProgressDto(
             "objective",
             true,
-            QuestProfileRules.CapObjectiveCurrent(2, 1),
+            CoreProgressRules.CapCurrent(2, 1),
             1,
             true
         );
         var comparisonObjective = new ObjectiveProgressDto(
             "objective",
             true,
-            QuestProfileRules.CapObjectiveCurrent(1, 1),
+            CoreProgressRules.CapCurrent(1, 1),
             1,
             true
         );
@@ -489,7 +516,7 @@ public sealed class BlazorMigrationTests
         var progress = new ObjectiveProgressDto(
             objective.Id,
             true,
-            QuestProfileRules.CapObjectiveCurrent(2, objective.RequiredValue),
+            CoreProgressRules.CapCurrent(2, objective.RequiredValue),
             objective.RequiredValue,
             true
         );
@@ -703,14 +730,78 @@ public sealed class BlazorMigrationTests
     }
 
     [Test]
-    public void RepeatableQuestRulesIncludePmcDailyAndWeeklyOnly()
+    public void RepeatableQuestRulesIncludePmcAndScavGroupsWithNormalizedBands()
     {
         Assert.Multiple(() =>
         {
             Assert.That(RepeatableQuestRules.ShouldIncludeGroup("Daily"), Is.True);
             Assert.That(RepeatableQuestRules.ShouldIncludeGroup("Weekly"), Is.True);
-            Assert.That(RepeatableQuestRules.ShouldIncludeGroup("Daily_Savage"), Is.False);
+            Assert.That(RepeatableQuestRules.ShouldIncludeGroup("Daily_Savage"), Is.True);
             Assert.That(RepeatableQuestRules.ShouldIncludeGroup(null), Is.False);
+            Assert.That(RepeatableQuestRules.IsScavGroup("Daily_Savage"), Is.True);
+            Assert.That(RepeatableQuestRules.IsScavGroup("Daily"), Is.False);
+            Assert.That(RepeatableQuestRules.DisplayKind("Daily_Savage"), Is.EqualTo("Daily"));
+            Assert.That(RepeatableQuestRules.DisplayKind("Weekly"), Is.EqualTo("Weekly"));
+        });
+    }
+
+    [Test]
+    public void DetailMetadataRemainsOutsideCanvasTopologyJson()
+    {
+        var node = Node("quest", "Quest", "trader") with
+        {
+            Summary = "Summary",
+            WikiUrl = "https://example.test/wiki/quest",
+            RelevantItems = [new QuestRelevantItemDto("item", "Relevant item", false)],
+        };
+
+        var json = JsonSerializer.Serialize(node);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(json, Does.Not.Contain("Summary"));
+            Assert.That(json, Does.Not.Contain("WikiUrl"));
+            Assert.That(json, Does.Not.Contain("RelevantItems"));
+            Assert.That(QuestMapUiCatalog.English["details.relevantItems"], Is.EqualTo("Relevant items"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".wiki-button"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".flea-ineligible"));
+            Assert.That(QuestMapEmbeddedAssets.Css, Does.Contain(".relevant-items-section { border-top-color:"));
+            Assert.That(QuestDetails.RelevantItemMarkup("<b><color=#ca741f>Item</color></b>"),
+                Does.Contain("<strong>").And.Contain("style=\"color:#ca741f\"").And.Contain("Item"));
+        });
+    }
+
+    [Test]
+    public async Task ScavRepeatableDetailsRendersExplicitBannerDenomination()
+    {
+        var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
+        var node = Node("scav-daily", "Scav Daily", "trader-a") with { ScavRepeatable = true };
+        var topology = new QuestTopologyDto("version", [], [], [new QuestTraderDto("trader-a", "Trader A", null)], [], []);
+        var profile = new ProfileStateDto("profile", "PMC", "Usec", 10, 0, false, false, [], [], [], [])
+        {
+            RepeatableQuestGroups =
+            [
+                new RepeatableQuestGroupDto("Daily", 100,
+                    [new RepeatableQuestEntryDto(node, State(node.Id, "Available"))]) { Scav = true },
+            ],
+        };
+        var state = new QuestMapPageState();
+        state.SetData(topology, profile);
+        state.SelectQuest(node.Id);
+        var localizer = new QuestMapLocalizer(new QuestMapBootstrapDto("en", "en", [], QuestMapUiCatalog.English));
+
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<QuestDetails>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                [nameof(QuestDetails.State)] = state,
+                [nameof(QuestDetails.Localizer)] = localizer,
+            }))).ToHtmlString());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(html, Does.Contain("scav-quest-badge"));
+            Assert.That(html, Does.Contain(">Scav</span>"));
         });
     }
 

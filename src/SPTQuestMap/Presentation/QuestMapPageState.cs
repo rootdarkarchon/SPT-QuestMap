@@ -1,5 +1,7 @@
 using SPTQuestMap.Services;
 using System.Text.Json.Serialization;
+using CoreQuestGraphRules = SPTQuestMap.Core.Rules.QuestGraphRules;
+using QuestTraderOrder = SPTQuestMap.Core.Rules.QuestTraderOrder;
 
 namespace SPTQuestMap.Presentation;
 
@@ -185,7 +187,7 @@ public sealed class QuestMapPageState
     {
         if (Topology is null) return [];
         var questTraderIds = _nodeById.Values.Select(quest => quest.TraderId).ToHashSet(StringComparer.Ordinal);
-        var ranks = QuestMapTraderOrder.Ids.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
+        var ranks = QuestTraderOrder.Ids.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
         return Topology.Traders
             .Where(trader => questTraderIds.Contains(trader.Id))
             .OrderBy(trader => ranks.GetValueOrDefault(trader.Id, int.MaxValue))
@@ -197,7 +199,7 @@ public sealed class QuestMapPageState
     {
         if (Topology is null || Profile is null) return [];
         var traderMeta = Topology.Traders.ToDictionary(trader => trader.Id, StringComparer.Ordinal);
-        var ranks = QuestMapTraderOrder.Ids.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
+        var ranks = QuestTraderOrder.Ids.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
         var ids = Profile.Quests.Where(state => state.DisplayState == "InProgress").Select(state => state.QuestId)
             .Concat(ComparisonProfile?.Quests.Where(state => state.DisplayState == "InProgress").Select(state => state.QuestId) ?? [])
             .Distinct(StringComparer.Ordinal);
@@ -253,6 +255,39 @@ public sealed class QuestMapPageState
         VisibleIds.Clear();
         _comparisonScopeIds.Clear();
         if (Profile is null || Topology is null) { UpdateComparisonCounts([]); return; }
+
+        if (!CompareMode)
+        {
+            var sharedVisible = SPTQuestMap.Core.Rules.QuestVisibilityRules.BuildVisibleIds(
+                _nodeById.Values.Select(node => new SPTQuestMap.Core.Rules.QuestVisibilityNode(
+                    node.Id, node.Name, node.TraderId, node.TraderName, node.Restartable, _repeatableIds.Contains(node.Id))).ToArray(),
+                Topology.Edges.Select(edge => new SPTQuestMap.Core.Models.QuestDependency(edge.SourceId, edge.TargetId)).ToArray(),
+                _stateById.Values
+                    .Where(state => CoreQuestGraphRules.TryParseProfileDisplayState(state.DisplayState, out _))
+                    .Select(state =>
+                    {
+                        CoreQuestGraphRules.TryParseProfileDisplayState(state.DisplayState, out var display);
+                        return new SPTQuestMap.Core.Rules.QuestVisibilityState(
+                            state.QuestId,
+                            display,
+                            state.Blockers.Where(blocker => blocker.Kind == "Prerequisite" && blocker.SubjectId is not null)
+                                .Select(blocker => blocker.SubjectId!).Distinct(StringComparer.Ordinal).ToArray());
+                    }).ToArray(),
+                Profile.DefaultVisibleQuestIds,
+                _applicable,
+                new SPTQuestMap.Core.Rules.QuestVisibilityOptions(
+                    ShowAllFuture,
+                    ShowFinished,
+                    LevelEligibleOnly,
+                    TraderFilter,
+                    Search,
+                    SelectedId,
+                    FocusedId,
+                    ShowRepeatables));
+            VisibleIds.UnionWith(sharedVisible);
+            UpdateComparisonCounts([]);
+            return;
+        }
 
         var baseIds = ShowAllFuture
             ? Profile.AllApplicableQuestIds.Concat(ComparisonProfile?.AllApplicableQuestIds ?? [])
@@ -392,9 +427,8 @@ public sealed class QuestMapPageState
     private static bool IsFinished(QuestNodeDto node, QuestStateDto? state)
     {
         if (state is null) return false;
-        if (state.DisplayState is "Completed" or "Failed") return true;
-        if (state.DisplayState == "Excluded") return state.Exclusion?.Permanent is not false;
-        return state.DisplayState == "Expired" && !node.Restartable;
+        return CoreQuestGraphRules.TryParseProfileDisplayState(state.DisplayState, out var display)
+            && CoreQuestGraphRules.IsFinishedForFilter(display, node.Restartable, state.Exclusion?.Permanent is not false);
     }
 
     private bool IsFinishedForEveryApplicableProfile(QuestNodeDto node, string id)
@@ -410,7 +444,9 @@ public sealed class QuestMapPageState
         var states = new List<QuestStateDto?>();
         if (IsPrimaryApplicable(id)) states.Add(GetQuestState(id));
         if (IsComparisonApplicable(id)) states.Add(GetComparisonQuestState(id));
-        return states.Count > 0 && states.All(state => state?.DisplayState == "LevelGated");
+        return states.Count > 0 && states.All(state => state is not null
+            && CoreQuestGraphRules.TryParseProfileDisplayState(state.DisplayState, out var display)
+            && CoreQuestGraphRules.IsLevelGatedForFilter(display));
     }
 
     private IEnumerable<QuestStateDto?> GetApplicableStates(string id)
@@ -420,7 +456,9 @@ public sealed class QuestMapPageState
     }
 
     private bool IsBoundaryForAnyApplicableProfile(string id) => GetApplicableStates(id)
-        .Any(state => state?.DisplayState is "Available" or "InProgress" or "ReadyToFinish" or "Completed");
+        .Any(state => state is not null
+            && CoreQuestGraphRules.TryParseProfileDisplayState(state.DisplayState, out var display)
+            && CoreQuestGraphRules.IsTraderBoundaryForFilter(display));
 
     private void BuildComparisons()
     {

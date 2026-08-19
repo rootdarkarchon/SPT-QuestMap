@@ -69,6 +69,7 @@
   "legend.requiresStarted": "Nécessite le démarrage",
   "legend.requiresOutcome": "N'importe quel résultat",
   "state.PrerequisiteGated": "Bloquée par une quête préalable",
+  "state.PrestigeGated": "Bloquée par le prestige",
   "state.LevelGated": "Bloquée par le niveau",
   "state.TraderGated": "Bloquée par le marchand",
   "state.TraderUnavailable": "Marchand indisponible",
@@ -87,5 +88,6 @@
   "details.branchAlternatives": "Branches alternatives",
   "details.prerequisites": "Prérequis",
   "details.successors": "Successeurs directs",
-  "profile.aria": "Profil"
+  "profile.aria": "Profil",
+  "location.none": "Hors raid"
 }

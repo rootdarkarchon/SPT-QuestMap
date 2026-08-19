@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>SPTQuestMap</AssemblyName>
     <RootNamespace>SPTQuestMap</RootNamespace>
-    <Version>1.4.0</Version>
+    <Version>2.0.0</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <OutputType>Library</OutputType>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -22,6 +22,7 @@
   </Target>
 
   <ItemGroup>
+    <ProjectReference Include="..\SPTQuestMap.Core\SPTQuestMap.Core.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Reference Include="SemanticVersioning">
       <HintPath>$(SptInstallRoot)\SPT\SemanticVersioning.dll</HintPath>
@@ -46,8 +47,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Data\metainfo.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Data\triggerIds.json" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="Localization\Locales\*.json" />
     <EmbeddedResource Include="Localization\Summaries\*.json" />
+    <Content Remove="Localization\Summaries\ru.json" />
     <EmbeddedResource Include="Presentation\Assets\QuestMap.css" />
     <EmbeddedResource Include="Presentation\Assets\QuestMapRenderer.mjs" />
   </ItemGroup>

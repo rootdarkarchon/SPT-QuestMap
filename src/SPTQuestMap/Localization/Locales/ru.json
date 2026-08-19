@@ -69,6 +69,7 @@
   "legend.requiresStarted": "Требуется начало",
   "legend.requiresOutcome": "Любой исход",
   "state.PrerequisiteGated": "Заблокировано предыдущим заданием",
+  "state.PrestigeGated": "Заблокировано престижем",
   "state.LevelGated": "Заблокировано уровнем",
   "state.TraderGated": "Заблокировано торговцем",
   "state.TraderUnavailable": "Торговец недоступен",
@@ -87,5 +88,6 @@
   "details.branchAlternatives": "Альтернативные ветви",
   "details.prerequisites": "Предварительные условия",
   "details.successors": "Прямые последующие задания",
-  "profile.aria": "Профиль"
+  "profile.aria": "Профиль",
+  "location.none": "Вне рейда"
 }

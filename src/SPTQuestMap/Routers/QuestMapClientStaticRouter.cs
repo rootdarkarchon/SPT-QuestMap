@@ -1,0 +1,238 @@
+using System.Diagnostics;
+using SPTarkov.DI.Annotations;
+using SPTarkov.Server.Core.DI;
+using SPTarkov.Server.Core.Models.Eft.Common;
+using SPTarkov.Server.Core.Models.Utils;
+using SPTarkov.Server.Core.Utils;
+using SPTQuestMap.Services;
+
+namespace SPTQuestMap.Routers;
+
+/// <summary>
+/// Read-only native-client feed. It exposes the same sanitized topology used by
+/// the browser UI and profile-generated quest definitions for the authenticated
+/// session, without returning or modifying a raw profile.
+/// </summary>
+[Injectable]
+public sealed class QuestMapClientStaticRouter(
+    JsonUtil jsonUtil,
+    QuestMapDataService dataService,
+    ISptLogger<QuestMapDataService> logger)
+    : DynamicRouter(
+        jsonUtil,
+        [
+            new RouteAction<EmptyRequestData>(
+                "/questmap/client/topology",
+                (url, _, sessionId, _) =>
+                {
+                    var totalStopwatch = Stopwatch.StartNew();
+                    var stageStopwatch = Stopwatch.StartNew();
+                    var requestedLanguage = GetRequestedLanguage(url, Route);
+                    var topology = dataService.GetTopology(requestedLanguage);
+                    var topologyMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    stageStopwatch.Restart();
+                    var profileState = dataService.GetProfileState(sessionId.ToString(), requestedLanguage);
+                    var profileMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    stageStopwatch.Restart();
+                    var generated = profileState?.RepeatableQuestGroups
+                        .SelectMany(group => group.Quests)
+                        .Select(entry => entry.Node)
+                        .OrderBy(node => node.Id, StringComparer.Ordinal)
+                        .ToArray() ?? [];
+                    var repeatableKinds = (profileState?.RepeatableQuestGroups ?? [])
+                        .SelectMany(group => group.Quests.Select(entry => (entry.Node.Id, group.Kind)))
+                        .GroupBy(entry => entry.Id, StringComparer.Ordinal)
+                        .ToDictionary(group => group.Key, group => group.First().Kind, StringComparer.Ordinal);
+                    var generatedIds = generated.Select(node => node.Id).ToArray();
+                    var defaultVisibleQuestIds = (profileState?.DefaultVisibleQuestIds ?? [])
+                        .Concat(generatedIds)
+                        .Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal)
+                        .ToArray();
+                    var allApplicableQuestIds = (profileState?.AllApplicableQuestIds ?? [])
+                        .Concat(generatedIds)
+                        .Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal)
+                        .ToArray();
+                    var stateEntries = (profileState?.Quests ?? [])
+                        .Concat((profileState?.RepeatableQuestGroups ?? []).SelectMany(group => group.Quests.Select(entry => entry.State)))
+                        .GroupBy(state => state.QuestId, StringComparer.Ordinal)
+                        .Select(group => group.Last())
+                        .ToArray();
+                    var displayStates = stateEntries.ToDictionary(
+                        state => state.QuestId,
+                        state => state.DisplayState,
+                        StringComparer.Ordinal);
+                    var progressPercentages = stateEntries.ToDictionary(
+                        state => state.QuestId,
+                        state => state.ProgressPercent,
+                        StringComparer.Ordinal);
+                    var repeatableEndTimes = (profileState?.RepeatableQuestGroups ?? [])
+                        .SelectMany(group => group.Quests.Select(entry => (entry.Node.Id, group.EndTime)))
+                        .GroupBy(entry => entry.Id, StringComparer.Ordinal)
+                        .ToDictionary(group => group.Key, group => group.Last().EndTime, StringComparer.Ordinal);
+                    var prerequisiteBlockerIds = stateEntries.ToDictionary(
+                        state => state.QuestId,
+                        state => state.Blockers
+                            .Where(blocker => blocker.Kind == "Prerequisite" && blocker.SubjectId is not null)
+                            .Select(blocker => blocker.SubjectId!)
+                            .Distinct(StringComparer.Ordinal)
+                            .Order(StringComparer.Ordinal)
+                            .ToArray(),
+                        StringComparer.Ordinal);
+                    var questSummaries = topology.Quests
+                        .Concat(generated)
+                        .Where(node => !string.IsNullOrWhiteSpace(node.Summary))
+                        .GroupBy(node => node.Id, StringComparer.Ordinal)
+                        .ToDictionary(group => group.Key, group => group.Last().Summary!, StringComparer.Ordinal);
+                    var questMetaInfo = topology.Quests
+                        .Concat(generated)
+                        .Where(node => !string.IsNullOrWhiteSpace(node.WikiUrl))
+                        .GroupBy(node => node.Id, StringComparer.Ordinal)
+                        .ToDictionary(
+                            group => group.Key,
+                            group =>
+                            {
+                                var node = group.Last();
+                                return new QuestMetaInfoDto(node.WikiUrl!, node.RelevantItems);
+                            },
+                            StringComparer.Ordinal);
+                    var feed = new QuestMapClientTopologyFeedDto(
+                        topology,
+                        generated,
+                        repeatableKinds,
+                        defaultVisibleQuestIds,
+                        allApplicableQuestIds,
+                        displayStates,
+                        progressPercentages,
+                        repeatableEndTimes,
+                        prerequisiteBlockerIds,
+                        questSummaries,
+                        questMetaInfo);
+                    var projectionMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    stageStopwatch.Restart();
+                    // JsonUtil already escapes JSON control characters. HttpResponseUtil.NoBody would
+                    // rescan this large, valid payload with five Regex.Replace passes for no change.
+                    var response = jsonUtil.Serialize(feed)
+                        ?? throw new InvalidOperationException("QuestMap topology feed serialization returned null.");
+                    var serializationMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    totalStopwatch.Stop();
+                    logger.Info(
+                        "QUESTMAP_M08_SERVER_TOPOLOGY_ROUTE " +
+                        $"quests={topology.Quests.Count}; generated={generated.Length}; chars={response.Length}; " +
+                        $"topologyMs={topologyMilliseconds:F2}; profileMs={profileMilliseconds:F2}; " +
+                        $"projectionMs={projectionMilliseconds:F2}; serializeMs={serializationMilliseconds:F2}; " +
+                        $"totalMs={totalStopwatch.Elapsed.TotalMilliseconds:F2}");
+                    return new ValueTask<string>(response);
+                }),
+            new RouteAction<EmptyRequestData>(
+                "/questmap/client/repeatables",
+                (url, _, sessionId, _) =>
+                {
+                    var totalStopwatch = Stopwatch.StartNew();
+                    var stageStopwatch = Stopwatch.StartNew();
+                    var requestedLanguage = GetRequestedLanguage(url, RepeatablesRoute);
+                    var topology = dataService.GetTopology(requestedLanguage);
+                    var topologyMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    stageStopwatch.Restart();
+                    var profileState = dataService.GetProfileState(sessionId.ToString(), requestedLanguage);
+                    var profileMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    stageStopwatch.Restart();
+                    var generated = profileState?.RepeatableQuestGroups
+                        .SelectMany(group => group.Quests)
+                        .Select(entry => entry.Node)
+                        .OrderBy(node => node.Id, StringComparer.Ordinal)
+                        .ToArray() ?? [];
+                    var repeatableKinds = (profileState?.RepeatableQuestGroups ?? [])
+                        .SelectMany(group => group.Quests.Select(entry => (entry.Node.Id, group.Kind)))
+                        .GroupBy(entry => entry.Id, StringComparer.Ordinal)
+                        .ToDictionary(group => group.Key, group => group.First().Kind, StringComparer.Ordinal);
+                    var generatedIds = generated.Select(node => node.Id).ToArray();
+                    var defaultVisibleQuestIds = (profileState?.DefaultVisibleQuestIds ?? [])
+                        .Concat(generatedIds)
+                        .Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal)
+                        .ToArray();
+                    var allApplicableQuestIds = (profileState?.AllApplicableQuestIds ?? [])
+                        .Concat(generatedIds)
+                        .Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal)
+                        .ToArray();
+                    var stateEntries = (profileState?.Quests ?? [])
+                        .Concat((profileState?.RepeatableQuestGroups ?? []).SelectMany(group => group.Quests.Select(entry => entry.State)))
+                        .GroupBy(state => state.QuestId, StringComparer.Ordinal)
+                        .Select(group => group.Last())
+                        .ToArray();
+                    var displayStates = stateEntries.ToDictionary(state => state.QuestId, state => state.DisplayState, StringComparer.Ordinal);
+                    var progressPercentages = stateEntries.ToDictionary(state => state.QuestId, state => state.ProgressPercent, StringComparer.Ordinal);
+                    var repeatableEndTimes = (profileState?.RepeatableQuestGroups ?? [])
+                        .SelectMany(group => group.Quests.Select(entry => (entry.Node.Id, group.EndTime)))
+                        .GroupBy(entry => entry.Id, StringComparer.Ordinal)
+                        .ToDictionary(group => group.Key, group => group.Last().EndTime, StringComparer.Ordinal);
+                    var prerequisiteBlockerIds = stateEntries.ToDictionary(
+                        state => state.QuestId,
+                        state => state.Blockers
+                            .Where(blocker => blocker.Kind == "Prerequisite" && blocker.SubjectId is not null)
+                            .Select(blocker => blocker.SubjectId!)
+                            .Distinct(StringComparer.Ordinal)
+                            .Order(StringComparer.Ordinal)
+                            .ToArray(),
+                        StringComparer.Ordinal);
+                    var summaries = generated
+                        .Where(node => !string.IsNullOrWhiteSpace(node.Summary))
+                        .GroupBy(node => node.Id, StringComparer.Ordinal)
+                        .ToDictionary(group => group.Key, group => group.Last().Summary!, StringComparer.Ordinal);
+                    var questMetaInfo = generated
+                        .Where(node => !string.IsNullOrWhiteSpace(node.WikiUrl))
+                        .GroupBy(node => node.Id, StringComparer.Ordinal)
+                        .ToDictionary(
+                            group => group.Key,
+                            group =>
+                            {
+                                var node = group.Last();
+                                return new QuestMetaInfoDto(node.WikiUrl!, node.RelevantItems);
+                            },
+                            StringComparer.Ordinal);
+                    var feed = new QuestMapClientRepeatableFeedDto(
+                        topology.Version,
+                        generated,
+                        repeatableKinds,
+                        defaultVisibleQuestIds,
+                        allApplicableQuestIds,
+                        displayStates,
+                        progressPercentages,
+                        repeatableEndTimes,
+                        prerequisiteBlockerIds,
+                        summaries,
+                        questMetaInfo);
+                    var projectionMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    stageStopwatch.Restart();
+                    var response = jsonUtil.Serialize(feed)
+                        ?? throw new InvalidOperationException("QuestMap repeatable feed serialization returned null.");
+                    var serializationMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
+                    totalStopwatch.Stop();
+                    logger.Info(
+                        "QUESTMAP_M08_SERVER_REPEATABLE_ROUTE " +
+                        $"generated={generated.Length}; chars={response.Length}; topologyMs={topologyMilliseconds:F2}; " +
+                        $"profileMs={profileMilliseconds:F2}; projectionMs={projectionMilliseconds:F2}; " +
+                        $"serializeMs={serializationMilliseconds:F2}; totalMs={totalStopwatch.Elapsed.TotalMilliseconds:F2}");
+                    return new ValueTask<string>(response);
+                })
+        ])
+{
+    public const string Route = "/questmap/client/topology";
+    public const string RepeatablesRoute = "/questmap/client/repeatables";
+
+    internal static string? GetRequestedLanguage(string url, string route)
+    {
+        if (string.Equals(url, route, StringComparison.Ordinal)) return null;
+
+        var prefix = route + "/";
+        if (!url.StartsWith(prefix, StringComparison.Ordinal)) return null;
+
+        var encodedLanguage = url[prefix.Length..];
+        if (encodedLanguage.Length == 0 || encodedLanguage.Contains('/')) return null;
+
+        return Uri.UnescapeDataString(encodedLanguage);
+    }
+}

@@ -15,11 +15,13 @@ Cover pure state and graph logic with small fixtures:
 - trader-filter direct-successor context seeded only by available/active/completed quests, with finished/level filtering;
 - trader-filter selection matching unfiltered recursive-prerequisite visibility across traders;
 - trader-filter merge quests showing only direct unmet prerequisites across traders;
-- Daily/Weekly-only group inclusion with `Daily_Savage` exclusion;
+- Daily/Weekly/`Daily_Savage` group inclusion, Daily band normalization, and explicit Scav identity propagation;
 - unaccepted repeatables classified as available and elapsed groups classified as expired;
 - repeatable search, trader, and finished filtering, default-on persisted calendar visibility, plus selection/details without focused-chain activation;
 - hide-finished behavior;
 - objective dependency ordering;
+- task-zone map resolution, shared triggers spanning multiple maps, canonical Factory/Ground Zero variant IDs, unknown-zone fallback, server-to-client objective relevance/scope transport, concrete display-map precedence, and loaded-location internal/Mongo alias transport;
+- exact objective-scope native map-filter membership/row visibility across `Out of Raid`, `Any`, Transition, and concrete maps; identification and location naming of objectives omitted by inactive filters; Mongo-to-internal alias expansion in the server-map-driven raid tracked-list projection; Arena exclusion from Safe Corridor's mixed Reserve/`develop` condition; and unknown objective types defaulting to in-raid relevance;
 - objective rich-text parsing through the same allowlisted sanitizer as descriptions and rewards;
 - task counter mapping, including capped exposed progress without changing raw comparator semantics;
 - focused-chain closure: recursive predecessors plus direct successors only.

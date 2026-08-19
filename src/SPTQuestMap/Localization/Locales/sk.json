@@ -69,6 +69,7 @@
   "legend.requiresStarted": "Vyžaduje začatie",
   "legend.requiresOutcome": "Ľubovoľný výsledok",
   "state.PrerequisiteGated": "Blokované predchádzajúcou úlohou",
+  "state.PrestigeGated": "Blokované prestížou",
   "state.LevelGated": "Blokované úrovňou",
   "state.TraderGated": "Blokované obchodníkom",
   "state.TraderUnavailable": "Obchodník nedostupný",
@@ -87,5 +88,6 @@
   "details.branchAlternatives": "Alternatívne vetvy",
   "details.prerequisites": "Predpoklady",
   "details.successors": "Priame následné úlohy",
-  "profile.aria": "Profil"
+  "profile.aria": "Profil",
+  "location.none": "Mimo raidu"
 }

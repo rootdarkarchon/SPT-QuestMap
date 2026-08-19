@@ -69,6 +69,7 @@
   "legend.requiresStarted": "Richiede avvio",
   "legend.requiresOutcome": "Qualsiasi esito",
   "state.PrerequisiteGated": "Bloccata da missione precedente",
+  "state.PrestigeGated": "Bloccata dal prestigio",
   "state.LevelGated": "Bloccata dal livello",
   "state.TraderGated": "Bloccata dal commerciante",
   "state.TraderUnavailable": "Commerciante non disponibile",
@@ -87,5 +88,6 @@
   "details.branchAlternatives": "Rami alternativi",
   "details.prerequisites": "Prerequisiti",
   "details.successors": "Successori diretti",
-  "profile.aria": "Profilo"
+  "profile.aria": "Profilo",
+  "location.none": "Fuori dal raid"
 }

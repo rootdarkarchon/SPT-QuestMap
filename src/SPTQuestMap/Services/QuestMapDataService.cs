@@ -1,43 +1,49 @@
 using SPTarkov.DI.Annotations;
+using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Helpers;
-using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Services;
 
 namespace SPTQuestMap.Services;
 
-[Injectable(InjectionType.Singleton)]
-public sealed class QuestMapDataService
+[Injectable(InjectionType.Singleton, TypePriority = OnLoadOrder.PostSptModLoader + 1)]
+public sealed class QuestMapDataService : IOnLoad
 {
+    private readonly DatabaseService _databaseService;
     private readonly QuestMapLocalizationService _localization;
+    private readonly QuestMetaInfoCatalog _metaInfoCatalog;
     private readonly QuestTopologyBuilder _topology;
     private readonly QuestProfileStateBuilder _profiles;
+    private readonly QuestMapTopologyPreload _preload;
     private readonly SaveServer _saveServer;
 
-#pragma warning disable CS0618 // SPT 4.0.13 provides ConfigServer; direct config DI starts in 4.1.
     public QuestMapDataService(
         DatabaseService databaseService,
         LocaleService localeService,
         SaveServer saveServer,
         QuestHelper questHelper,
         SeasonalEventService seasonalEventService,
-        ConfigServer configServer,
+        QuestMapTopologyPreload preload,
         ISptLogger<QuestMapDataService> logger
     )
-#pragma warning restore CS0618
     {
+        _databaseService = databaseService;
         _saveServer = saveServer;
+        _preload = preload;
         _localization = new QuestMapLocalizationService(databaseService, localeService);
+        _metaInfoCatalog = new QuestMetaInfoCatalog(
+            warning: message => logger.Warning(message));
+        var zoneMapCatalog = new QuestZoneMapCatalog();
         _topology = new QuestTopologyBuilder(
             databaseService,
             localeService,
             questHelper,
             seasonalEventService,
-#pragma warning disable CS0618 // SPT 4.0.13 exposes config instances through ConfigServer.
-            configServer.GetConfig<QuestConfig>(),
-#pragma warning restore CS0618
+            preload,
             new QuestSummaryCatalog(warning: message => logger.Warning(message)),
+            _metaInfoCatalog,
+            zoneMapCatalog,
             logger
         );
         _profiles = new QuestProfileStateBuilder(
@@ -46,11 +52,16 @@ public sealed class QuestMapDataService
             saveServer,
             questHelper,
             seasonalEventService,
-#pragma warning disable CS0618 // SPT 4.0.13 exposes config instances through ConfigServer.
-            configServer.GetConfig<QuestConfig>(),
-#pragma warning restore CS0618
+            preload,
+            zoneMapCatalog,
             logger
         );
+    }
+
+    public Task OnLoad()
+    {
+        _metaInfoCatalog.Resolve(_preload.Items);
+        return Task.CompletedTask;
     }
 
     public QuestTopologyDto GetTopology(string? requestedLanguage = null) =>
