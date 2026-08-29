@@ -6,15 +6,15 @@
 
 ## Status at a glance
 
-- **Release:** `2.0.1` combined server/web + in-game client.
-- **Accepted browser baseline:** the server/Blazor Milestone 4 application and difference-first profile comparison originally completed as `1.3.0`, retained in the `2.0.1` product.
+- **Release:** `2.0.2` combined server/web + in-game client.
+- **Accepted browser baseline:** the server/Blazor Milestone 4 application and difference-first profile comparison originally completed as `1.3.0`, retained in the `2.0.2` product.
 - **Milestones:** in-game M0–M8 are complete and user-accepted. The `ingame-ui` work has been merged into `main` and is closed as the completed 2.0 in-game implementation.
 - **Scope:** the 2.0 feature scope is complete and remains frozen at the server-authoritative multi-map/task-location integration. Further 2.0 work is maintenance: verified regressions, compatibility corrections, and release servicing only. New feature work belongs in a separately approved post-2.0 scope.
 - **Blockers:** none.
-- **Next work:** live-verify that FIR item drop/search/pickup cycles do not repeat a prior progress notification and that an Icebreaker-expanded map strip scrolls horizontally without clipping.
-- **Current validation:** zero compiler warnings/errors; **94/94 shared-core tests** and **166/166 server/browser tests**.
-- **Current combined package:** `artifacts/release/SPT-QuestMap-2.0.1.zip`, 15 entries / 12 files, 835,532 bytes, SHA-256 `43762BCE3A9209B28C2955EE374878C7C5A3995FD3419286081287EDA92BCF7F`. Root inspection found zero escaping files, zero `.js`/`.ts` files, and only the four expected QuestMap project DLL entries. All assemblies report `2.0.1.0`; package DLLs are client `95F0507BC0754AB30C50331504974E232C105BDBD51D2503F329024D955BDDA1`, shared Core `5F1E1C1425954F8CD1F02E70ABE2FC68896025E6BEF1198EC1073001BBD47399`, and server `DC3075E2D65827CD46821B34E587020DE4777B0F105CD784C1EC9F18E8333E95`. This testing artifact has not been deployed to the live install.
-- **Current installed state (read-only verification):** the live install remains on `2.0.0.0` and does not match the `2.0.1` testing artifact. Installed SHA-256 values are client `4969B5EAB203989401D64E822C14943428EC89F1D583083A67AD6EAC01D886C5`, client Core `7F7FF4D6F3620BAE261C1AA90A927CEAF9EDBD9DD961797B861B4E17984D94D6`, server `6548FA6AD1E24C0268EE49648F7F5C3AB7E9F5B0C85AA8F89533C7369A44523A`, and server Core `C243719C735304903A2A789DB78BC0FFBC8088A81D2B881EF0C2E427871145C7`.
+- **Next work:** live-verify that an externally resolved custom `Block` gate changes Interchangium Arcadium from Locked to Available wherever the native Accept action is offered; also verify that FIR item drop/search/pickup cycles do not repeat a prior progress notification and that an Icebreaker-expanded map strip scrolls horizontally without clipping.
+- **Current validation:** zero compiler warnings/errors; **95/95 shared-core tests** and **166/166 server/browser tests**.
+- **Current combined package:** `artifacts/release/SPT-QuestMap-2.0.2.zip`, 15 entries / 12 files, 835,618 bytes, SHA-256 `946DFB605D456E273B519EA77138B0348A24454D6EA366F55F81C37979C0CCB7`. Root inspection found zero escaping files, zero `.js`/`.ts` files, and only the four expected QuestMap project DLL entries. All assemblies report `2.0.2.0`; package DLLs are client `6CBE1FCFFABD07A6B8B30194C6D63B373C518EB263F93AFE398E07D958C8BB00`, shared Core `4BEAA77C3701CDD4735C6172CAB6A24B32B366618D6DE40F4CA9B61CB31FB0EF`, and server `FB96043ABC5F2DF70D8DF8F386635124C505EB4821307439BCF0174408B8B4E0`. This testing artifact has not been deployed to the live install.
+- **Current installed state (read-only verification):** the live install remains on `2.0.0.0` and does not match the `2.0.2` testing artifact. Installed SHA-256 values are client `4969B5EAB203989401D64E822C14943428EC89F1D583083A67AD6EAC01D886C5`, client Core `7F7FF4D6F3620BAE261C1AA90A927CEAF9EDBD9DD961797B861B4E17984D94D6`, server `6548FA6AD1E24C0268EE49648F7F5C3AB7E9F5B0C85AA8F89533C7369A44523A`, and server Core `C243719C735304903A2A789DB78BC0FFBC8088A81D2B881EF0C2E427871145C7`.
 
 Every source-changing 2.0 maintenance slice must create a **fresh** combined archive with `scripts/package-release.ps1 -Target Both`; record entry/file count, byte size, SHA-256, and root-containment inspection. Never cite an archive generated before the latest source change.
 
@@ -172,6 +172,7 @@ Native location-strip order is:
 
 - Quest/location banners, Description/Summary/Relevant Items tabs, authoritative objective order/progress, native success-reward and failure-penalty cards, Wiki/Flea actions, route markers, and fixed action strip are accepted.
 - Accept/Restart, Turn In, Replace, and objective Hand In continue through native EFT views/controllers. Lightkeeper and BTR Driver remain read-only outside their raid-only interaction context.
+- An initialized native quest at `AvailableForStart` overrides only a stale generic server `Locked` presentation, keeping the status consistent with the native Accept action while retaining specific server gates and keeping missing/future quests locked.
 - Accept/restart, turn-in, and objective hand-in share a one-second real-time duplicate-press guard across table and details controls. Repeatable replacement is intentionally outside that narrow guard.
 - Handover eligibility is resolved progressively through initialized native objective hosts; do not synchronously scan every objective during table construction.
 - Opt-in objective skipping remains a narrow exact-EFT checker operation, disabled by default, guarded by no-raid/eligibility confirmation, and does not claim standalone persistence before ordinary quest settlement.
@@ -233,10 +234,11 @@ Treat order-of-magnitude regressions or visible vanilla-screen exposure during f
 ```powershell
 scripts/build.ps1 -Target Both -Configuration Release -SptRoot D:\Tarkov-SPT
 scripts/deploy.ps1 -Target Client   # or Server / Both
-scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.0.1
+scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.0.2
 ```
 
 - `build.ps1` uses the explicit `Client|Server|Both` contract and SDK `--artifacts-path`; stages process-specific output under `dist/client` and `dist/server`.
+- Tagged CI downloads the exact `4.0.13 / 40087 / 2891fd4` SPT reference archive from SP-Tushonka's maintained installer mirrors, verifies SHA-256 `036D7F062A13547CA7591BDE02C5111E9B791D29906BD5C4C4D8CBF60734FD16`, and does not depend on a GitHub release asset or the archived `sp-tarkov` organization.
 - A normal complete pass runs the shared-core suite and server/browser suite. `-SkipTests` is allowed only when explicitly requested and must be recorded honestly.
 - The server and client project versions must match before packaging.
 - Release contents are confined to:

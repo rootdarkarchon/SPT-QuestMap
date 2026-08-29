@@ -278,7 +278,7 @@ After building, create an install-ready combined archive with the version declar
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\package-release.ps1 `
-  -Target Both -Configuration Release -Version 2.0.1
+  -Target Both -Configuration Release -Version 2.0.2
 ```
 
 See the [script reference](scripts/README.md), [deployment contract](docs/deployment.md), and [testing guide](docs/testing.md) for the complete workflow.

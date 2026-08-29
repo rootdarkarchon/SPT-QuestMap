@@ -20,7 +20,10 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.ref_name }}
       SPT_VERSION: 4.0.13
-      SPT_RELEASE_REPOSITORY: sp-tushonka/build
+      SPT_CLIENT_BUILD: 40087
+      SPT_REFERENCE_ARCHIVE_URL: https://patcher.sp-tushonka.com/releases/SPT-4.0.13-40087-2891fd4.7z
+      SPT_REFERENCE_ARCHIVE_FALLBACK_URL: https://mirror.sp-tushonka.com/releases/SPT-4.0.13-40087-2891fd4.7z
+      SPT_REFERENCE_ARCHIVE_SHA256: 036D7F062A13547CA7591BDE02C5111E9B791D29906BD5C4C4D8CBF60734FD16
 
     steps:
       - name: Check out tagged source
@@ -59,33 +62,46 @@ jobs:
               throw "Tag '$env:RELEASE_TAG' does not match the client BepInEx plugin version."
           }
 
-      - name: Download official SPT build references
+      - name: Download pinned SPT build references
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           $downloadDirectory = Join-Path $env:RUNNER_TEMP 'spt-download'
           $sptInstallRoot = Join-Path $env:RUNNER_TEMP 'spt-install'
           New-Item -ItemType Directory -Force -Path $downloadDirectory, $sptInstallRoot | Out-Null
 
-          gh release download $env:SPT_VERSION `
-              --repo $env:SPT_RELEASE_REPOSITORY `
-              --pattern "SPT-$($env:SPT_VERSION)-*.7z" `
-              --dir $downloadDirectory
+          $archiveName = "SPT-$($env:SPT_VERSION)-$($env:SPT_CLIENT_BUILD)-2891fd4.7z"
+          $archive = Join-Path $downloadDirectory $archiveName
+          $downloadErrors = [System.Collections.Generic.List[string]]::new()
+          $downloaded = $false
 
-          $archives = @(Get-ChildItem -LiteralPath $downloadDirectory -Filter '*.7z' -File)
-          if ($archives.Count -ne 1) {
-              throw "Expected one SPT $env:SPT_VERSION archive, found $($archives.Count)."
+          foreach ($downloadUrl in @($env:SPT_REFERENCE_ARCHIVE_URL, $env:SPT_REFERENCE_ARCHIVE_FALLBACK_URL)) {
+              try {
+                  Invoke-WebRequest -Uri $downloadUrl -OutFile $archive
+                  $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
+                  if ($actualHash -ne $env:SPT_REFERENCE_ARCHIVE_SHA256) {
+                      throw "SHA-256 mismatch: expected $env:SPT_REFERENCE_ARCHIVE_SHA256, found $actualHash."
+                  }
+
+                  $downloaded = $true
+                  break
+              }
+              catch {
+                  $downloadErrors.Add("${downloadUrl}: $($_.Exception.Message)")
+              }
           }
 
-          & 7z x $archives[0].FullName "-o$sptInstallRoot" -y
+          if (-not $downloaded) {
+              throw "Unable to download the pinned SPT $env:SPT_VERSION reference archive. $($downloadErrors -join ' | ')"
+          }
+
+          & 7z x $archive "-o$sptInstallRoot" -y
           if ($LASTEXITCODE -ne 0) {
               throw "7-Zip failed with exit code $LASTEXITCODE."
           }
 
           $sptCore = Join-Path $sptInstallRoot 'SPT/SPTarkov.Server.Core.dll'
           if (-not (Test-Path -LiteralPath $sptCore -PathType Leaf)) {
-              throw "The official archive did not contain the expected SPT/SPTarkov.Server.Core.dll."
+              throw "The pinned archive did not contain the expected SPT/SPTarkov.Server.Core.dll."
           }
 
           $coreVersion = [System.Reflection.AssemblyName]::GetAssemblyName($sptCore).Version

@@ -1186,6 +1186,38 @@ public sealed class QuestGraphCoreTests
     }
 
     [Test]
+    public void LiveAvailableForStart_OverridesOnlyAStaleGenericServerLock()
+    {
+        var quest = Node("custom-lock", "Prapor", "Any");
+        var feed = Feed([quest], []);
+        feed.DefaultVisibleQuestIds = [quest.Id];
+        feed.AllApplicableQuestIds = [quest.Id];
+        var topology = QuestTopologyNormalizer.Normalize(feed);
+        var liveOverlay = QuestOverlayBuilder.Build(topology, Snapshot(Quest(quest.Id, "AvailableForStart"))) with
+        {
+            AuthoritativeDisplayStates = new Dictionary<string, QuestMapDisplayStateKind>(StringComparer.Ordinal)
+            {
+                [quest.Id] = QuestMapDisplayStateKind.Locked,
+            },
+        };
+        var missingOverlay = QuestOverlayBuilder.Build(topology, Snapshot()) with
+        {
+            AuthoritativeDisplayStates = new Dictionary<string, QuestMapDisplayStateKind>(StringComparer.Ordinal)
+            {
+                [quest.Id] = QuestMapDisplayStateKind.Locked,
+            },
+        };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(QuestGraphRules.ClassifyProfileDisplayState(topology, topology.NodesById[quest.Id], liveOverlay),
+                Is.EqualTo(QuestMapDisplayStateKind.Available));
+            Assert.That(QuestGraphRules.ClassifyProfileDisplayState(topology, topology.NodesById[quest.Id], missingOverlay),
+                Is.EqualTo(QuestMapDisplayStateKind.Locked));
+        });
+    }
+
+    [Test]
     public void ServerProfileProjection_IsAuthoritativeForStateVisibilityAndRepeatableLayout()
     {
         var lightkeeper = Node("lightkeeper", "Lightkeeper", "Any");

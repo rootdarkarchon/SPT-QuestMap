@@ -66,6 +66,12 @@ public static class QuestGraphRules
         if (TryClassifyLiveDynamicState(exact, out var liveDynamic)) return liveDynamic;
         if (overlay.AuthoritativeDisplayStates.TryGetValue(node.Id, out var authoritative))
         {
+            // The initialized EFT quest is the authority for whether Accept can run. A
+            // custom gate may leave the last server projection generically Locked even
+            // after EFT advances the live quest to AvailableForStart.
+            if (authoritative == QuestMapDisplayStateKind.Locked
+                && exact == QuestDisplayStateKind.AvailableForStart)
+                return QuestMapDisplayStateKind.Available;
             if (authoritative == QuestMapDisplayStateKind.Available && state?.HasLiveQuest != true)
                 return QuestMapDisplayStateKind.Locked;
             return authoritative;

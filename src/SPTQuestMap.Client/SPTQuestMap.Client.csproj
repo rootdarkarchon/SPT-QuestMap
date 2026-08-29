@@ -7,7 +7,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>SPTQuestMap.Client</AssemblyName>
     <RootNamespace>SPTQuestMap.Client</RootNamespace>
-    <Version>2.0.1</Version>
+    <Version>2.0.2</Version>
     <DebugType>portable</DebugType>
     <Deterministic>true</Deterministic>
     <EftInstallRoot Condition="'$(EftInstallRoot)' == ''">$(SPT_ROOT)</EftInstallRoot>

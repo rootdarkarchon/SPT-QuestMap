@@ -31,7 +31,7 @@ Do not commit machine-specific paths or credentials.
 Pushing a semantic-version tag such as `2.0.0` runs `.github/workflows/release.yml` on a Windows GitHub-hosted runner. The workflow:
 
 1. verifies that the tag exactly matches the map, shared-core, client, and BepInEx plugin versions;
-2. downloads the official `sp-tarkov/build` release archive for SPT 4.0.13;
+2. downloads the exact SPT 4.0.13 archive from SP-Tushonka's maintained installer mirrors and verifies its pinned SHA-256;
 3. downloads a hash-pinned, access-controlled EFT 40087 build-reference archive;
 4. verifies the exact SPT core and `Assembly-CSharp.dll` identities;
 5. builds the server and client and runs the complete test suite;
@@ -64,7 +64,7 @@ BepInEx/
       SPTQuestMap.Core.pdb
 ```
 
-The official SPT archive and private EFT reference archive are used only as build references on the runner and are not republished inside the QuestMap archive. The MIT license travels with the binary distribution; installation and usage documentation remain on the GitHub Release and repository README.
+The SPT archive and private EFT reference archive are used only as build references on the runner and are not republished inside the QuestMap archive. The SPT URL is pinned to the exact `4.0.13 / 40087 / 2891fd4` archive published by the current SP-Tushonka installer infrastructure, with primary and fallback mirrors plus a fixed SHA-256; CI does not depend on a GitHub release asset or the archived `sp-tarkov` organization. The MIT license travels with the binary distribution; installation and usage documentation remain on the GitHub Release and repository README.
 
 ## Restart command
 
