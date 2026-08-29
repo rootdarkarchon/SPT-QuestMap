@@ -24,6 +24,7 @@ internal sealed class RaidQuestRuntime : IDisposable
     private readonly RaidQuestProgressNotificationStack _notification;
     private readonly RaidTrackedQuestListView _trackedList;
     private readonly RaidPerformanceTelemetry _telemetry;
+    private readonly RaidProgressNotificationState _notificationProgress = new();
     private readonly Action<AbstractQuestControllerClass> _observeQuestController;
     private readonly Action _clearObservedQuestController;
     private readonly Action<string, string?, string?> _requestRefresh;
@@ -102,6 +103,7 @@ internal sealed class RaidQuestRuntime : IDisposable
         if (enteringRaid)
         {
             _progressMonitor?.Dispose();
+            _notificationProgress.Clear();
             _active = true;
             _questController = raid.QuestController;
             _locationId = raid.LocationId;
@@ -160,7 +162,22 @@ internal sealed class RaidQuestRuntime : IDisposable
                 .ToArray();
             var notificationObjectives = changedObjectives
                 .Where(objective => IsActiveObjective(node, objective.ObjectiveId))
-                .Where(objective => RaidProgressNotificationRules.HasEffectiveIncrease(objective, previousById))
+                .Where(objective =>
+                {
+                    previousById.TryGetValue(objective.ObjectiveId, out var prior);
+                    var definition = node.Objectives.FirstOrDefault(candidate =>
+                        string.Equals(candidate.Id, objective.ObjectiveId, StringComparison.Ordinal));
+                    var resetOnDecrease = definition is
+                    {
+                        OneSessionOnly: true,
+                        DoNotResetIfCounterCompleted: false,
+                    };
+                    return _notificationProgress.ObserveEffectiveIncrease(
+                        questId,
+                        objective,
+                        prior,
+                        resetOnDecrease);
+                })
                 .ToArray();
 
             if (notificationObjectives.Length == 0)
@@ -236,6 +253,7 @@ internal sealed class RaidQuestRuntime : IDisposable
         _questController = null;
         _locationId = null;
         _currentMapIds.Clear();
+        _notificationProgress.Clear();
         _progressMonitor?.Dispose();
         _progressMonitor = null;
         _clearRefreshSignals();

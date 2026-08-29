@@ -19,7 +19,7 @@ namespace SPTQuestMap.Client.UI;
 
 internal sealed class InProgressQuestTableView : IGlobalTasksContentView
 {
-    private const float GlobalHeaderHeight = 140f;
+    private const float GlobalHeaderHeight = 150f;
     private const float TableHeaderHeight = 38f;
     private const float NonTaskContentHeight = 78f;
     private const float MinimumRowHeight = NonTaskContentHeight + 4f;

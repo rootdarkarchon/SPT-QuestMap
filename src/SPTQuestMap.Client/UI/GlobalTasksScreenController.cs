@@ -948,11 +948,34 @@ internal sealed class GlobalTasksScreenController : IDisposable
             QuestObjectiveMapRules.AnyFilterId, StringComparison.OrdinalIgnoreCase));
         var transition = taskLocations.FirstOrDefault(map => map.Id.Equals(
             QuestObjectiveMapRules.TransitionFilterId, StringComparison.OrdinalIgnoreCase));
-        const float startX = 12;
-        const float y = -103;
         const float width = 116;
         const float height = 32;
         const float gap = 6;
+
+        var viewport = UnityUiFactory.CreateRect("MapStripViewport", header);
+        viewport.anchorMin = new Vector2(0, 1);
+        viewport.anchorMax = new Vector2(1, 1);
+        viewport.pivot = new Vector2(0.5f, 1);
+        viewport.offsetMin = new Vector2(12, -147);
+        viewport.offsetMax = new Vector2(-12, -98);
+        viewport.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, 0.01f);
+        viewport.gameObject.AddComponent<RectMask2D>();
+
+        var content = UnityUiFactory.CreateRect("MapStripContent", viewport);
+        content.anchorMin = content.anchorMax = content.pivot = new Vector2(0, 1);
+        content.anchoredPosition = new Vector2(0, -4);
+
+        var scrollRect = viewport.gameObject.AddComponent<ScrollRect>();
+        scrollRect.viewport = viewport;
+        scrollRect.content = content;
+        scrollRect.horizontal = true;
+        scrollRect.vertical = false;
+        scrollRect.movementType = ScrollRect.MovementType.Clamped;
+        scrollRect.inertia = true;
+        scrollRect.scrollSensitivity = 32f;
+        scrollRect.horizontalScrollbar = CreateMapStripScrollbar(viewport);
+        scrollRect.horizontalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+
         var nextIndex = 0;
         AddMapResetChoice(nextIndex++);
         AddSpecialMapChoice(noLocation);
@@ -964,6 +987,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
             AddMapChoice(location.Name, location.Id, location.BannerImageUrl ?? FallbackLocationBannerUrl, location.Aliases, nextIndex + index,
                 location.Aliases.Any(_inProgressLocationIds.Contains));
         }
+        content.sizeDelta = new Vector2(Mathf.Max(0, (nextIndex + locations.Length) * (width + gap) - gap), height);
 
         void AddSpecialMapChoice(QuestMapReference? map)
         {
@@ -975,9 +999,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
         void AddMapResetChoice(int index)
         {
-            var root = UnityUiFactory.CreateRect("Map-Reset", header);
+            var root = UnityUiFactory.CreateRect("Map-Reset", content);
             root.anchorMin = root.anchorMax = root.pivot = new Vector2(0, 1);
-            root.anchoredPosition = new Vector2(startX + index * (width + gap), y);
+            root.anchoredPosition = new Vector2(index * (width + gap), 0);
             root.sizeDelta = new Vector2(width, height);
             var button = UnityUiFactory.AddButton(root.gameObject, QuestGraphPalette.Control);
             var text = UnityUiFactory.AddText(root.gameObject, ClientLocale.Text("label.reset"), 11,
@@ -991,9 +1015,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
         void AddMapChoice(string label, string? id, string? bannerUrl, string[] aliases, int index, bool selected)
         {
-            var root = UnityUiFactory.CreateRect($"Map-{id}", header);
+            var root = UnityUiFactory.CreateRect($"Map-{id}", content);
             root.anchorMin = root.anchorMax = root.pivot = new Vector2(0, 1);
-            root.anchoredPosition = new Vector2(startX + index * (width + gap), y);
+            root.anchoredPosition = new Vector2(index * (width + gap), 0);
             root.sizeDelta = new Vector2(width, height);
             root.gameObject.AddComponent<RectMask2D>();
             var button = UnityUiFactory.AddButton(root.gameObject,
@@ -1058,6 +1082,31 @@ internal sealed class GlobalTasksScreenController : IDisposable
             });
             pointerClicks.triggers.Add(pointerClick);
         }
+    }
+
+    private static Scrollbar CreateMapStripScrollbar(RectTransform viewport)
+    {
+        var track = UnityUiFactory.CreateRect("MapStripScrollbar", viewport);
+        track.anchorMin = new Vector2(0, 0);
+        track.anchorMax = new Vector2(1, 0);
+        track.pivot = new Vector2(0.5f, 0);
+        track.offsetMin = new Vector2(0, 2);
+        track.offsetMax = new Vector2(0, 9);
+        var trackImage = track.gameObject.AddComponent<Image>();
+        trackImage.color = new Color(0.10f, 0.11f, 0.11f, 0.85f);
+
+        var slidingArea = UnityUiFactory.CreateRect("SlidingArea", track);
+        UnityUiFactory.Stretch(slidingArea, 1, 1, 1, 1);
+        var handle = UnityUiFactory.CreateRect("Handle", slidingArea);
+        UnityUiFactory.Stretch(handle);
+        var handleImage = handle.gameObject.AddComponent<Image>();
+        handleImage.color = QuestGraphPalette.ControlActive;
+
+        var scrollbar = track.gameObject.AddComponent<Scrollbar>();
+        scrollbar.targetGraphic = handleImage;
+        scrollbar.handleRect = handle;
+        scrollbar.direction = Scrollbar.Direction.LeftToRight;
+        return scrollbar;
     }
 
     private static IEnumerable<QuestMapReference> FilterMapChoices(QuestGraphNode node)

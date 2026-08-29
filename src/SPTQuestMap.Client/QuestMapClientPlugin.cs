@@ -18,7 +18,7 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.rootdarkarchon.sptquestmap.client";
     public const string PluginName = "SPT-QuestMap Client";
-    public const string PluginVersion = "2.0.0";
+    public const string PluginVersion = "2.0.1";
 
     private PatchRegistration? _patchRegistration;
     private QuestMapDataRuntime? _dataRuntime;

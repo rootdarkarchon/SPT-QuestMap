@@ -75,6 +75,49 @@ public sealed class RaidProgressNotificationRulesTests
             Is.False);
     }
 
+    [Test]
+    public void NotificationStateSuppressesARepeatedInventoryDerivedValue()
+    {
+        var state = new RaidProgressNotificationState();
+
+        Assert.That(state.ObserveEffectiveIncrease(
+            "quest", Progress("objective", 1, 3), Progress("objective", 0, 3)), Is.True);
+        Assert.That(state.ObserveEffectiveIncrease(
+            "quest", Progress("objective", 0, 3), Progress("objective", 1, 3)), Is.False);
+        Assert.That(state.ObserveEffectiveIncrease(
+            "quest", Progress("objective", 1, 3), Progress("objective", 0, 3)), Is.False);
+        Assert.That(state.ObserveEffectiveIncrease(
+            "quest", Progress("objective", 2, 3), Progress("objective", 1, 3)), Is.True);
+    }
+
+    [Test]
+    public void NotificationStateAllowsProgressAfterAResettableCounterDecreases()
+    {
+        var state = new RaidProgressNotificationState();
+
+        Assert.That(state.ObserveEffectiveIncrease(
+            "quest", Progress("objective", 2, 3), Progress("objective", 0, 3), resetOnDecrease: true), Is.True);
+        Assert.That(state.ObserveEffectiveIncrease(
+            "quest", Progress("objective", 0, 3), Progress("objective", 2, 3), resetOnDecrease: true), Is.False);
+        Assert.That(state.ObserveEffectiveIncrease(
+            "quest", Progress("objective", 1, 3), Progress("objective", 0, 3), resetOnDecrease: true), Is.True);
+    }
+
+    [Test]
+    public void NotificationStateClearStartsANewRaidHighWaterMark()
+    {
+        var state = new RaidProgressNotificationState();
+        var previous = Progress("objective", 0, 3);
+        var current = Progress("objective", 1, 3);
+
+        Assert.That(state.ObserveEffectiveIncrease("quest", current, previous), Is.True);
+        Assert.That(state.ObserveEffectiveIncrease("quest", current, previous), Is.False);
+
+        state.Clear();
+
+        Assert.That(state.ObserveEffectiveIncrease("quest", current, previous), Is.True);
+    }
+
     private static QuestGraphNode Node(params QuestObjectiveDefinition[] objectives) => new(
         "quest",
         "Quest",

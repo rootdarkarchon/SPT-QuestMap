@@ -6,15 +6,15 @@
 
 ## Status at a glance
 
-- **Release:** `2.0.0` combined server/web + in-game client.
-- **Accepted browser baseline:** the server/Blazor Milestone 4 application and difference-first profile comparison originally completed as `1.3.0`, retained in the `2.0.0` product.
+- **Release:** `2.0.1` combined server/web + in-game client.
+- **Accepted browser baseline:** the server/Blazor Milestone 4 application and difference-first profile comparison originally completed as `1.3.0`, retained in the `2.0.1` product.
 - **Milestones:** in-game M0–M8 are complete and user-accepted. The `ingame-ui` work has been merged into `main` and is closed as the completed 2.0 in-game implementation.
 - **Scope:** the 2.0 feature scope is complete and remains frozen at the server-authoritative multi-map/task-location integration. Further 2.0 work is maintenance: verified regressions, compatibility corrections, and release servicing only. New feature work belongs in a separately approved post-2.0 scope.
 - **Blockers:** none.
-- **Next work:** no M8 or `ingame-ui` milestone work remains. Future work begins from `main` as post-2.0 maintenance or as a separately scoped compatibility/feature milestone.
-- **Current validation:** zero compiler warnings/errors; **91/91 shared-core tests** and **166/166 server/browser tests**.
-- **Current combined package:** `artifacts/release/SPT-QuestMap-2.0.0.zip`, 15 entries / 12 files, 832,549 bytes, SHA-256 `4C48F8B2C3D269F7116F2DD2A4EACA7DE3F1FA3BB398BACCD8C9ABDA7665BFA1`. Root inspection found zero escaping files, zero `.js`/`.ts` files, and only the four expected QuestMap project DLL entries. Package DLLs are client `CE60E9E5085530E80716372E75278431F157F8F2954C0EDBF374138ADE23D894` and server `7FD6993486F71A306C94479361921E2C1C7103DEF6E55C2C00C81F5DDA104BAB`.
-- **Last recorded automated deployment state:** the installed client/client Core were hash-matched at `CBE22CCCE45BD3FCE09855BDD01DE59B00E345A2B14557EC1D453F8F170FF209` and `4F3FC21968C4B40A17A957D0863A8D02840F25FA2A7FF40B723A442796B3E8FC`. The installed server DLL/Core remained `DFF278CE60F050070EC7C374C705BC86B15748F50CA53FB00C96DE8A367F6AF8` and `27724B9DC9A8E3A551B155A5205909D8ED59BCE42580B6829B4B4B5BD794C66D` because no restart command was supplied. This records the last automated local deployment only; the combined artifact above is the final M8 release evidence.
+- **Next work:** live-verify that FIR item drop/search/pickup cycles do not repeat a prior progress notification and that an Icebreaker-expanded map strip scrolls horizontally without clipping.
+- **Current validation:** zero compiler warnings/errors; **94/94 shared-core tests** and **166/166 server/browser tests**.
+- **Current combined package:** `artifacts/release/SPT-QuestMap-2.0.1.zip`, 15 entries / 12 files, 835,532 bytes, SHA-256 `43762BCE3A9209B28C2955EE374878C7C5A3995FD3419286081287EDA92BCF7F`. Root inspection found zero escaping files, zero `.js`/`.ts` files, and only the four expected QuestMap project DLL entries. All assemblies report `2.0.1.0`; package DLLs are client `95F0507BC0754AB30C50331504974E232C105BDBD51D2503F329024D955BDDA1`, shared Core `5F1E1C1425954F8CD1F02E70ABE2FC68896025E6BEF1198EC1073001BBD47399`, and server `DC3075E2D65827CD46821B34E587020DE4777B0F105CD784C1EC9F18E8333E95`. This testing artifact has not been deployed to the live install.
+- **Current installed state (read-only verification):** the live install remains on `2.0.0.0` and does not match the `2.0.1` testing artifact. Installed SHA-256 values are client `4969B5EAB203989401D64E822C14943428EC89F1D583083A67AD6EAC01D886C5`, client Core `7F7FF4D6F3620BAE261C1AA90A927CEAF9EDBD9DD961797B861B4E17984D94D6`, server `6548FA6AD1E24C0268EE49648F7F5C3AB7E9F5B0C85AA8F89533C7369A44523A`, and server Core `C243719C735304903A2A789DB78BC0FFBC8088A81D2B881EF0C2E427871145C7`.
 
 Every source-changing 2.0 maintenance slice must create a **fresh** combined archive with `scripts/package-release.ps1 -Target Both`; record entry/file count, byte size, SHA-256, and root-containment inspection. Never cite an archive generated before the latest source change.
 
@@ -166,6 +166,7 @@ Native location-strip order is:
 - Raid context identity is the canonical location plus the bound EFT quest controller. Every genuinely new raid restores those defaults and rebuilds the table/filter presentation even when two consecutive raids use the same map; suspend/resume within one raid preserves the user's current filter selection.
 - Current default mouse behavior uses left-click isolation/reset and right-click inclusion/exclusion; the F12 inversion setting can swap that behavior. Tooltips are derived from current state.
 - Trader choices are recalculated immediately from the quest membership produced by active map filters without rebuilding the complete header.
+- The global Tasks map strip is horizontally scrollable and clips to its own viewport, so extra locations from mods such as Icebreaker remain reachable without extending past the right edge.
 
 ### Details and actions
 
@@ -193,6 +194,7 @@ Native location-strip order is:
 - Raid exit schedules one mandatory server topology reload through the existing coalesced refresh coordinator. Its generation marker clears only after a successful response, so failure remains retryable. The request may finish without a menu quest controller; overlay reconstruction waits for one, and a Tasks screen opened while the request is in flight receives the completed topology through the normal refresh path rather than racing it.
 - F12 **Diagnostics → Force reload server topology** exposes the same retry-safe full reload as an explicit outside-raid action. The custom drawer has no hard ConfigurationManager dependency, disables itself in raid or while a reload is running, refreshes open QuestMap surfaces through the coordinator, and logs an unconditional success/failure result.
 - Notifications stack by quest/trader identity, replace an existing card for the same quest, cap progress at the requirement, and select one representative overlapping objective. Minimal and artwork presentations share configured fade/timing behavior.
+- Notification progress retains an in-raid high-water mark per objective, so inventory-derived FIR values cannot re-notify after a drop/search/pickup cycle unless they exceed the prior value; genuine resettable one-session counters reset that mark when their counter falls.
 - A Tasks screen opened in raid forces Tasks mode; the full Quest Map is disabled in raid. Tracked-list and notification assets share the runtime sprite cache.
 
 ## Compatibility already implemented
@@ -231,7 +233,7 @@ Treat order-of-magnitude regressions or visible vanilla-screen exposure during f
 ```powershell
 scripts/build.ps1 -Target Both -Configuration Release -SptRoot D:\Tarkov-SPT
 scripts/deploy.ps1 -Target Client   # or Server / Both
-scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.0.0
+scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.0.1
 ```
 
 - `build.ps1` uses the explicit `Client|Server|Both` contract and SDK `--artifacts-path`; stages process-specific output under `dist/client` and `dist/server`.

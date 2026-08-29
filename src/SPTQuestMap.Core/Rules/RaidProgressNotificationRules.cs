@@ -67,3 +67,45 @@ public static class RaidProgressNotificationRules
         node.Objectives.FirstOrDefault(objective =>
             string.Equals(objective.Id, objectiveId, StringComparison.Ordinal))?.Index ?? int.MinValue;
 }
+
+public sealed class RaidProgressNotificationState
+{
+    private const double Epsilon = 0.0001d;
+    private readonly Dictionary<(string QuestId, string ObjectiveId), ObjectiveWatermark> _watermarks = [];
+
+    public bool ObserveEffectiveIncrease(
+        string questId,
+        QuestObjectiveProgress current,
+        QuestObjectiveProgress? previous,
+        bool resetOnDecrease = false)
+    {
+        var key = (questId, current.ObjectiveId);
+        var currentValue = QuestProgressRules.EffectiveValue(current);
+        var previousValue = previous is null ? 0d : QuestProgressRules.EffectiveValue(previous);
+        var previousComplete = previous?.Complete == true;
+
+        if (_watermarks.TryGetValue(key, out var watermark))
+        {
+            previousValue = Math.Max(previousValue, watermark.Value);
+            previousComplete |= watermark.Complete;
+        }
+
+        if ((previousComplete && !current.Complete)
+            || (resetOnDecrease && currentValue + Epsilon < previousValue))
+        {
+            _watermarks[key] = new ObjectiveWatermark(current.Complete, currentValue);
+            return false;
+        }
+
+        var increased = current.Complete && !previousComplete
+            || currentValue - previousValue > Epsilon;
+        _watermarks[key] = new ObjectiveWatermark(
+            previousComplete || current.Complete,
+            Math.Max(previousValue, currentValue));
+        return increased;
+    }
+
+    public void Clear() => _watermarks.Clear();
+
+    private sealed record ObjectiveWatermark(bool Complete, double Value);
+}
