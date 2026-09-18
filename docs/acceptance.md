@@ -6,7 +6,7 @@
 - [x] Core 103/103, server/browser 189/189, metadata-only client compatibility 22/22.
 - [x] Matching server source inspected; no installed SPT assembly decompiled.
 - [x] Configurable browser authentication (enabled by default; ordinary SPT users accepted), injected-table preload/cancellation, edition filtering, native contract rejection, and feed serialization covered by automated tests.
-- [x] Fresh combined 2.1.1 package uses `SPT_Runtime` and contains only QuestMap payloads.
+- [x] Fresh combined 2.1.2 package uses `SPT_Runtime` and contains only QuestMap payloads.
 - [ ] Configured-command deployment and installed hash verification.
 - [ ] Live browser/server authentication, anonymous-access option, ordinary-user access, assets, profile comparison, and refresh.
 - [ ] Live native actions, optional skipping/reset, raid transitions, tracking, and localization.

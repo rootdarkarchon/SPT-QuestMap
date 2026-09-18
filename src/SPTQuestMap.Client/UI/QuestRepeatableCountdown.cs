@@ -11,14 +11,12 @@ internal sealed class QuestRepeatableCountdown : MonoBehaviour
 {
     private TextMeshProUGUI? _label;
     private long _expirationTime;
-    private bool _includePrefix;
     private float _nextUpdate;
 
-    public void Bind(TextMeshProUGUI label, long expirationTime, bool includePrefix = false)
+    public void Bind(TextMeshProUGUI label, long expirationTime)
     {
         _label = label;
         _expirationTime = expirationTime;
-        _includePrefix = includePrefix;
         Refresh();
     }
 
@@ -36,14 +34,13 @@ internal sealed class QuestRepeatableCountdown : MonoBehaviour
         if (_label is null) return;
         var seconds = QuestRepeatableTimeRules.RemainingSeconds(_expirationTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         var text = seconds == 0 ? ClientLocale.Text("state.expired") : FormatRemaining(seconds);
-        if (_includePrefix && seconds > 0)
-            text = ClientLocale.Format("common.expires", ClientLocale.Arg("remaining", text));
         if (_label.text != text) _label.text = text;
     }
 
-    private static string FormatRemaining(long seconds) => seconds >= 86400
-        ? ClientLocale.Format("common.remainingDays", ClientLocale.Arg("days", seconds / 86400),
-            ClientLocale.Arg("hours", seconds % 86400 / 3600), ClientLocale.Arg("minutes", seconds % 3600 / 60))
-        : ClientLocale.Format("common.remainingHours", ClientLocale.Arg("hours", seconds / 3600),
-            ClientLocale.Arg("minutes", seconds % 3600 / 60));
+    private static string FormatRemaining(long seconds) => seconds > 86400
+        ? ClientLocale.Format("common.expiresInDays", ClientLocale.Arg("days", seconds / 86400),
+            ClientLocale.Arg("hours", seconds % 86400 / 3600), ClientLocale.Arg("minutes", seconds % 3600 / 60),
+            ClientLocale.Arg("seconds", seconds % 60))
+        : ClientLocale.Format("common.expiresInHours", ClientLocale.Arg("hours", seconds / 3600),
+            ClientLocale.Arg("minutes", seconds % 3600 / 60), ClientLocale.Arg("seconds", seconds % 60));
 }

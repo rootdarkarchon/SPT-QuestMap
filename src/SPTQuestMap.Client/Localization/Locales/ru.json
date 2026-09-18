@@ -15,6 +15,8 @@
   "common.remainingDays": "{days} д. {hours:00}:{minutes:00}",
   "common.remainingHours": "{hours:00}:{minutes:00}",
   "common.expires": "истекает через {remaining}",
+  "common.expiresInDays": "Истекает через {days} д. {hours:00}:{minutes:00}:{seconds:00}",
+  "common.expiresInHours": "Истекает через {hours:00}:{minutes:00}:{seconds:00}",
   "common.noDescription": "Описание отсутствует.",
   "common.hiddenPrefix": "[СКРЫТО]  ",
   "common.listSeparator": ", ",

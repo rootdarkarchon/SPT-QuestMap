@@ -944,9 +944,11 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
             if (QuestRepeatableTimeRules.ExpirationTime(node, _overlay) is { } expirationTime)
             {
                 var timer = UnityUiFactory.CreateRect("RepeatableTimeRemaining", content);
-                timer.anchorMin = timer.anchorMax = timer.pivot = new Vector2(1, 1);
-                timer.anchoredPosition = new Vector2(-26, -10 - QuestTableLayoutRules.RepeatableBadgeHeight);
-                timer.sizeDelta = new Vector2(96, 20);
+                timer.anchorMin = new Vector2(0, 1);
+                timer.anchorMax = new Vector2(1, 1);
+                var timerTop = -10 - QuestTableLayoutRules.RepeatableBadgeHeight;
+                timer.offsetMin = new Vector2(showTraderPortrait ? 80 : 18, timerTop - 20);
+                timer.offsetMax = new Vector2(-26, timerTop);
                 var timerText = UnityUiFactory.AddText(timer.gameObject, string.Empty, 12,
                     TextAlignmentOptions.MidlineRight, Color.white);
                 UnityUiFactory.FitSingleLine(timerText, 9f, 0f);

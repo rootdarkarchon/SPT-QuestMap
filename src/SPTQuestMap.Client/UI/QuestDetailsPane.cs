@@ -360,7 +360,7 @@ internal sealed class QuestDetailsPane : IDisposable
                 TextAlignmentOptions.MidlineLeft, Color.white);
             UnityUiFactory.FitSingleLine(timerText, 10f, 0f);
             AddTextShadow(timerText);
-            timer.gameObject.AddComponent<QuestRepeatableCountdown>().Bind(timerText, expirationTime, includePrefix: true);
+            timer.gameObject.AddComponent<QuestRepeatableCountdown>().Bind(timerText, expirationTime);
         }
         title.fontStyle = FontStyles.Bold;
         AddTextShadow(title);

@@ -6,7 +6,7 @@ QuestMap 2.1 targets SPT `>=4.1.6 <4.2.0`; the pinned build is SPT 4.1.6 / EFT 4
 
 ```powershell
 scripts/build.ps1 -Target Both -Configuration Release -SptRoot D:\Tarkov-SPT-4.1
-scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.1.1
+scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.1.2
 scripts/deploy.ps1 -Target Both -SptRoot D:\Tarkov-SPT-4.1 -SkipBuild -RestartCommand '<your configured command>'
 ```
 
