@@ -571,7 +571,7 @@ public sealed class QuestZoneMapCatalogTests
                     },
                 },
             ],
-        }),
+        }, cacheValue: false),
     };
 
     private sealed class CatalogFixture : IDisposable

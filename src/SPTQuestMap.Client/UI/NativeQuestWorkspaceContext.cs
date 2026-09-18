@@ -24,9 +24,9 @@ internal sealed class NativeQuestWorkspaceContext
     private readonly QuestMapClientConfiguration _configuration;
 
     public NativeQuestWorkspaceContext(
-        ISession session,
+        EFT.IEftSession session,
         InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
+        EFT.Quests.QuestController questController,
         ManualLogSource log,
         QuestMapClientConfiguration configuration)
     {
@@ -38,11 +38,11 @@ internal sealed class NativeQuestWorkspaceContext
         DebugLogging = configuration.EnableDebugLogging.Value;
     }
 
-    public ISession Session { get; private set; }
+    public EFT.IEftSession Session { get; private set; }
 
     public InventoryController InventoryController { get; private set; }
 
-    public AbstractQuestControllerClass QuestController { get; private set; }
+    public EFT.Quests.QuestController QuestController { get; private set; }
 
     public ManualLogSource Log { get; }
 
@@ -75,9 +75,9 @@ internal sealed class NativeQuestWorkspaceContext
         NativeQuestActionPressGuard.WaitForCooldown(pressedAt);
 
     public bool Rebind(
-        ISession session,
+        EFT.IEftSession session,
         InventoryController inventoryController,
-        AbstractQuestControllerClass questController)
+        EFT.Quests.QuestController questController)
     {
         var changed = !ReferenceEquals(Session, session)
             || !ReferenceEquals(InventoryController, inventoryController)
@@ -88,7 +88,7 @@ internal sealed class NativeQuestWorkspaceContext
         return changed;
     }
 
-    public QuestClass? FindLiveQuest(string questId) => QuestController.Quests.LastOrDefault(
+    public EFT.Quests.Quest? FindLiveQuest(string questId) => QuestController.Quests.LastOrDefault(
         quest => string.Equals(quest.Id, questId, StringComparison.Ordinal));
 
     public NativeQuestHandoverAction? TryCreateHandover(
@@ -136,7 +136,7 @@ internal sealed class NativeQuestWorkspaceContext
             || quest is not null && NativeQuestCompletionRecovery.CanRecover(QuestController, node, quest);
     }
 
-    public bool TryPrepareForCompletion(QuestGraphNode node, QuestClass quest) =>
+    public bool TryPrepareForCompletion(QuestGraphNode node, EFT.Quests.Quest quest) =>
         NativeQuestCompletionRecovery.TryPrepare(QuestController, node, quest, Log);
 
     public async Task CompleteAsync(RectTransform parent, QuestGraphTopology topology, string questId)

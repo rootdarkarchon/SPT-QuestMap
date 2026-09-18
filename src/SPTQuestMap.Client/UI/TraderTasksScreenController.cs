@@ -33,7 +33,7 @@ internal sealed class TraderTasksScreenController : IDisposable
 
     private readonly QuestsScreen _screen;
     private readonly NativeQuestWorkspaceContext _workspace;
-    private readonly TraderClass _trader;
+    private readonly EFT.Trading.Trader _trader;
     private readonly QuestAssetSpriteCache _assetCache;
     private readonly QuestTrackingService _tracking;
     private readonly Action<string, QuestDetailsActionKind> _requestQuestRefresh;
@@ -43,7 +43,7 @@ internal sealed class TraderTasksScreenController : IDisposable
     private QuestsListView? _vanillaList;
     private QuestView? _nativeQuestView;
     private TraderNativeWorkspaceSuppressor? _nativeWorkspaceSuppressor;
-    private GClass3794? _favoriteQuestService;
+    private EFT.UI.FavoriteQuestManager? _favoriteQuestService;
     private RectTransform? _surfaceParent;
     private Rect _surfaceBounds;
     private bool _vanillaListWasActive;
@@ -73,7 +73,7 @@ internal sealed class TraderTasksScreenController : IDisposable
 
     public TraderTasksScreenController(
         QuestsScreen screen,
-        TraderClass trader,
+        EFT.Trading.Trader trader,
         NativeQuestWorkspaceContext workspace,
         QuestAssetSpriteCache assetCache,
         QuestTrackingService tracking,
@@ -671,7 +671,7 @@ internal sealed class TraderTasksScreenController : IDisposable
         return mount;
     }
 
-    private static GClass3794? ResolveFavoriteQuestService(params object[] owners)
+    private static EFT.UI.FavoriteQuestManager? ResolveFavoriteQuestService(params object[] owners)
     {
         foreach (var owner in owners)
         {
@@ -679,10 +679,10 @@ internal sealed class TraderTasksScreenController : IDisposable
             {
                 foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
                 {
-                    if (!typeof(GClass3794).IsAssignableFrom(field.FieldType)) continue;
+                    if (!typeof(EFT.UI.FavoriteQuestManager).IsAssignableFrom(field.FieldType)) continue;
                     try
                     {
-                        if (field.GetValue(owner) is GClass3794 service) return service;
+                        if (field.GetValue(owner) is EFT.UI.FavoriteQuestManager service) return service;
                     }
                     catch
                     {

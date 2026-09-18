@@ -99,15 +99,15 @@ internal sealed class QuestMapDataRuntime : IDisposable
         _loadCoroutine = _coroutineOwner.StartCoroutine(LoadAndOverlay(backgroundWarmup: true));
     }
 
-    public void ObserveQuestController(AbstractQuestControllerClass questController) =>
+    public void ObserveQuestController(EFT.Quests.QuestController questController) =>
         ObserveQuestController(questController, !_raid.Active);
 
     public void ShowTraderScreen(
         QuestsScreen screen,
-        ISession session,
+        EFT.IEftSession session,
         InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
-        TraderClass trader) =>
+        EFT.Quests.QuestController questController,
+        EFT.Trading.Trader trader) =>
         _screens.ShowTraderScreen(screen, session, inventoryController, questController, trader);
 
     public void CloseTraderScreen(QuestsScreen screen) => _screens.CloseTraderScreen(screen);
@@ -130,7 +130,7 @@ internal sealed class QuestMapDataRuntime : IDisposable
     }
 
     private void ObserveQuestController(
-        AbstractQuestControllerClass questController,
+        EFT.Quests.QuestController questController,
         bool enableReactiveMonitor)
     {
         if (_disposed) return;

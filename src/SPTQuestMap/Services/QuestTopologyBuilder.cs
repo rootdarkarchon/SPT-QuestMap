@@ -2,16 +2,19 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using SPTarkov.Server.Core.Extensions;
-using SPTarkov.Server.Core.Helpers;
+using SPTarkov.Server.Core.Helpers.Quest;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Enums;
-using SPTarkov.Server.Core.Models.Utils;
-using SPTarkov.Server.Core.Services;
+using SPTarkov.Common.Models.Logging;
+using SPTarkov.Server.Core.Services.Locales;
+using SPTarkov.Server.Core.Services.Server;
+using SPTarkov.Server.Core.Models.Spt.Tables;
 
 namespace SPTQuestMap.Services;
 
 internal sealed class QuestTopologyBuilder(
-    DatabaseService databaseService,
+    TemplateTable templateTable,
+    TradersTable tradersTable,
     LocaleService localeService,
     QuestHelper questHelper,
     SeasonalEventService seasonalEventService,
@@ -42,9 +45,9 @@ internal sealed class QuestTopologyBuilder(
         var stageStopwatch = Stopwatch.StartNew();
         var locale = localeService.GetLocaleDb(language);
         var ui = QuestMapUiCatalog.For(language, locale);
-        var dbQuests = databaseService.GetQuests().Values.OrderBy(quest => quest.Id.ToString(), StringComparer.Ordinal).ToArray();
+        var dbQuests = templateTable.Quests.Values.OrderBy(quest => quest.Id.ToString(), StringComparer.Ordinal).ToArray();
         var items = preload.Items;
-        var traders = databaseService.GetTraders();
+        var traders = tradersTable;
         var locationValues = preload.Locations;
         var locationsById = QuestTemplateMapper.BuildLocationLookup(locationValues);
         var canonicalMapIdsByAlias = QuestTemplateMapper.BuildCanonicalMapIdLookup(locationsById);

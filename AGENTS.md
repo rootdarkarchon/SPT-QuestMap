@@ -2,7 +2,7 @@
 
 ## Mission
 
-Build **SPT-QuestMap**, a read-only, profile-aware quest dependency map for the currently installed **SPT 4.0.13** server.
+Build **SPT-QuestMap**, a read-only, profile-aware quest dependency map for the currently installed **SPT 4.1.6** server.
 
 The page must be served by the SPT server at:
 
@@ -10,7 +10,7 @@ The page must be served by the SPT server at:
 /questmap
 ```
 
-Use the existing SPT ASP.NET/Kestrel host and its supported server-mod web integration. Do not launch a separate web server unless the provided 4.0.13 source proves that integration is impossible.
+Use the existing SPT ASP.NET/Kestrel host and its supported server-mod web integration. Do not launch a separate web server unless the provided 4.1.6 source proves that integration is impossible.
 
 ## Start here
 
@@ -18,17 +18,17 @@ Use the existing SPT ASP.NET/Kestrel host and its supported server-mod web integ
 2. Read `README.md` and `docs/development-status.md`.
 3. Read the relevant documents in `docs/`.
 4. Inspect `reference/existing-quest-graph/index.html` as a visual and interaction reference only.
-5. Ask the user to place matching SPT 4.0.13 sources under `reference/spt-4.0.13-sources/` if they are not already present.
+5. Ask the user to place matching SPT 4.1.6 sources under `reference/spt-4.1.6-sources/` if they are not already present.
 6. Inspect those sources before choosing exact APIs, interfaces, namespaces, routes, or deployment layout.
 
 ## Source-first rule
 
-The installed server is the runtime target, but the user can provide the matching SPT 4.0.13 source tree.
+The installed server is the runtime target, but the user can provide the matching SPT 4.1.6 source tree.
 
 - **Do not decompile installed SPT DLLs.**
-- Do not infer public APIs from current 4.1 documentation when the 4.0.13 source can answer the question.
+- Do not infer public APIs from moving documentation when the pinned 4.1.6 source can answer the question.
 - Reading installed configuration, database JSON, profile JSON, logs, and directory layout is allowed.
-- Referencing the installed server assemblies for compilation is acceptable if that is the normal 4.0.13 mod workflow, but use the supplied source tree to understand behavior.
+- Referencing the installed server assemblies for compilation is acceptable if that is the normal 4.1.6 mod workflow, but use the supplied source tree to understand behavior.
 - If the supplied source and installed binaries do not match, stop and report the mismatch rather than guessing.
 
 ## Product requirements
@@ -59,7 +59,7 @@ Render quests according to the selected profile, including at minimum:
 - restartable failure where applicable
 - expired where applicable
 
-Use the exact quest-status model from SPT 4.0.13.
+Use the exact quest-status model from SPT 4.1.6.
 
 ### Dependency graph
 
@@ -122,7 +122,7 @@ Do not hide active, hand-in-ready, available, pending, or restartable-failure qu
 
 Do not bundle copied quest or trader artwork.
 
-- Discover how SPT 4.0.13 already serves quest icons and trader portraits to clients.
+- Discover how SPT 4.1.6 already serves quest icons and trader portraits to clients.
 - Use those existing server asset URLs or a thin URL-normalizing endpoint if required.
 - Reuse quest image paths already present in quest templates when possible.
 - Provide graceful text/initial fallbacks for missing assets.
@@ -169,13 +169,13 @@ Do not create write endpoints in the first version.
 
 ## Build and deployment
 
-- Build against the installed SPT 4.0.13-compatible references and matching source.
+- Build against the installed SPT 4.1.6-compatible references and matching source.
 - Deploy only after a successful build and test pass.
-- Default deployment target is expected to be under the SPT server's mod directory, but confirm the exact 4.0.13 layout from source and the installed server.
+- Default deployment target is expected to be under the SPT server's mod directory, but confirm the exact 4.1.6 layout from source and the installed server.
 - If the deployed DLL changed, restart the SPT server using the user-provided restart command.
 - Treat that restart as part of the deployment task: run the configured command yourself instead of leaving the restart as a manual user step. If no command is configured, ask for it before deployment.
 - Do not guess or hard-code the restart command.
-- Static-only changes may be copied without restart if the 4.0.13 host serves them dynamically; verify this rather than assuming it.
+- Static-only changes may be copied without restart if the 4.1.6 host serves them dynamically; verify this rather than assuming it.
 - `scripts/deploy.ps1` is a starting hook and may be adapted after source inspection.
 
 ## Development discipline
@@ -186,7 +186,7 @@ Do not create write endpoints in the first version.
 - Prefer tests around graph/state logic over screenshot-only validation.
 - Add fixture profiles only after sanitizing them.
 - Log unsupported or ambiguous quest conditions rather than silently misclassifying them.
-- Keep compatibility work for 4.1 out of scope unless it naturally costs almost nothing. The target is 4.0.13.
+- The target is SPT >=4.1.6 <4.2.0 with the validated EFT 40743 ABI. Keep 4.0 support in prior releases; do not add dual-version runtime code.
 
 ## Development status files
 
@@ -197,4 +197,4 @@ Do not create write endpoints in the first version.
 
 ## Definition of done
 
-The project is done when the acceptance checklist in `docs/acceptance.md` passes on the user's installed SPT 4.0.13 server, the page is reachable at `/questmap`, profile selection and refresh work, quest state/objective/exclusion data is accurate, and pan/zoom remains responsive on the full graph.
+The project is done when the acceptance checklist in `docs/acceptance.md` passes on the user's installed SPT 4.1.6 server, the page is reachable at `/questmap`, profile selection and refresh work, quest state/objective/exclusion data is accurate, and pan/zoom remains responsive on the full graph.

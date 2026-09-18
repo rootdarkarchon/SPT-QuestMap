@@ -1,327 +1,67 @@
 # Development status — current operational handoff
 
-> Last consolidated: 2026-08-19. This is a current-state handoff for Codex, not an append-only development diary.
->
-> **Maintenance rule:** update existing sections in place. Keep at most 8 short entries under **Final M8 changes**. Do not accumulate old PIDs, superseded hashes, screenshot-by-screenshot refinements, or full implementation narratives here. Git history and the archived long status are the source for archaeology.
+Last consolidated: 2026-09-18. Update this file in place; keep historical implementation details in Git history. The archived status is immutable.
 
 ## Status at a glance
 
-- **Release:** `2.0.2` combined server/web + in-game client.
-- **Accepted browser baseline:** the server/Blazor Milestone 4 application and difference-first profile comparison originally completed as `1.3.0`, retained in the `2.0.2` product.
-- **Milestones:** in-game M0–M8 are complete and user-accepted. The `ingame-ui` work has been merged into `main` and is closed as the completed 2.0 in-game implementation.
-- **Scope:** the 2.0 feature scope is complete and remains frozen at the server-authoritative multi-map/task-location integration. Further 2.0 work is maintenance: verified regressions, compatibility corrections, and release servicing only. New feature work belongs in a separately approved post-2.0 scope.
-- **Blockers:** none.
-- **Next work:** deploy the fresh combined package after the required server restart command is supplied, then live-verify kill-objective notification delays at 0 and 10 seconds and Daily/Weekly/Scav Daily timers in global/trader Tasks banners and details.
-- **Current validation:** zero compiler warnings/errors; **103/103 shared-core tests** and **170/170 server/browser tests** (kill-delay scheduling/classification, transport, and repeatable expiry coverage included).
-- **Current combined package:** `artifacts/release/SPT-QuestMap-2.0.2.zip`, 15 entries / 12 files, 842,274 bytes, SHA-256 `F4ACF2104250D2F9A0F9120948AFEF8EA63490E8C462D3317363A82668B8F222`. Root inspection found zero escaping/unexpected files, zero `.js`/`.ts` files, and only the four expected QuestMap project DLL entries. Built after the kill-delay and repeatable-timer changes; not yet deployed or live-game verified.
-- **Previously recorded installed state (not refreshed for this change):** the live install remains on `2.0.0.0` and does not match the `2.0.2` testing artifact. Installed SHA-256 values are client `4969B5EAB203989401D64E822C14943428EC89F1D583083A67AD6EAC01D886C5`, client Core `7F7FF4D6F3620BAE261C1AA90A927CEAF9EDBD9DD961797B861B4E17984D94D6`, server `6548FA6AD1E24C0268EE49648F7F5C3AB7E9F5B0C85AA8F89533C7369A44523A`, and server Core `C243719C735304903A2A789DB78BC0FFBC8088A81D2B881EF0C2E427871145C7`.
+- **Release candidate:** QuestMap `2.1.0`, complete server/browser/core/native migration to SPT 4.1. The accepted 2.0 feature set is retained; prior releases provide 4.0.13 support.
+- **Automated validation:** combined Release build succeeded with zero warnings/errors; **303 tests passed**: 103 core, 178 server/browser, 22 native compatibility. The old 273-test count is historical.
+- **Acceptance:** not yet accepted on the live 4.1 installation. No deployment, server restart, live browser/game/Fika validation, or new runtime performance measurements occurred.
+- **Blocker:** deployment requires the user's configured server restart command. No command is configured or inferred. CI hosting/secrets will be provisioned by the user.
+- **Next step:** deploy the validated combined package after the restart command is supplied, then complete the live matrix in [SPT 4.1 migration](spt-4.1-migration.md) and [acceptance](acceptance.md).
 
-Every source-changing 2.0 maintenance slice must create a **fresh** combined archive with `scripts/package-release.ps1 -Target Both`; record entry/file count, byte size, SHA-256, and root-containment inspection. Never cite an archive generated before the latest source change.
+## Runtime and integration contracts
 
-## Exact runtime target
+- Build target: `D:\Tarkov-SPT-4.1`, SPT **4.1.6**, EFT **0.16.9.40743**.
+- Permitted SPT range: **>=4.1.6 <4.2.0**, only with the known EFT fingerprint and all required native member contracts. Later patches are permitted conditionally, not claimed as tested.
+- Matched server source: `731d7a2a4418865c37141862ec5ad2451525f7f8`, in ignored `reference/spt-4.1.6-sources/`. Vendor sources and installed assemblies remain unmodified; no SPT DLL was decompiled.
+- EFT assembly SHA-256: `EE25CEE1259777B38ED8B3E7841FDC2DB3C98540B1469FA539B1FF183476E436`.
+- Server Core SHA-256: `490409F7C67480A8BF647DA67ADA8B91361330C2A9324D9E9787CD1EBAF5BF27`.
+- Server and all test projects target `net10.0`; core/client remain `netstandard2.1`. All production project/plugin versions are `2.1.0`.
+- `IModMetadata` / `IModBlazorMetadata` register `/questmap`; `HasPrepatcher = false`. Embedded Razor, CSS, and Canvas assets remain in use.
+- `TemplateTable`, `TradersTable`, `LocationTable`, and `LocaleTable` replace `DatabaseService`. Cancellation-aware preload runs at `PostLoad + 1`, catalog initialization at `+ 2`.
+- The all-profile page requires the host `Administrator` policy. SPT owns login, cookies, and configured localhost bypass. Native routes retain SPT session authentication and existing URLs.
+- Native integration uses the supplied 4.1 mappings and installed named metadata. **71 required member contracts** are validated before activating replacements; exactly four global/trader Show/Close targets are patched. Unknown fingerprints or missing contracts leave replacements disabled with diagnostics.
 
-- **SPT:** `4.0.13`, source commit `2891fd41fd07b6150a2192ac0d24adb93eb72862`.
-- **EFT:** `0.16.9.40087`.
-- **SPT client:** `4.0.13.0`.
-- **BepInEx:** `5.4.23.2`.
-- **SPT Reflection:** `4.0.13.0`.
-- **Unity:** `2022.3.43f1`.
-- **Exact client guard:** private build part `40087` and installed `Assembly-CSharp.dll` SHA-256 `FAEF6F0B9F142F9D047495EC3DCCFD5D6974AC048368DC7045955CF54B117982`.
-- All EFT, SPT, BepInEx, Harmony, Unity, Sirenix, TextMeshPro, Newtonsoft, and other vendor references remain external with `Private=false`. Do not copy vendor assemblies into output or release packages.
-- The server mod may contain multiple top-level project assemblies, but exactly one deployed top-level DLL may implement `AbstractModMetadata`. `IModWebMetadata` enrolls the mod in SPT web integration. `SptVersion` is exact `4.0.13`.
+## Preserved behavior and authority boundaries
 
-## Solution architecture
-
-### `SPTQuestMap` — server and browser
-
-- Targets matching installed **net9.0** SPT assemblies.
-- Owns the complete post-mod quest topology, localization, profile applicability/state projection, generated repeatables, summaries, Wiki/relevant-item metadata, authoritative objective relevance, task locations, map aliases, and task-map resolution.
-- `/questmap` is a mod-owned **Interactive Server Razor** page. CSS and the Canvas module are embedded in the DLL and emitted/imported by Razor.
-- The browser receives sanitized snapshots through its Blazor circuit. There is no browser-facing raw-profile API or generic JSON data controller.
-- Auth is intentionally absent because SPT 4.0.13 provides no browser login/session acquisition flow. The local install is bound to `127.0.0.1:6969`; changing that bind address exposes `/questmap` to reachable clients.
-- SPT recursively rejects deployed `.js` and `.ts` files as legacy mods. Do not deploy them. Embedded `.mjs` source inside the assembly is valid.
-
-### `SPTQuestMap.Core` — shared pure model
-
-- Targets `netstandard2.1` and has no Unity, EFT, BepInEx, SPT server, ASP.NET, Blazor, or JavaScript dependencies.
-- Owns normalized graph models, filtering/visibility contracts, state and edge classification, objective completion/capping/percentage rules, selection/focus rules, canonical trader order, deterministic layout, spatial indexing, route calculation, task-location matching, tracking projections, and repeatable-node delta logic.
-- Browser/server and native client should share a rule here whenever the behavior is platform-neutral. Do not maintain parallel visibility or completion algorithms without a documented platform reason.
-
-### `SPTQuestMap.Client` — exact-version BepInEx client
-
-- Targets `netstandard2.1` and fails closed outside the exact installed environment.
-- The compatibility catalog retains only the four `QuestsScreen`/`TasksScreen` **Show/Close** lifecycle targets. Do not reintroduce the removed `MainMenuControllerClass.ShowScreen` Harmony patch.
-- A plugin-owned one-shot coroutine waits for `CurrentScreenSingletonClass` to report `EEftScreenType.MainMenu`, yields one frame, then starts the retry-safe topology warm-up. Repeated main-menu entries cannot duplicate it.
-- Owns the global and trader replacement workspaces, shared Tasks table, Quest Map graph, details pane, tracking/pinning presentation, raid monitor, tracked list, notifications, sprite cache, and native action bridges.
-- Complete replacement initialization failure restores the corresponding vanilla screen. Disabling a replacement restores the native third-party integration surface.
-
-## Non-negotiable authority boundaries
-
-1. **Never mutate a profile, quest book, inventory, objective counter, or quest template directly.** Accept/restart, turn-in, repeatable replacement, item hand-in, rewards, confirmations, and inventory selection must continue through initialized EFT `QuestView`, `QuestObjectiveView`, `QuestRewardList`, controller, and item-event paths.
-2. **Never call `QuestBook.LoadAll()` or inject fake live quests.** Complete future topology comes from QuestMap's read-only server feed, not `/client/quest/list`.
-3. **Do not call `QuestHelper.GetClientQuests` for QuestMap projection.** It mutates shared templates and deep-clones complete quest payloads. The lean projection emits only the state needed by QuestMap.
-4. **Do not infer objective relevance or map scope on the client.** `InRaidRelevant`, `TaskLocations`, `MapIds`, aliases, and quest-level `ActualMaps` are server-authoritative for static and generated repeatable objectives.
-5. **Keep native `Quest.Location` unchanged.** Derived task locations are separate metadata and may intentionally differ from the quest template's native location.
-6. **No custom mutations in raid.** Native action controls are not created in raid, and callbacks recheck raid state before invoking EFT.
-7. **Preserve topology/layout whenever possible.** Ordinary state changes use small feeds or targeted quest patches; generated-repeatable changes use the repeatable delta path; only real structural incompatibility falls back to a full topology rebuild.
-8. **Fail closed, not half-rendered.** Rows and replacement surfaces are constructed transactionally; incomplete replacements stay inactive and the prior complete UI remains usable.
-9. **Preserve user-managed data.** Deployment must retain the external `summaries` subtree and shipped `Data` files.
-
-## Server-authoritative quest state
-
-### Availability and applicability
-
-The lean profile projection follows the SPT 4.0.13 decision order:
-
-1. explicit accepted/profile status;
-2. faction;
-3. active event/season;
-4. player level;
-5. trader existence/availability;
-6. prerequisite status;
-7. trader loyalty;
-8. trader standing.
-
-Use SPT's public comparison/faction/event helpers for the individual checks. Local graph rules may explain future/locked reasons but must not contradict the authoritative result.
-
-Important accepted cases:
-
-- An explicit profile `Locked` row remains locked; client-payload membership must not promote it to available.
-- An unaccepted template containing opaque external `Block` start conditions remains locked. An explicit profile row is authoritative when an external mod unlocks it.
-- Unknown custom start-condition types remain represented as opaque/unsupported data; do not invent satisfaction.
-- A server-`Available` static quest missing from EFT's native `QuestController` is rejected from the actionable native set and logged once; non-native future/history data remains available for read-only graph context.
-- Duplicate profile quest IDs, generated/static collisions, and duplicate objective condition IDs use deterministic **first-entry-wins** behavior with warnings rather than crashing the topology build.
-- Jaeger requires **Introduction** success; Ref requires **Easy Money - Part 1 [PVE ZONE]** success; Lightkeeper requires **Knock-Knock** success. Recursive Collector/Lightkeeper ancestry is route presentation, not an additional unlock boolean.
-- Seasonal classification propagates through dependent chains. `None` event chains retain their stricter descendant-exclusion behavior when ancestry exists only through excluded nodes.
-- Game-edition handling in 4.0.13 affects rewards after visibility cloning, not the sanitized quest ID/status projection.
-
-### Objective state
-
-- Profile truth is `PmcData.Quests`, `CompletedConditions`, and `TaskConditionCounters`; live client checkers take precedence for in-raid changes.
-- Objective completion uses the actual comparator and caps displayed current values at the configured requirement. Boolean `1 / 1` objectives do not show redundant numbers/bars.
-- Server dependency/source order is authoritative for objective display; native details, the Tasks table, and the browser must not independently re-sort it.
-- `oneSessionOnly` and `doNotResetIfCounterCompleted` are transported. A resettable active counter can correctly downgrade stale completion after death.
-- Unknown future/modded objective types default to **in-raid relevant** to avoid silently hiding work.
-- WTT CommonLib `CounterCreator` + nested `Salvage` / `LeaveItemAtLocation` children are display-compatible. Only the outer counter contributes to overall quest percentage; nested rows remain non-actionable.
-- Repeatable text supports Daily/Weekly/Scav Daily, exact exploration exits, specific bot roles such as Killa, `AnyPmc` → `AnyPMC` locale lookup, and localized qualifier ordering.
-
-## Task-location model
-
-Every objective carries an authoritative task scope:
-
-- stable transport/filter ID `no-location`, displayed as **Out of Raid**;
-- **Any** as an independent scope, not a wildcard;
-- **Transition**;
-- one or more concrete maps.
-
-Rules:
-
-- Objective scopes drive global Tasks membership, visible objective rows, omitted-task summaries, map choices, raid matching, smart tracking, and new-quest tracking.
-- A mixed Customs/Any/Out-of-Raid quest shows only objectives matching the selected scopes; all three filters are required to see the complete task list.
-- Concrete maps win header presentation over Any; Any wins Out of Raid. For native Transition quests, `Transition` is shown first beside every complete derived concrete map set, including one-map cases.
-- `ActualMaps` and objective `MapIds` remain the data authority; presentation must not rewrite them to add Transition.
-- Factory day/night and Ground Zero low/high use alias groups transported by the server. The current raid Mongo ID is expanded through those groups before matching.
-- Every known location alias is normalized to the location's canonical internal ID before objective-level and quest-level deduplication. Native Mongo IDs and derived internal IDs must therefore collapse to one map identity rather than producing duplicate localized banners such as Customs/Customs.
-- Ambiguous zone IDs are narrowed by the quest's native location only for that individual zone and only when the native canonical map is one of its candidates. Distinct zone IDs continue contributing their maps; Any/Transition provides no preferred map; unmatched ambiguity remains multi-map. Static topology and generated repeatables use the same server-owned rule.
-- Tarkov's non-SPT Arena location is semantically excluded from task-map resolution: internal `develop`, Mongo ID `56db0b3bd2720bb0678b4567`, and `Arena` never become filters or aliases. Mixed data such as Safe Corridor retains its valid Reserve scope; Arena-only metadata is suppressed rather than mislabeled Out of Raid.
-- Quest-item spawn-map inference applies only to exact `QuestItem` templates in `spawnpointsForced`; ordinary FIR/item objectives are not treated as map evidence.
-
-## Accepted browser behavior
-
-- Profile-aware dependency graph with deterministic layout, culling/spatial hit testing, pan/zoom/fit/focus, selection chains, trader/search/future/finished/level filters, repeatable bands, Collector/Lightkeeper routes, map artwork, terminal/completion markers, rich details, success rewards, failure penalties, summaries, Wiki links, relevant items, and persistence.
-- Difference-first profile comparison with symmetric A/B state/objective/gate differences and category filters.
-- Server-owned localization for all installed locales: English plus 16 non-English catalogs. QuestMap branding is invariant.
-- Sanitized rich text supports the accepted safe HTML/Tarkov tag set; executable/embedded markup and event attributes are rejected.
-- `/questmap` remains intentionally unauthenticated and is safe only within the documented bind/exposure boundary.
-
-## Accepted native Tasks behavior
-
-### Workspaces
-
-- Both global Tasks and trader Tasks are complete QuestMap-owned renderers with two modes: **Tasks** table and **Quest Map** graph.
-- Global native Notes and Quest Items remain real EFT branches, toggled by QuestMap-owned controls, mutually exclusive, reselect-to-close, and restored on disposal.
-- The reusable details pane is intrinsic to an enabled replacement; there is no separate custom-details feature switch.
-- Trader Tasks omits the favorite column because the native favorite action is unavailable there. Global Tasks uses EFT's profile-scoped favorite service and pinned grouping.
-
-### Task table and selection
-
-- Global table columns are Trader/Quest identity, Location, Status, Progress, and Tasks; trader context uses shared rendering with trader-specific grouping and no redundant trader portrait.
-- Global sections include Pinned, Daily, Weekly/Scav Daily, and ordinary tasks as applicable. Trader sections are Available to Finish, Available to Start, In Progress, and Unavailable.
-- Task rows use cached incremental updates. Sorting, filters, completed-task visibility, and expansion must not tear down the complete view, sprite cache, or static cells.
-- Current click contract:
-  - first click quest A: select A and open details;
-  - click selected A again: retain selection and toggle details closed/open;
-  - click B while A is selected: switch selection and open B details directly;
-  - click table background: clear selection and details.
-- The removed double-click task-list setting and custom click-count handler must not return. Quest Map card double-click focus behavior is separate and retained.
-- Map-filter omission is shown as `+ x task(s) on ...` with a tooltip; ordinary four-row collapsing and completed-task hiding are separate counts.
-
-### Location controls
-
-Native location-strip order is:
-
-`Reset` → `Out of Raid` → `Any` → `Transition` → concrete maps alphabetically.
-
-- Reset selects every available scope outside raids and Any/current-map/Transition defaults in raid.
-- Raid context identity is the canonical location plus the bound EFT quest controller. Every genuinely new raid restores those defaults and rebuilds the table/filter presentation even when two consecutive raids use the same map; suspend/resume within one raid preserves the user's current filter selection.
-- Current default mouse behavior uses left-click isolation/reset and right-click inclusion/exclusion; the F12 inversion setting can swap that behavior. Tooltips are derived from current state.
-- Trader choices are recalculated immediately from the quest membership produced by active map filters without rebuilding the complete header.
-- The global Tasks map strip is horizontally scrollable and clips to its own viewport, so extra locations from mods such as Icebreaker remain reachable without extending past the right edge.
-
-### Details and actions
-
-- Quest/location banners, Description/Summary/Relevant Items tabs, authoritative objective order/progress, native success-reward and failure-penalty cards, Wiki/Flea actions, route markers, and fixed action strip are accepted. Daily/Weekly (including Scav Daily) rows now show remaining time directly below the right-hand badge, with a second expiry line beneath the quest title in details. Each uses the server deadline with native expiry fallback; visible labels tick without rebuilding the row/pane and show Expired at zero. In-game layout validation of the added labels is pending.
-- Accept/Restart, Turn In, Replace, and objective Hand In continue through native EFT views/controllers. Lightkeeper and BTR Driver remain read-only outside their raid-only interaction context.
-- An initialized native quest at `AvailableForStart` overrides only a stale generic server `Locked` presentation, keeping the status consistent with the native Accept action while retaining specific server gates and keeping missing/future quests locked.
-- Accept/restart, turn-in, and objective hand-in share a one-second real-time duplicate-press guard across table and details controls. Repeatable replacement is intentionally outside that narrow guard.
-- Handover eligibility is resolved progressively through initialized native objective hosts; do not synchronously scan every objective during table construction.
-- Opt-in objective skipping remains a narrow exact-EFT checker operation, disabled by default, guarded by no-raid/eligibility confirmation, and does not claim standalone persistence before ordinary quest settlement.
-
-### Localization and presentation
-
-- Server/web strings exist in all 17 catalogs. The native client currently has English fallback plus Russian catalog coverage.
-- `FitSingleLine` handles fixed-width localized controls with bounded shrinking and ellipsis; multiline body text continues to wrap. Daily/Weekly/Scav badges remain single-line.
-- Menu Tasks text size and in-raid overlay text size are separate Small/Medium/Large settings. Changing the raid preset updates visible overlays immediately.
-- QuestMap-created pointer controls use native `SimpleTooltip` with delayed, state-aware text and ownership-safe cleanup.
-
-## Tracking and raid behavior
-
-- Manual tracking is profile-scoped in `BepInEx/config/SPTQuestMap/tracking-state.json`; native favorites remain in SPT's `favorite_quests_<profileId>` registry entries.
-- Effective tracking combines manual tracking, optional native favorites, and optional current-map policy. Auto-track-new-quests is objective-aware: Any-location quests track only when they contain real in-raid objective work.
-- Smart in-raid filtering uses authoritative `InRaidRelevant` and `TaskLocations`; hand-ins and other out-of-raid work do not clutter tracked overlays.
-- The tracked-list hotkey and objective-skip shortcut require configured key/modifiers but permit unrelated held gameplay keys such as `W`.
-- Raid monitoring uses exact checker events plus a bounded fallback of at most 16 cached `CurrentValue` reads per 100 ms. Do not restore full-book `QuestClass.Progress.GetHashCode()` polling.
-- Ordinary raid objective/status changes patch only the affected quest model and visible row/card. Quest-book add/remove/reset remains the structural fallback.
-- Raid exit schedules one mandatory server topology reload through the existing coalesced refresh coordinator. Its generation marker clears only after a successful response, so failure remains retryable. The request may finish without a menu quest controller; overlay reconstruction waits for one, and a Tasks screen opened while the request is in flight receives the completed topology through the normal refresh path rather than racing it.
-- F12 **Diagnostics → Force reload server topology** exposes the same retry-safe full reload as an explicit outside-raid action. The custom drawer has no hard ConfigurationManager dependency, disables itself in raid or while a reload is running, refreshes open QuestMap surfaces through the coordinator, and logs an unconditional success/failure result.
-- Notifications stack by quest/trader identity, replace an existing card for the same quest, cap progress at the requirement, and select one representative overlapping objective. Minimal and artwork presentations share configured fade/timing behavior. F12 **Raid overlays → Kill objective notification delay (seconds)** defaults to 0 and accepts 0–10 seconds. Server-classified `Kills` counters alone are delayed; further kills for the same quest replace pending progress and restart the delay, and a separate final-kill status event cannot bypass it. Other objective notifications stay immediate. Pending notifications clear at raid boundaries and are rechecked against tracking/live progress before display.
-- Notification progress retains an in-raid high-water mark per objective, so inventory-derived FIR values cannot re-notify after a drop/search/pickup cycle unless they exceed the prior value; genuine resettable one-session counters reset that mark when their counter falls.
-- A Tasks screen opened in raid forces Tasks mode; the full Quest Map is disabled in raid. Tracked-list and notification assets share the runtime sprite cache.
-
-## Compatibility already implemented
-
-- WTT CommonLib `v2.0.23`: nested Salvage display objectives and opaque `Block` gates.
-- Content Backport Prestiges: `PrestigeLevel == 0..5` requirements and localized `PrestigeGated` state.
-- Fika `2.3.9`: native handover/turn-in contexts and post-raid hidden-view lifecycle retained.
-- Modded malformed data: duplicate quest/objective IDs, malformed child values, unsupported conditions, and missing locale text degrade deterministically instead of aborting the full topology.
-- Custom summary discovery under `SPT/user/mods/SPT-QuestMap/summaries`: top-level `<name>.json` is English; `<name>.<language>.json` is localized; deterministic merge order; later files win per language; malformed files are isolated.
-- Native-row mods such as Quest Tracker or Task List Fixes cannot inject behavior into QuestMap's complete custom rows. QuestMap owns equivalent sorting/filtering/tracking/raid presentation. Disabling the relevant replacement restores the native integration surface.
+- The browser receives sanitized, read-only snapshots through Blazor. Do not expose raw profiles or add write endpoints.
+- Profile-known quest statuses take precedence. Future availability uses matched faction, edition allowlist/denylist, seasonal, level, trader, and prerequisite checks. Keep external Block/prestige gates and deterministic duplicate handling.
+- Never call mutating `QuestHelper.GetClientQuests` for browser projection or `QuestBook.LoadAll()` to fabricate live client quests.
+- Quest acceptance, restart, handover, completion, replacement, rewards, and optional skipping remain owned by initialized EFT views/controllers/checkers. Preserve transaction reconciliation, duplicate-press protection, hidden-host lifetime, reset recovery, and raid restrictions.
+- Keep objective dependency order, authoritative task locations/relevance, canonical map aliases, Arena exclusion, and native availability overrides. Do not infer task scope on the client or rewrite native `Quest.Location`.
+- Preserve global/trader Tasks, Quest Map, details, notes/quest items, favorites, tracking, comparison, localization, summaries, and UI persistence. Configuration keys and tracking paths are unchanged.
+- Kill-notification delay (0–10 seconds), FIR high-water behavior, repeatable countdown banners/details, and post-raid refresh are retained but still need live 4.1 acceptance.
+- Failed replacement initialization must restore vanilla UI. Native-row integrations remain available when the relevant replacement is disabled.
+- Preserve user-managed summaries, settings, and shipped Data files during deployment. Never distribute vendor assemblies.
 
 ## Performance boundaries
 
-Do not regress these accepted design choices:
+- Materialize loose-loot/quest-item mapping once at startup, including uncached 4.1 lazy values. Reuse cached locations/indexes on topology, profile, and repeatable requests.
+- Retain indexed graph propagation, deterministic cached layout, viewport culling/spatial hit testing, and topology-version invalidation when topology changes.
+- Ordinary refreshes reuse topology/layout and apply profile/repeatable deltas. Sorting, filters, row expansion, and hover must not rebuild the full table or graph.
+- Keep non-blocking shared main-menu warm-up, bounded polling, incremental raid monitoring, and the runtime-wide eight-request asset concurrency limit.
+- Measure full/modded-graph startup, topology/profile requests, first Tasks opening, pan/zoom, and raid monitoring on 4.1. Historical 4.0 timings are not current acceptance evidence.
 
-- Server graph propagation uses indexes/queues and a topological pass, with bounded fallback for malformed cycles; do not restore graph-depth-dependent fixed-point scans.
-- Loose-loot/quest-item map data is materialized once during startup by `QuestMapTopologyPreload`; applicable locations are scanned in parallel into isolated results and merged deterministically, while the item-to-map index remains keyed by `MongoId` through objective resolution. Requests must not enumerate locations, dereference `LooseLoot.Value`, or rebuild that index.
-- The native topology route serializes its valid JSON directly; do not run the multi-megabyte payload through redundant response regex replacement.
-- Ordinary out-of-raid refreshes use the smaller profile/repeatable feed, reuse static topology/layout, batch changed quest IDs, and rebuild geometry only when membership changes.
-- In Progress filters/sorts/expansion are incremental; table rows and artwork are reused.
-- `QuestAssetSpriteCache` is runtime-wide and limits local asset transport to eight outstanding requests, processing completed decode/callback work in bounded frame batches.
-- Main-menu warm-up is non-blocking and retry-safe. A Tasks screen joins the same in-flight request.
-
-Accepted observed scale:
-
-- One-time startup preload: about **8.4 s** for 4,582 items / 19 locations / 138 quest-item spawn mappings; accepted as-is.
-- After preload: local 558-quest topology roughly **60 ms**, profile roughly **44 ms**.
-- Reporter setup with 1,245 static quests: server request roughly **440 ms**, full client topology load roughly **1.06 s**, including a 5.39 MB response and about 590 ms deserialization.
-
-Treat order-of-magnitude regressions or visible vanilla-screen exposure during first Tasks open as defects.
-
-## Build, test, package, and deployment
-
-### Commands
+## Build and package evidence
 
 ```powershell
-scripts/build.ps1 -Target Both -Configuration Release -SptRoot D:\Tarkov-SPT
-scripts/deploy.ps1 -Target Client   # or Server / Both
-scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.0.2
+scripts/build.ps1 -Target Both -Configuration Release -SptRoot D:\Tarkov-SPT-4.1
+scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.1.0
 ```
 
-- `build.ps1` uses the explicit `Client|Server|Both` contract and SDK `--artifacts-path`; stages process-specific output under `dist/client` and `dist/server`.
-- Tagged CI downloads the exact `4.0.13 / 40087 / 2891fd4` SPT reference archive from SP-Tushonka's maintained installer mirrors, verifies SHA-256 `036D7F062A13547CA7591BDE02C5111E9B791D29906BD5C4C4D8CBF60734FD16`, and does not depend on a GitHub release asset or the archived `sp-tarkov` organization.
-- A normal complete pass runs the shared-core suite and server/browser suite. `-SkipTests` is allowed only when explicitly requested and must be recorded honestly.
-- The server and client project versions must match before packaging.
-- Release contents are confined to:
-  - `SPT/user/mods/SPT-QuestMap/`
-  - `BepInEx/plugins/SPTQuestMap/`
-- Inspect the archive for path escape and unintended files. No vendor DLLs or server `.js`/`.ts` files may appear.
+- Build log: `artifacts/migration-41-audit/combined-build.log`.
+- Combined package: `artifacts/release/SPT-QuestMap-2.1.0.zip`.
+- Package: **15 entries / 12 files, 847,349 bytes**; SHA-256 `601EF7EC405273E0FACCDFA42AF4262AA865E0A8996E57BAB930F8129E2A1003`.
+- Inspection: zero escaping/unexpected entries, zero loose `.js`/`.ts`, and only four QuestMap DLL entries. Install roots are `SPT_Runtime/user/mods/SPT-QuestMap/` and `BepInEx/plugins/SPTQuestMap/`.
+- `deploy.ps1 -Target Both -SkipBuild -WhatIf` confirmed destination paths; this was only a dry run.
+- New tests cover injected tables, preload cancellation/order/single materialization, edition applicability, unchanged statuses, client-feed serialization, anonymous/non-administrator page denial, and deliberate ABI/version failures. The new compatibility project is registered in the solution.
 
-### Deployment behavior
+## CI and rollout
 
-- After requested QuestMap code changes pass validation, deployment is the established default unless the current task explicitly opts out or withholds a required live-process action.
-- Client deployment synchronizes only `BepInEx/plugins/SPTQuestMap` and intentionally does **not** inspect or stop Tarkov. A mapped-DLL lock while EFT is open is an expected deployment failure, not permission to kill the process.
-- Server deployment preserves the external summaries subtree, compares staged/installed DLL hashes, stops only the exact configured `SPT.Server.exe` when changed, and relaunches it in a normal visible console.
-- Never poll or wait for server readiness after restart. The user confirms runtime readiness.
-- Compare staged and installed SHA-256 values after copy. Do not restart an unchanged server package.
-
-## Final M8 acceptance record
-
-The user accepted the integrated 2.0 in-game UI and closed M8 on 2026-08-19. The following uncommon or environment-dependent cases remain useful post-release smoke/regression coverage, but they are not unfinished milestone work or known blockers:
-
-1. **Task-location semantics:** live Safe Corridor must retain Reserve while excluding Arena; Chemical - Part 1 must not show duplicate Customs; Work Smarter must not inherit Labyrinth from its ambiguous `exit777` zone. Confirm `Out of Raid` labels/tooltips and stable `no-location` transport behavior.
-2. **Mixed scopes:** verify one quest containing concrete map + Any + Out of Raid across global table membership, objective visibility, omission summary, headers, and tracked raid list.
-3. **Transition:** verify native/web detail and table headers show Transition first with one or multiple derived concrete maps without altering filter/raid data.
-4. **Tasks interactions:** confirm the current single-click selection/detail contract, background clear, action controls, map isolate/include behavior, Reset defaults, trader-strip refresh, and new-raid reset versus same-raid resume preservation.
-5. **Localization/layout:** validate Russian fixed-control fitting, Out of Raid translations, long badges, repeatable exploration/elimination wording, and the separate in-raid text-size presets.
-6. **Preload/compatibility:** confirm one `QUESTMAP_M02_PRELOAD` after main-menu readiness, `resolved=4/4; installedPatches=4`, no old main-menu Harmony interaction, and no conflict with the reported repair patch.
-7. **Native lifecycle/actions:** recheck Fika handover/turn-in, post-raid details reopening, one-second duplicate-press rejection, hidden-host cleanup, the mandatory post-raid topology refresh after repeatables change during a raid, and the manual F12 force-reload action.
-8. **Modded content:** opportunistically validate WTT Doom Arcade Salvage/Block and Content Backport Prestige templates on installations that actually contain them.
-
-M8 closure retained the successful combined build/test/package evidence above. Future releases should reuse this matrix proportionally to the affected code instead of reopening the completed milestone.
-
-## Final M8 changes
-
-Keep this list short and replace/collapse older entries instead of extending it indefinitely.
-
-- Raid exit now schedules one retry-safe, coalesced server-topology reload; the F12 Diagnostics section also exposes that full reload manually for stale/missing native data without an EFT restart.
-- New-raid identity includes canonical map plus EFT quest controller, so every new raid restores raid filter defaults even on the same map while same-raid suspend/resume preserves the user's filters.
-- Task-map aliases are canonicalized before deduplication, preventing Mongo/internal aliases from producing duplicate map banners such as Customs/Customs; quest-item spawn inference retains `MongoId` keys end-to-end and parallelizes independent location materialization before a deterministic merge.
-- Quest details now preserve the server's dependency-aware objective order, and both browser/native details transport and render SPT `Fail` rewards as a distinct **Penalties for failure** section below success rewards.
-- Accept/restart, turn-in, and objective hand-in share a one-second cross-surface press guard and matching temporary control disablement; repeatable replacement remains outside it.
-- Server-authoritative per-objective relevance/task scopes and finalized Any/Transition/mixed-map semantics drive every browser/native filter, task, tracking, and raid surface; the hotkey raid list uses full available screen height and current-map-first/Any-second task bands without splitting mixed-scope quests.
-- Main-menu warm-up and server topology construction were hardened against visible first-open delay and large-modded-graph regressions; Russian/fixed-width localization and raid text sizing were also stabilized.
-- Failed one-session objectives now reset stale native completion through EFT's initialized checker/controller before they can be skipped again; a narrowly stuck `Started` quest whose necessary conditions are all effectively complete can replay one satisfied condition before the ordinary native Turn In flow. Trader Tasks also retains already-started, hand-in-ready, and restartable quests after an exact-status start prerequisite advances beyond the status that originally unlocked them. Compatibility hardening otherwise retains WTT, prestige/external gates, malformed mod data, Arena exclusion, and **Out of Raid** presentation.
-
-## Milestone summary
-
-- **Web M0–M4 / 1.3 baseline:** exact SPT integration, sanitized topology/profile model, Canvas graph, localization, acceptance fixes, repeatables, rewards, summaries, and difference-first profile comparison. Complete.
-- **Client M0:** exact installed-client investigation and hierarchy/action tracing. Complete.
-- **Client M1:** exact-version project/compatibility harness and safe-disable behavior. Complete.
-- **Client M2:** shared graph model, complete read-only topology feed, live overlay adapter, observation hooks. Complete.
-- **Client M3:** trader graph vertical slice proving native detail bridge; later superseded by the shared production workspace. Complete.
-- **Client M4:** native action ownership and event-driven reactive updates, including viewport/selection preservation. Complete.
-- **Client M5:** shared core and production pooled/batched graph renderer. Complete.
-- **Client M6:** global replacement, Tasks table, filters, pinning/tracking, retained screen lifecycle, targeted raid monitor, notifications, and tracked list. Complete and accepted.
-- **Client M7:** reusable details/native actions, transaction reconciliation, repeatable deltas, trader full workspace, relevant items/Wiki/Flea, and final interaction polish. Complete and accepted.
-- **M8:** stabilization, multi-map/task-scope finalization, compatibility fixes, performance, validation, and release hardening. Complete and user-accepted on 2026-08-19; `ingame-ui` is merged into `main`.
-
-## Superseded designs — do not resurrect
-
-- MVC/monolithic HTML browser app, physical `wwwroot`, browser JSON topology/profile APIs, or deployed `.js`/`.ts` files.
-- `QuestHelper.GetClientQuests` cloning/mutation path.
-- Client-side condition-type/location inference, raid-entry `TriggerWithId` scans, or copied Factory/Ground Zero alias constants.
-- `MainMenuControllerClass.ShowScreen` Harmony patch.
-- The retired M03 trader controller, read-only future pane, `QuestGraphDataSet`, or separate node/edge renderers.
-- Native Tasks/Return-to-Map escape hatch, repurposed native regular/daily selectors, route filters, or the removed Tasks status filter.
-- Per-view selection persistence or stale selection resurrection.
-- Full-screen/table teardown for sorting, filtering, completed-task toggles, or one-row expansion.
-- Synchronous native handover eligibility checks for every table objective.
-- Full active-quest `Progress.GetHashCode()` polling.
-- Full-row hover highlight setting, redundant task-row selection tooltip, or custom task-list double-click setting.
-- A separate `EnableCustomQuestDetails` switch; details are intrinsic to an enabled replacement.
-- Recursive Lightkeeper-path satisfaction as trader availability; only Knock-Knock success is the unlock requirement.
-- Direct profile/counter mutation or fabricated live quest instances.
-
-## Reference documents
-
-Use these for detail rather than expanding this status again:
-
-- `AGENTS.md` — repository working rules.
-- `docs/in-game-client-design.md` — exact client targets, signatures, hashes, and hierarchy evidence.
-- `docs/acceptance.md` — acceptance matrix/history.
-- `docs/quest-actions-plan.md` — server-only action design audit; native client now owns actual live actions.
-- `docs/ingame-map/M06-native-web-parity-audit.md` — native/browser parity decisions.
-- `docs/ingame-ui-branch-changes.md` — exhaustive player-facing branch summary.
-- M8 plan/checklist documents — closed 2.0 release-hardening record.
-
-Historical implementation narratives, old release hashes, PIDs, failed candidates, and superseded UI geometry belong in Git history or the archived long status, not in this operational handoff.
+- CI uses .NET 10 and one private, hash-pinned SPT 4.1.6 / EFT 40743 reference ZIP. The user will supply hosting and GitHub secrets.
+- Private input: `artifacts/private-build-references/eft-spt-4.1.6-build-references.zip`, **30,507,998 bytes**, SHA-256 `2494CEA377BA01DAACEA78F7CCB17CFCF63DE9EBA19F2B34F2E87C867B63453E`; manifest beside it.
+- Secret names: `EFT_REFERENCE_ARCHIVE_4_1_URL` and `EFT_REFERENCE_ARCHIVE_4_1_SHA256`. GitHub secret names cannot contain periods. Never attach this reference ZIP to a public QuestMap release.
+- Deployment requires `-RestartCommand` or ignored `scripts/restart-command.local.txt` before replacing changed server DLLs. Invoke the supplied command after copying. Never infer a command, stop EFT, or poll readiness.
+- Live validation must cover browser authentication (including host-configured bypass), all native actions, repeatable replacement/expiry, skip/reset recovery, localization/favorites/tracking, raid transitions, post-raid refresh, kill delay at **0 and 10 seconds**, and timers in both banners and details.
+- Standalone and Fika lifecycle checks must pass before retaining a 4.1 Fika compatibility claim. Build/metadata success is separate from live-game evidence.

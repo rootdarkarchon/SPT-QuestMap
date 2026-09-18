@@ -27,7 +27,7 @@ internal sealed class QuestRefreshCoordinator : IDisposable
     private readonly HashSet<string> _reasons = new(StringComparer.Ordinal);
     private readonly HashSet<string> _questIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _preferredObjectiveIds = new(StringComparer.Ordinal);
-    private AbstractQuestControllerClass? _currentController;
+    private EFT.Quests.QuestController? _currentController;
     private ReactiveQuestMonitor? _reactiveMonitor;
     private Coroutine? _refreshCoroutine;
     private int _requiredTopologyRefreshGeneration;
@@ -58,12 +58,12 @@ internal sealed class QuestRefreshCoordinator : IDisposable
             Request);
     }
 
-    public AbstractQuestControllerClass? CurrentController => _currentController;
+    public EFT.Quests.QuestController? CurrentController => _currentController;
 
     public bool TopologyReloadInProgress => _refreshCoroutine is not null
         && _requiredTopologyRefreshGeneration > _completedTopologyRefreshGeneration;
 
-    public void ObserveController(AbstractQuestControllerClass questController, bool enableReactiveMonitor)
+    public void ObserveController(EFT.Quests.QuestController questController, bool enableReactiveMonitor)
     {
         if (_disposed) return;
         if (!ReferenceEquals(_currentController, questController))
@@ -93,7 +93,7 @@ internal sealed class QuestRefreshCoordinator : IDisposable
     public void SetInventoryController(InventoryController? inventoryController) =>
         _reactiveMonitor?.SetInventoryController(inventoryController);
 
-    public bool RefreshOverlay(AbstractQuestControllerClass controller, bool repeated)
+    public bool RefreshOverlay(EFT.Quests.QuestController controller, bool repeated)
     {
         try
         {
@@ -386,7 +386,7 @@ internal sealed class QuestRefreshCoordinator : IDisposable
     }
 
     private bool TryApplyTargetedRaidRefresh(
-        AbstractQuestControllerClass controller,
+        EFT.Quests.QuestController controller,
         QuestGraphTopology topology,
         QuestProfileOverlay oldOverlay,
         IReadOnlyCollection<string> reasons,

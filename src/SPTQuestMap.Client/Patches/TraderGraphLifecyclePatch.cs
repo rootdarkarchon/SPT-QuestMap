@@ -15,10 +15,10 @@ internal static class TraderGraphLifecyclePatch
 
     public static void ShowPostfix(
         QuestsScreen __instance,
-        ISession backendSession,
+        EFT.IEftSession backendSession,
         InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
-        TraderClass trader)
+        EFT.Quests.QuestController questController,
+        EFT.Trading.Trader trader)
     {
         _runtime?.ShowTraderScreen(__instance, backendSession, inventoryController, questController, trader);
     }

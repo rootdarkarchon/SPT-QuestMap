@@ -14,7 +14,7 @@ internal sealed class QuestActionReconciler : IDisposable
     private readonly MonoBehaviour _coroutineOwner;
     private readonly ManualLogSource _log;
     private readonly QuestMapDataAdapter _adapter;
-    private readonly Func<AbstractQuestControllerClass?> _currentController;
+    private readonly Func<EFT.Quests.QuestController?> _currentController;
     private readonly Action<string, string?> _requestRefresh;
     private readonly Dictionary<string, PendingAction> _pending = new(StringComparer.Ordinal);
     private bool _disposed;
@@ -23,7 +23,7 @@ internal sealed class QuestActionReconciler : IDisposable
         MonoBehaviour coroutineOwner,
         ManualLogSource log,
         QuestMapDataAdapter adapter,
-        Func<AbstractQuestControllerClass?> currentController,
+        Func<EFT.Quests.QuestController?> currentController,
         Action<string, string?> requestRefresh)
     {
         _coroutineOwner = coroutineOwner;

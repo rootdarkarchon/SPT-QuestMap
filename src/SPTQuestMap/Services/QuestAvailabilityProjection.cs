@@ -5,8 +5,8 @@ using SPTarkov.Server.Core.Models.Enums;
 namespace SPTQuestMap.Services;
 
 /// <summary>
-/// Projects the visibility/status portion of SPT 4.0.13 QuestHelper.GetClientQuests without
-/// materializing its deep-cloned client quest payload. Keep this decision order source-pinned.
+/// Projects SPT 4.1.6 QuestHelper.GetClientQuests without stamping shared templates.
+/// Keep this decision order pinned to server commit 731d7a2.
 /// </summary>
 internal static class QuestAvailabilityProjection
 {
@@ -15,13 +15,14 @@ internal static class QuestAvailabilityProjection
         IReadOnlyList<QuestStatus> orderedProfileQuests,
         IReadOnlyDictionary<string, QuestStatus> profileQuests,
         string playerSide,
-        double playerLevel,
+        int playerLevel,
         IReadOnlyCollection<MongoId> profileTraderIds,
         Func<string, MongoId, bool> questIsForOtherSide,
         Func<MongoId, bool> showEventQuestToPlayer,
-        Func<double, QuestCondition, bool> levelRequirementPasses,
+        Func<int, QuestCondition, bool> levelRequirementPasses,
         Func<QuestCondition, bool> loyaltyRequirementPasses,
-        Func<QuestCondition, bool> standingRequirementPasses)
+        Func<QuestCondition, bool> standingRequirementPasses,
+        Func<MongoId, bool> editionRequirementPasses)
     {
         var result = new Dictionary<string, QuestStatusEnum?>(StringComparer.Ordinal);
         var traderIds = profileTraderIds.ToHashSet();
@@ -39,7 +40,9 @@ internal static class QuestAvailabilityProjection
                 continue;
             }
 
-            if (questIsForOtherSide(playerSide, quest.Id) || !showEventQuestToPlayer(quest.Id)) continue;
+            if (questIsForOtherSide(playerSide, quest.Id)
+                || !editionRequirementPasses(quest.Id)
+                || !showEventQuestToPlayer(quest.Id)) continue;
 
             var startConditions = quest.Conditions?.AvailableForStart ?? [];
             // Block is an opaque external gate. Mods can leave it on the template and add an
@@ -86,7 +89,7 @@ internal static class QuestAvailabilityProjection
                 return false;
             }
 
-            // SPT 4.0.13 reports an availableAfter delay here but still exposes the quest.
+            // SPT 4.1.6 reports an availableAfter delay here but still exposes the quest.
         }
 
         return true;

@@ -8,9 +8,9 @@ namespace SPTQuestMap.Client.Data;
 
 internal sealed class RaidQuestProgressMonitor : IDisposable
 {
-    private readonly AbstractQuestControllerClass _controller;
+    private readonly EFT.Quests.QuestController _controller;
     private readonly Action<string, string?, RaidQuestChangeKind> _changed;
-    private readonly HashSet<QuestClass> _quests = new(ReferenceEqualityComparer<QuestClass>.Instance);
+    private readonly HashSet<EFT.Quests.Quest> _quests = new(ReferenceEqualityComparer<EFT.Quests.Quest>.Instance);
     private readonly Dictionary<ConditionProgressChecker, CheckerBinding> _bindings =
         new(ReferenceEqualityComparer<ConditionProgressChecker>.Instance);
     private readonly List<CheckerBinding> _pollBindings = new();
@@ -18,7 +18,7 @@ internal sealed class RaidQuestProgressMonitor : IDisposable
     private bool _disposed;
 
     public RaidQuestProgressMonitor(
-        AbstractQuestControllerClass controller,
+        EFT.Quests.QuestController controller,
         Action<string, string?, RaidQuestChangeKind> changed)
     {
         _controller = controller;
@@ -68,7 +68,7 @@ internal sealed class RaidQuestProgressMonitor : IDisposable
     {
         if (_disposed) return;
 
-        var currentQuests = new HashSet<QuestClass>(_controller.Quests, ReferenceEqualityComparer<QuestClass>.Instance);
+        var currentQuests = new HashSet<EFT.Quests.Quest>(_controller.Quests, ReferenceEqualityComparer<EFT.Quests.Quest>.Instance);
         foreach (var quest in _quests.Where(quest => !currentQuests.Contains(quest)).ToArray())
             UnsubscribeQuest(quest);
         foreach (var quest in currentQuests) SubscribeQuest(quest);
@@ -106,13 +106,13 @@ internal sealed class RaidQuestProgressMonitor : IDisposable
         if (_pollIndex >= _pollBindings.Count) _pollIndex = 0;
     }
 
-    private void SubscribeQuest(QuestClass quest)
+    private void SubscribeQuest(EFT.Quests.Quest quest)
     {
         if (!_quests.Add(quest)) return;
         quest.OnStatusChanged += OnQuestStatusChanged;
     }
 
-    private void UnsubscribeQuest(QuestClass quest)
+    private void UnsubscribeQuest(EFT.Quests.Quest quest)
     {
         if (!_quests.Remove(quest)) return;
         quest.OnStatusChanged -= OnQuestStatusChanged;
@@ -159,37 +159,37 @@ internal sealed class RaidQuestProgressMonitor : IDisposable
         Resync();
     }
 
-    private void OnQuestStatusChanged(QuestClass quest, bool _)
+    private void OnQuestStatusChanged(EFT.Quests.Quest quest, bool _)
     {
         _changed(quest.Id, null, RaidQuestChangeKind.Status);
         Resync();
     }
 
-    private void OnNewQuestAdded(QuestClass quest)
+    private void OnNewQuestAdded(EFT.Quests.Quest quest)
     {
         Resync();
         _changed(quest.Id, null, RaidQuestChangeKind.Book);
     }
 
-    private void OnQuestAdded(QuestClass quest)
+    private void OnQuestAdded(EFT.Quests.Quest quest)
     {
         Resync();
         _changed(quest.Id, null, RaidQuestChangeKind.Book);
     }
 
-    private void OnQuestRemoved(QuestClass quest)
+    private void OnQuestRemoved(EFT.Quests.Quest quest)
     {
         Resync();
         _changed(quest.Id, null, RaidQuestChangeKind.Book);
     }
 
-    private void OnQuestsAdded(IEnumerable<QuestClass> quests)
+    private void OnQuestsAdded(IEnumerable<EFT.Quests.Quest> quests)
     {
         Resync();
         foreach (var quest in quests) _changed(quest.Id, null, RaidQuestChangeKind.Book);
     }
 
-    private void OnQuestsRemoved(IEnumerable<QuestClass> quests)
+    private void OnQuestsRemoved(IEnumerable<EFT.Quests.Quest> quests)
     {
         Resync();
         foreach (var quest in quests) _changed(quest.Id, null, RaidQuestChangeKind.Book);
@@ -201,7 +201,7 @@ internal sealed class RaidQuestProgressMonitor : IDisposable
         _changed(string.Empty, null, RaidQuestChangeKind.Book);
     }
 
-    private static bool IsActive(QuestClass quest) =>
+    private static bool IsActive(EFT.Quests.Quest quest) =>
         quest.QuestStatus == EQuestStatus.Started
         || quest.QuestStatus == EQuestStatus.AvailableForFinish
         || quest.QuestStatus == EQuestStatus.MarkedAsFailed;
@@ -209,7 +209,7 @@ internal sealed class RaidQuestProgressMonitor : IDisposable
     private sealed class CheckerBinding
     {
         public CheckerBinding(
-            QuestClass quest,
+            EFT.Quests.Quest quest,
             string objectiveId,
             ConditionProgressChecker checker,
             double lastValue)
@@ -220,7 +220,7 @@ internal sealed class RaidQuestProgressMonitor : IDisposable
             LastValue = lastValue;
         }
 
-        public QuestClass Quest { get; }
+        public EFT.Quests.Quest Quest { get; }
 
         public string ObjectiveId { get; }
 

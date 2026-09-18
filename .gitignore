@@ -9,6 +9,7 @@ dist/
 *.suo
 *.log
 reference/spt-4.0.13-sources/
+reference/spt-4.1.6-sources/
 reference/test-profiles/*
 !reference/test-profiles/README.md
 config/questmap.local.json

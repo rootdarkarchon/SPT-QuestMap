@@ -20,7 +20,8 @@ internal static class StartupDiagnostics
             "QUESTMAP_M01_STARTUP " +
             $"pluginVersion={pluginVersion}; " +
             $"supportedEFT={CompatibilityValidator.SupportedEftVersion}; " +
-            $"supportedSPT={CompatibilityValidator.SupportedSptVersion}");
+            $"supportedSPT={CompatibilityValidator.SupportedSptVersion}; " +
+            $"validatedSPT={ClientBuildPolicy.ValidatedSptVersion}; nativeContracts={NativeTargetContract.Requirements.Length}");
 
         QuestMapDebugLog.Info(log,
             "QUESTMAP_M01_ENVIRONMENT " +

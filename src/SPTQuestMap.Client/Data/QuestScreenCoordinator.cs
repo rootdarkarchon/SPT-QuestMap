@@ -20,7 +20,7 @@ internal sealed class QuestScreenCoordinator : IDisposable
     private readonly QuestMapDataAdapter _adapter;
     private readonly QuestAssetSpriteCache _assetCache;
     private readonly QuestTrackingService _tracking;
-    private readonly Action<AbstractQuestControllerClass> _observeQuestController;
+    private readonly Action<EFT.Quests.QuestController> _observeQuestController;
     private readonly Action<InventoryController?> _setInventoryController;
     private readonly Action<string, string?> _requestRefresh;
     private readonly Action<string, QuestDetailsActionKind> _reconcileQuestAction;
@@ -38,7 +38,7 @@ internal sealed class QuestScreenCoordinator : IDisposable
         QuestMapDataAdapter adapter,
         QuestAssetSpriteCache assetCache,
         QuestTrackingService tracking,
-        Action<AbstractQuestControllerClass> observeQuestController,
+        Action<EFT.Quests.QuestController> observeQuestController,
         Action<InventoryController?> setInventoryController,
         Action<string, string?> requestRefresh,
         Action<string, QuestDetailsActionKind> reconcileQuestAction)
@@ -57,10 +57,10 @@ internal sealed class QuestScreenCoordinator : IDisposable
 
     public void ShowTraderScreen(
         QuestsScreen screen,
-        ISession session,
+        EFT.IEftSession session,
         InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
-        TraderClass trader)
+        EFT.Quests.QuestController questController,
+        EFT.Trading.Trader trader)
     {
         if (_disposed) return;
         CloseTraderScreen(screen);
@@ -96,9 +96,9 @@ internal sealed class QuestScreenCoordinator : IDisposable
             stale.Value.Dispose();
         }
 
-        var questController = arguments.OfType<AbstractQuestControllerClass>().SingleOrDefault();
+        var questController = arguments.OfType<EFT.Quests.QuestController>().SingleOrDefault();
         var inventoryController = arguments.OfType<InventoryController>().SingleOrDefault();
-        var session = arguments.OfType<ISession>().SingleOrDefault();
+        var session = arguments.OfType<EFT.IEftSession>().SingleOrDefault();
         if (questController is null || inventoryController is null || session is null)
         {
             _log.LogWarning($"QUESTMAP_M06_STATE screen={screen.GetInstanceID()}; active=False; safelyDisabled=True; reason=required Show argument missing; vanillaRestored=True");
@@ -173,7 +173,7 @@ internal sealed class QuestScreenCoordinator : IDisposable
         ReleaseInventoryMonitoringIfInactive();
     }
 
-    public void TryMountPending(AbstractQuestControllerClass questController)
+    public void TryMountPending(EFT.Quests.QuestController questController)
     {
         TryMountPendingTraderScreen(questController);
         TryMountPendingGlobalScreen(questController);
@@ -241,7 +241,7 @@ internal sealed class QuestScreenCoordinator : IDisposable
         _setInventoryController(null);
     }
 
-    private void TryMountPendingTraderScreen(AbstractQuestControllerClass questController)
+    private void TryMountPendingTraderScreen(EFT.Quests.QuestController questController)
     {
         var pending = _pendingTraderScreen;
         if (pending is null
@@ -292,7 +292,7 @@ internal sealed class QuestScreenCoordinator : IDisposable
         _log.LogWarning($"QUESTMAP_M03_STATE screen={pending.Screen.GetInstanceID()}; trader={pending.Trader.Id}; active=False; safelyDisabled=True; reason={reason}; vanillaRestored=True");
     }
 
-    private void TryMountPendingGlobalScreen(AbstractQuestControllerClass questController)
+    private void TryMountPendingGlobalScreen(EFT.Quests.QuestController questController)
     {
         var pending = _pendingGlobalScreen;
         if (pending is null
@@ -359,10 +359,10 @@ internal sealed class QuestScreenCoordinator : IDisposable
     {
         public PendingTraderScreen(
             QuestsScreen screen,
-            ISession session,
+            EFT.IEftSession session,
             InventoryController inventoryController,
-            AbstractQuestControllerClass questController,
-            TraderClass trader)
+            EFT.Quests.QuestController questController,
+            EFT.Trading.Trader trader)
         {
             Screen = screen;
             Session = session;
@@ -372,10 +372,10 @@ internal sealed class QuestScreenCoordinator : IDisposable
         }
 
         public QuestsScreen Screen { get; }
-        public ISession Session { get; }
+        public EFT.IEftSession Session { get; }
         public InventoryController InventoryController { get; }
-        public AbstractQuestControllerClass QuestController { get; }
-        public TraderClass Trader { get; }
+        public EFT.Quests.QuestController QuestController { get; }
+        public EFT.Trading.Trader Trader { get; }
     }
 
     private sealed class PendingGlobalScreen
@@ -383,8 +383,8 @@ internal sealed class QuestScreenCoordinator : IDisposable
         public PendingGlobalScreen(
             TasksScreen screen,
             InventoryController inventoryController,
-            AbstractQuestControllerClass questController,
-            ISession session)
+            EFT.Quests.QuestController questController,
+            EFT.IEftSession session)
         {
             Screen = screen;
             InventoryController = inventoryController;
@@ -394,8 +394,8 @@ internal sealed class QuestScreenCoordinator : IDisposable
 
         public TasksScreen Screen { get; }
         public InventoryController InventoryController { get; }
-        public AbstractQuestControllerClass QuestController { get; }
-        public ISession Session { get; }
+        public EFT.Quests.QuestController QuestController { get; }
+        public EFT.IEftSession Session { get; }
         public bool VanillaLayoutReady { get; set; }
     }
 }

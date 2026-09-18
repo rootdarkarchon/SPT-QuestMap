@@ -11,11 +11,10 @@ namespace SPTQuestMap.Client.Compatibility;
 
 internal static class CompatibilityValidator
 {
-    public const int SupportedEftPrivatePart = 40087;
-    public const string SupportedEftVersion = "0.16.9.40087";
-    public const string SupportedSptVersion = "4.0.13.0";
-    public const string SupportedAssemblyCSharpSha256 =
-        "FAEF6F0B9F142F9D047495EC3DCCFD5D6974AC048368DC7045955CF54B117982";
+    public const int SupportedEftPrivatePart = ClientBuildPolicy.EftBuild;
+    public const string SupportedEftVersion = ClientBuildPolicy.EftVersion;
+    public const string SupportedSptVersion = ClientBuildPolicy.SptRange;
+    public const string SupportedAssemblyCSharpSha256 = ClientBuildPolicy.AssemblySha256;
 
     public static CompatibilityReport Validate()
     {
@@ -32,29 +31,12 @@ internal static class CompatibilityValidator
             detectedEftVersion = executableVersion.ProductVersion ?? executableVersion.FileVersion ?? "unknown";
             detectedEftPrivatePart = executableVersion.FilePrivatePart;
 
-            if (detectedEftPrivatePart != SupportedEftPrivatePart)
-            {
-                failures.Add(
-                    $"EFT private build part {detectedEftPrivatePart} does not match {SupportedEftPrivatePart}.");
-            }
-
             var sptCorePath = Path.Combine(BepInEx.Paths.PluginPath, "spt", "spt-core.dll");
             detectedSptVersion = FileVersionInfo.GetVersionInfo(sptCorePath).FileVersion ?? "unknown";
-            if (!string.Equals(detectedSptVersion, SupportedSptVersion, StringComparison.Ordinal))
-            {
-                failures.Add($"SPT client version {detectedSptVersion} does not match {SupportedSptVersion}.");
-            }
-
             var assemblyCSharpPath = Path.Combine(BepInEx.Paths.ManagedPath, "Assembly-CSharp.dll");
             assemblyIdentity = AssemblyName.GetAssemblyName(assemblyCSharpPath).FullName;
             assemblyHash = ComputeSha256(assemblyCSharpPath);
-            if (!string.Equals(
-                    assemblyHash,
-                    SupportedAssemblyCSharpSha256,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                failures.Add("Assembly-CSharp.dll does not match the supported EFT build hash.");
-            }
+            failures.AddRange(ClientBuildPolicy.Validate(detectedEftPrivatePart, detectedSptVersion, assemblyHash));
         }
         catch (Exception exception)
         {
@@ -82,6 +64,7 @@ internal static class CompatibilityValidator
         if (!targets.AllResolved)
         {
             failures.Add("One or more exact patch targets could not be resolved.");
+            failures.AddRange(targets.UnresolvedTargets);
         }
 
         return new CompatibilityReport(

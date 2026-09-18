@@ -18,7 +18,7 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.rootdarkarchon.sptquestmap.client";
     public const string PluginName = "SPT-QuestMap Client";
-    public const string PluginVersion = "2.0.2";
+    public const string PluginVersion = "2.1.0";
 
     private PatchRegistration? _patchRegistration;
     private QuestMapDataRuntime? _dataRuntime;
@@ -31,6 +31,18 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
         QuestGraphPalette.Configure(configuration);
         QuestMapButtonFeedback.Configure(configuration);
         var compatibility = CompatibilityValidator.Validate();
+        if (!compatibility.IsCompatible)
+        {
+            StartupDiagnostics.Log(Logger, PluginVersion, configuration, compatibility,
+                new PatchRegistrationResult(false, true, "incompatible environment"));
+            return;
+        }
+        Activate(configuration, compatibility);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private void Activate(QuestMapClientConfiguration configuration, CompatibilityReport compatibility)
+    {
         _dataRuntime = new QuestMapDataRuntime(this, Logger, configuration);
         _patchRegistration = new PatchRegistration(PluginGuid);
         var registration = _patchRegistration.Register(compatibility, configuration, _dataRuntime);
@@ -57,7 +69,7 @@ public sealed class QuestMapClientPlugin : BaseUnityPlugin
     {
         while (_dataRuntime is not null)
         {
-            if (CurrentScreenSingletonClass.Instance?.CheckCurrentScreen(EEftScreenType.MainMenu) == true)
+            if (EFT.UI.Screens.EftScreenManager.Instance?.CheckCurrentScreen(EEftScreenType.MainMenu) == true)
             {
                 // Let the completed main-menu transition settle before beginning
                 // the non-blocking request without patching its shared ShowScreen path.

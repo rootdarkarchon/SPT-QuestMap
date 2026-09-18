@@ -4,8 +4,10 @@ using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
-using SPTarkov.Server.Core.Models.Utils;
-using SPTarkov.Server.Core.Services;
+using SPTarkov.Common.Models.Logging;
+using SPTarkov.Server.Core.Services.Locales;
+using SPTarkov.Server.Core.Services.Server;
+using SPTarkov.Server.Core.Models.Spt.Tables;
 
 namespace SPTQuestMap.Services;
 
@@ -14,9 +16,10 @@ namespace SPTQuestMap.Services;
 /// during startup. Location loose-loot snapshots are independent and are materialized in parallel;
 /// every later topology build consumes the same stable result.
 /// </summary>
-[Injectable(InjectionType.Singleton, TypePriority = OnLoadOrder.PostSptModLoader + 0)]
+[Injectable(InjectionType.Singleton, TypePriority = OnLoadOrder.PostLoad + 1)]
 public sealed class QuestMapTopologyPreload(
-    DatabaseService databaseService,
+    TemplateTable templateTable,
+    LocationTable locationTable,
     ISptLogger<QuestMapDataService> logger) : IOnLoad
 {
     private IReadOnlyDictionary<MongoId, TemplateItem>? _items;
@@ -32,13 +35,13 @@ public sealed class QuestMapTopologyPreload(
     internal IReadOnlyDictionary<MongoId, string[]> QuestItemSpawnMapIds => _questItemSpawnMapIds
         ?? throw new InvalidOperationException("SPT-QuestMap topology preload has not completed.");
 
-    public Task OnLoad()
+    public Task OnLoadAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var totalStopwatch = Stopwatch.StartNew();
         var stageStopwatch = Stopwatch.StartNew();
-        var items = databaseService.GetItems();
-        var locations = databaseService
-            .GetLocations()
+        var items = templateTable.Items;
+        var locations = locationTable
             .GetDictionary()
             .Values
             .Where(location => location?.Base?.Id is not null)
@@ -50,9 +53,10 @@ public sealed class QuestMapTopologyPreload(
         var itemFilterMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
 
         stageStopwatch.Restart();
-        var lookup = QuestTemplateMapper.BuildQuestItemSpawnMapLookup(locations, questItemIds);
+        var lookup = QuestTemplateMapper.BuildQuestItemSpawnMapLookup(locations, questItemIds, cancellationToken);
         var locationScanMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
 
+        cancellationToken.ThrowIfCancellationRequested();
         _items = items;
         _locations = locations;
         _questItemSpawnMapIds = lookup;

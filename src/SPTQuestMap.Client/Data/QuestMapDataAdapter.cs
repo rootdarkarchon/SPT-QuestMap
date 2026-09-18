@@ -147,7 +147,7 @@ internal sealed class QuestMapDataAdapter
         return topologyChanged ? QuestTopologyUpdateKind.FullTopology : QuestTopologyUpdateKind.None;
     }
 
-    public QuestProfileOverlay RefreshOverlay(IEnumerable<QuestClass> liveQuests, Profile profile, bool logDiagnostics = true)
+    public QuestProfileOverlay RefreshOverlay(IEnumerable<EFT.Quests.Quest> liveQuests, Profile profile, bool logDiagnostics = true)
     {
         var topology = Topology ?? throw new InvalidOperationException("QuestMap topology must be loaded before the live overlay.");
         var stopwatch = Stopwatch.StartNew();
@@ -201,7 +201,7 @@ internal sealed class QuestMapDataAdapter
     }
 
     public QuestProfileOverlay RefreshLiveQuests(
-        IEnumerable<QuestClass> liveQuests,
+        IEnumerable<EFT.Quests.Quest> liveQuests,
         out IReadOnlyDictionary<string, QuestLiveState?> previousStates)
     {
         var overlay = Overlay ?? throw new InvalidOperationException("QuestMap overlay must be loaded before a targeted live-quest refresh.");

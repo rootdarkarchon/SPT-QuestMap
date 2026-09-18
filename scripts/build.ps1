@@ -17,22 +17,22 @@ $clientRequested = $Target -in @('Client', 'Both')
 $serverRequested = $Target -in @('Server', 'Both')
 
 if ([string]::IsNullOrWhiteSpace($SptRoot) -or -not (Test-Path -LiteralPath $SptRoot -PathType Container)) {
-    throw 'Pass -SptRoot or set SPT_ROOT to the Tarkov install directory containing BepInEx and SPT.'
+    throw 'Pass -SptRoot or set SPT_ROOT to the Tarkov install directory containing BepInEx and SPT_Runtime.'
 }
 
 $sptRootFull = (Resolve-Path -LiteralPath $SptRoot).Path
-$serverCore = Join-Path $sptRootFull 'SPT/SPTarkov.Server.Core.dll'
+$serverCore = Join-Path $sptRootFull 'SPT_Runtime/SPTarkov.Server.Core.dll'
 $clientExecutable = Join-Path $sptRootFull 'EscapeFromTarkov.exe'
 if ($serverRequested -and -not (Test-Path -LiteralPath $serverCore -PathType Leaf)) {
-    throw "SPTarkov.Server.Core.dll was not found beneath the SPT subfolder of Tarkov install root: $sptRootFull"
+    throw "SPTarkov.Server.Core.dll was not found beneath the SPT_Runtime subfolder of Tarkov install root: $sptRootFull"
 }
 if ($clientRequested -and -not (Test-Path -LiteralPath $clientExecutable -PathType Leaf)) {
     throw "EscapeFromTarkov.exe was not found beneath the Tarkov install root: $sptRootFull"
 }
 if (Test-Path -LiteralPath $serverCore -PathType Leaf) {
     $coreVersion = [System.Reflection.AssemblyName]::GetAssemblyName($serverCore).Version
-    if ($coreVersion.ToString() -ne '4.0.13.0') {
-        throw "SPT-QuestMap targets SPT 4.0.13, but $serverCore reports assembly version $coreVersion."
+    if ($coreVersion -lt [Version]'4.1.6.0' -or $coreVersion -ge [Version]'4.2.0.0') {
+        throw "SPT-QuestMap requires >=4.1.6 <4.2.0, but $serverCore reports assembly version $coreVersion."
     }
     Write-Host "Validated SPT core version: $coreVersion"
 }
@@ -40,6 +40,7 @@ if (Test-Path -LiteralPath $serverCore -PathType Leaf) {
 $clientProject = Join-Path $root 'src/SPTQuestMap.Client/SPTQuestMap.Client.csproj'
 $serverProject = Join-Path $root 'src/SPTQuestMap/SPTQuestMap.csproj'
 $coreTestProject = Join-Path $root 'tests/SPTQuestMap.Core.Tests/SPTQuestMap.Core.Tests.csproj'
+$clientTestProject = Join-Path $root 'tests/SPTQuestMap.Client.Compatibility.Tests/SPTQuestMap.Client.Compatibility.Tests.csproj'
 $serverTestProject = Join-Path $root 'tests/SPTQuestMap.Tests/SPTQuestMap.Tests.csproj'
 $artifactRoot = Join-Path $root 'artifacts/build'
 $testArtifactRoot = Join-Path $root 'artifacts/tests'
@@ -90,6 +91,10 @@ if (-not $SkipTests) {
         Invoke-DotNet @('test', $serverTestProject, '--configuration', $Configuration, '--artifacts-path', $testArtifactRoot,
             "-p:SptInstallRoot=$sptRootFull", '-m:1') 'Server/browser tests failed'
     }
+    if ($clientRequested) {
+        Invoke-DotNet @('test', $clientTestProject, '--configuration', $Configuration, '--artifacts-path', $testArtifactRoot,
+            "-p:EftInstallRoot=$sptRootFull", '-m:1') 'Native client compatibility tests failed'
+    }
 }
 
 New-Item -ItemType Directory -Path $distRoot -Force | Out-Null
@@ -118,7 +123,7 @@ if ($serverRequested) {
     Copy-StagedFile (Join-Path $serverOutput 'Data/triggerIds.json') $dataStage
     $forbiddenScripts = @(Get-ChildItem -LiteralPath $serverStage -Recurse -File | Where-Object { $_.Extension -in @('.js', '.ts') })
     if ($forbiddenScripts.Count -gt 0) {
-        throw "SPT 4.0.13 rejects server mods containing .js or .ts files: $($forbiddenScripts.FullName -join ', ')"
+        throw "Server packages must not contain loose .js or .ts files: $($forbiddenScripts.FullName -join ', ')"
     }
     Write-Host "Server deployment staged at: $serverStage"
 }

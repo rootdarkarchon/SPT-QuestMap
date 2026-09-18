@@ -19,11 +19,8 @@ jobs:
     timeout-minutes: 20
     env:
       RELEASE_TAG: ${{ github.ref_name }}
-      SPT_VERSION: 4.0.13
-      SPT_CLIENT_BUILD: 40087
-      SPT_REFERENCE_ARCHIVE_URL: https://patcher.sp-tushonka.com/releases/SPT-4.0.13-40087-2891fd4.7z
-      SPT_REFERENCE_ARCHIVE_FALLBACK_URL: https://mirror.sp-tushonka.com/releases/SPT-4.0.13-40087-2891fd4.7z
-      SPT_REFERENCE_ARCHIVE_SHA256: 036D7F062A13547CA7591BDE02C5111E9B791D29906BD5C4C4D8CBF60734FD16
+      SPT_VERSION: 4.1.6
+      SPT_CLIENT_BUILD: 40743
 
     steps:
       - name: Check out tagged source
@@ -31,10 +28,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up .NET 9
+      - name: Set up .NET 10
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
       - name: Validate release tag
         shell: pwsh
@@ -62,80 +59,34 @@ jobs:
               throw "Tag '$env:RELEASE_TAG' does not match the client BepInEx plugin version."
           }
 
-      - name: Download pinned SPT build references
-        shell: pwsh
-        run: |
-          $downloadDirectory = Join-Path $env:RUNNER_TEMP 'spt-download'
-          $sptInstallRoot = Join-Path $env:RUNNER_TEMP 'spt-install'
-          New-Item -ItemType Directory -Force -Path $downloadDirectory, $sptInstallRoot | Out-Null
-
-          $archiveName = "SPT-$($env:SPT_VERSION)-$($env:SPT_CLIENT_BUILD)-2891fd4.7z"
-          $archive = Join-Path $downloadDirectory $archiveName
-          $downloadErrors = [System.Collections.Generic.List[string]]::new()
-          $downloaded = $false
-
-          foreach ($downloadUrl in @($env:SPT_REFERENCE_ARCHIVE_URL, $env:SPT_REFERENCE_ARCHIVE_FALLBACK_URL)) {
-              try {
-                  Invoke-WebRequest -Uri $downloadUrl -OutFile $archive
-                  $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
-                  if ($actualHash -ne $env:SPT_REFERENCE_ARCHIVE_SHA256) {
-                      throw "SHA-256 mismatch: expected $env:SPT_REFERENCE_ARCHIVE_SHA256, found $actualHash."
-                  }
-
-                  $downloaded = $true
-                  break
-              }
-              catch {
-                  $downloadErrors.Add("${downloadUrl}: $($_.Exception.Message)")
-              }
-          }
-
-          if (-not $downloaded) {
-              throw "Unable to download the pinned SPT $env:SPT_VERSION reference archive. $($downloadErrors -join ' | ')"
-          }
-
-          & 7z x $archive "-o$sptInstallRoot" -y
-          if ($LASTEXITCODE -ne 0) {
-              throw "7-Zip failed with exit code $LASTEXITCODE."
-          }
-
-          $sptCore = Join-Path $sptInstallRoot 'SPT/SPTarkov.Server.Core.dll'
-          if (-not (Test-Path -LiteralPath $sptCore -PathType Leaf)) {
-              throw "The pinned archive did not contain the expected SPT/SPTarkov.Server.Core.dll."
-          }
-
-          $coreVersion = [System.Reflection.AssemblyName]::GetAssemblyName($sptCore).Version
-          if ($coreVersion.ToString() -ne '4.0.13.0') {
-              throw "Expected SPT core 4.0.13.0, found $coreVersion."
-          }
-
-          "SPT_INSTALL_ROOT=$sptInstallRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Download access-controlled EFT build references
+      - name: Download private SPT 4.1 build references
         shell: pwsh
         env:
-          EFT_REFERENCE_ARCHIVE_URL: ${{ secrets.EFT_REFERENCE_ARCHIVE_URL }}
-          EFT_REFERENCE_ARCHIVE_SHA256: ${{ secrets.EFT_REFERENCE_ARCHIVE_SHA256 }}
+          EFT_REFERENCE_ARCHIVE_4_1_URL: ${{ secrets.EFT_REFERENCE_ARCHIVE_4_1_URL }}
+          EFT_REFERENCE_ARCHIVE_4_1_SHA256: ${{ secrets.EFT_REFERENCE_ARCHIVE_4_1_SHA256 }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:EFT_REFERENCE_ARCHIVE_URL) -or
-              [string]::IsNullOrWhiteSpace($env:EFT_REFERENCE_ARCHIVE_SHA256)) {
-              throw 'Configure EFT_REFERENCE_ARCHIVE_URL and EFT_REFERENCE_ARCHIVE_SHA256 repository secrets for the private EFT 40087 build-reference ZIP.'
+          if ([string]::IsNullOrWhiteSpace($env:EFT_REFERENCE_ARCHIVE_4_1_URL) -or
+              $env:EFT_REFERENCE_ARCHIVE_4_1_SHA256 -notmatch '^[0-9A-Fa-f]{64}$') {
+              throw 'Configure EFT_REFERENCE_ARCHIVE_4_1_URL and EFT_REFERENCE_ARCHIVE_4_1_SHA256 for the private ZIP produced by scripts/package-build-references.ps1.'
           }
-
-          $archive = Join-Path $env:RUNNER_TEMP 'eft-40087-build-references.zip'
-          Invoke-WebRequest -Uri $env:EFT_REFERENCE_ARCHIVE_URL -OutFile $archive
-          $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
-          if ($actualHash -ne $env:EFT_REFERENCE_ARCHIVE_SHA256.ToUpperInvariant()) {
-              throw "Private EFT reference archive hash mismatch. Expected $env:EFT_REFERENCE_ARCHIVE_SHA256, found $actualHash."
+          $sptInstallRoot = Join-Path $env:RUNNER_TEMP 'spt-install'
+          New-Item -ItemType Directory -Force -Path $sptInstallRoot | Out-Null
+          $archive = Join-Path $env:RUNNER_TEMP 'eft-spt-4.1.6-build-references.zip'
+          Invoke-WebRequest -Uri $env:EFT_REFERENCE_ARCHIVE_4_1_URL -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $env:EFT_REFERENCE_ARCHIVE_4_1_SHA256) {
+              throw 'Private reference archive SHA-256 mismatch.'
           }
-
-          Expand-Archive -LiteralPath $archive -DestinationPath $env:SPT_INSTALL_ROOT -Force
-          $assemblyCSharp = Join-Path $env:SPT_INSTALL_ROOT 'EscapeFromTarkov_Data/Managed/Assembly-CSharp.dll'
-          $assemblyHash = (Get-FileHash -LiteralPath $assemblyCSharp -Algorithm SHA256).Hash
-          if ($assemblyHash -ne 'FAEF6F0B9F142F9D047495EC3DCCFD5D6974AC048368DC7045955CF54B117982') {
-              throw "Assembly-CSharp.dll does not match EFT build 40087: $assemblyHash"
+          Expand-Archive -LiteralPath $archive -DestinationPath $sptInstallRoot -Force
+          $sptCore = Join-Path $sptInstallRoot 'SPT_Runtime/SPTarkov.Server.Core.dll'
+          if ([System.Reflection.AssemblyName]::GetAssemblyName($sptCore).Version.ToString() -ne '4.1.6.0' -or
+              (Get-FileHash -LiteralPath $sptCore -Algorithm SHA256).Hash -ne '490409F7C67480A8BF647DA67ADA8B91361330C2A9324D9E9787CD1EBAF5BF27') {
+              throw 'SPT server references must match 4.1.6 / source commit 731d7a2.'
           }
-
+          $assemblyCSharp = Join-Path $sptInstallRoot 'EscapeFromTarkov_Data/Managed/Assembly-CSharp.dll'
+          if ((Get-FileHash -LiteralPath $assemblyCSharp -Algorithm SHA256).Hash -ne 'EE25CEE1259777B38ED8B3E7841FDC2DB3C98540B1469FA539B1FF183476E436') {
+              throw 'Assembly-CSharp.dll does not match the validated EFT 40743 ABI.'
+          }
+          "SPT_INSTALL_ROOT=$sptInstallRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Build and test
         shell: pwsh
         run: |

@@ -1,6 +1,6 @@
 {
   "name": "SPT-QuestMap",
-  "targetSptVersion": "4.0.13",
+  "targetSptVersion": ">=4.1.6 <4.2.0",
   "route": "/questmap",
   "host": "existing SPT ASP.NET/Kestrel server",
   "readOnly": true,

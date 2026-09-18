@@ -1,3 +1,5 @@
+> Current 2.1 target: SPT >=4.1.6 <4.2.0 / EFT 40743. This document retains the original 4.0.13 design evidence; use [the 4.1 migration record](spt-4.1-migration.md) and `NativeTargetContract` for current types, members, compatibility checks, and pending live acceptance.
+
 # In-game client design investigation
 
 This document records Milestone 0 evidence for the native SPT-QuestMap client UI. It is source-backed against the installed SPT 4.0.13 client and deliberately does not define speculative SPT 4.1 compatibility.

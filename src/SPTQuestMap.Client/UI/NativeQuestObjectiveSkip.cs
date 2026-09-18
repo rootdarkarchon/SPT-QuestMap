@@ -15,14 +15,14 @@ using UnityEngine;
 namespace SPTQuestMap.Client.UI;
 
 /// <summary>
-/// Exact EFT 0.16.9.40087 objective-completion bridge. This deliberately
+/// Exact EFT 0.16.9.40743 objective-completion bridge. This deliberately
 /// changes one condition only; quest turn-in remains Tarkov-owned.
 /// </summary>
 internal static class NativeQuestObjectiveSkip
 {
     public static void ShowConfirmation(
-        AbstractQuestControllerClass questController,
-        QuestClass quest,
+        EFT.Quests.QuestController questController,
+        EFT.Quests.Quest quest,
         QuestObjectiveDefinition objective,
         string questName,
         Func<bool> stillAllowed,
@@ -72,8 +72,8 @@ internal static class NativeQuestObjectiveSkip
     }
 
     private static bool TrySkip(
-        AbstractQuestControllerClass questController,
-        QuestClass quest,
+        EFT.Quests.QuestController questController,
+        EFT.Quests.Quest quest,
         QuestObjectiveDefinition objective,
         ManualLogSource log)
     {
@@ -107,7 +107,7 @@ internal static class NativeQuestObjectiveSkip
             // override is required because many objective types derive their
             // value from inventory/game state instead of the task counter.
             checker.SetCurrentValueGetter(_ => condition.value);
-            ((GClass4005)questController).GClass4024_0.SetConditionCurrentValue(
+            ((EFT.Quests.QuestControllerClient)questController).ConditionsConnectorsManagerClient.SetConditionCurrentValue(
                 quest,
                 EQuestStatus.AvailableForFinish,
                 condition,
@@ -135,8 +135,8 @@ internal static class NativeQuestObjectiveSkip
     }
 
     private static bool TryResolve(
-        AbstractQuestControllerClass questController,
-        QuestClass quest,
+        EFT.Quests.QuestController questController,
+        EFT.Quests.Quest quest,
         QuestObjectiveDefinition objective,
         out Condition condition,
         out ConditionProgressChecker checker,
@@ -149,7 +149,7 @@ internal static class NativeQuestObjectiveSkip
         reason = string.Empty;
         var objectiveId = objective.Id;
 
-        if (questController is not GClass4005 exactController || exactController.GClass4024_0 is null)
+        if (questController is not EFT.Quests.QuestControllerClient exactController || exactController.ConditionsConnectorsManagerClient is null)
         {
             reason = $"unsupported controller {questController.GetType().Name}";
             return false;
@@ -167,7 +167,7 @@ internal static class NativeQuestObjectiveSkip
             return false;
         }
 
-        condition = finishConditions.IEnumerable_0.FirstOrDefault(value =>
+        condition = finishConditions.FirstOrDefault(value =>
             string.Equals(value.id.ToString(), objectiveId, StringComparison.Ordinal))!;
         if (condition is null)
         {

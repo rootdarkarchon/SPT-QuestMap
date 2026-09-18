@@ -1,19 +1,22 @@
 using System.Diagnostics;
 using System.Globalization;
-using SPTarkov.Server.Core.Helpers;
+using SPTarkov.Server.Core.Helpers.Quest;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Enums;
-using SPTarkov.Server.Core.Models.Utils;
+using SPTarkov.Common.Models.Logging;
 using SPTarkov.Server.Core.Servers;
-using SPTarkov.Server.Core.Services;
+using SPTarkov.Server.Core.Services.Locales;
+using SPTarkov.Server.Core.Services.Server;
+using SPTarkov.Server.Core.Models.Spt.Tables;
 using SPTQuestMap.Core.Rules;
 
 namespace SPTQuestMap.Services;
 
 internal sealed class QuestProfileStateBuilder(
-    DatabaseService databaseService,
+    TemplateTable templateTable,
+    TradersTable tradersTable,
     LocaleService localeService,
     SaveServer saveServer,
     QuestHelper questHelper,
@@ -44,7 +47,7 @@ internal sealed class QuestProfileStateBuilder(
                 var description = node is null
                     ? $"unknown quest {questId}"
                     : $"'{node.Name}' ({questId}) from trader '{node.TraderName}' ({node.TraderId})";
-                logger.Warning($"SPT-QuestMap: profile {profileId} contains duplicate status rows for {description}; keeping first status {kept.Status} and ignoring later status {ignored.Status} to match SPT 4.0.13.");
+                logger.Warning($"SPT-QuestMap: profile {profileId} contains duplicate status rows for {description}; keeping first status {kept.Status} and ignoring later status {ignored.Status} to match SPT 4.1.6.");
             }
         );
         var profileQuestStatuses = profileQuests.ToDictionary(
@@ -52,19 +55,24 @@ internal sealed class QuestProfileStateBuilder(
             pair => pair.Value.Status.ToString(),
             StringComparer.Ordinal
         );
-        var traderAvailability = new TraderAvailabilityEvaluator(pmc.TradersInfo, profileQuestStatuses);
+        var profileTraders = pmc.TradersInfo ?? [];
+        var traderAvailability = new TraderAvailabilityEvaluator(profileTraders, profileQuestStatuses);
+        bool EditionPasses(MongoId questId) =>
+            !questHelper.QuestIsProfileBlacklisted(pmc.Info.GameVersion, questId)
+            && questHelper.QuestIsProfileWhitelisted(pmc.Info.GameVersion, questId);
         var authoritative = QuestAvailabilityProjection.Build(
-            databaseService.GetQuests().Values,
+            templateTable.Quests.Values,
             pmc.Quests ?? [],
             profileQuests,
             pmc.Info.Side ?? string.Empty,
             pmc.Info.Level ?? 0,
-            pmc.TradersInfo.Keys,
+            profileTraders.Keys,
             questHelper.QuestIsForOtherSide,
             questHelper.ShowEventQuestToPlayer,
             questHelper.DoesPlayerLevelFulfilCondition,
             condition => questHelper.TraderLoyaltyLevelRequirementCheck(condition, pmc),
-            condition => questHelper.TraderStandingRequirementCheck(condition, pmc)
+            condition => questHelper.TraderStandingRequirementCheck(condition, pmc),
+            EditionPasses
         );
         var availabilityMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
         stageStopwatch.Restart();
@@ -75,6 +83,7 @@ internal sealed class QuestProfileStateBuilder(
             .ToDictionary(group => group.Key, group => (IReadOnlyCollection<QuestEdgeDto>)group.ToArray(), StringComparer.Ordinal);
         var applicable = topology.Quests
             .Where(quest => IsApplicable(quest, pmc.Info.Side ?? string.Empty, noneExcluded))
+            .Where(quest => profileQuests.ContainsKey(quest.Id) || EditionPasses(new MongoId(quest.Id)))
             .Select(quest => quest.Id)
             .ToHashSet(StringComparer.Ordinal);
         var states = new List<QuestStateDto>(applicable.Count);
@@ -90,7 +99,7 @@ internal sealed class QuestProfileStateBuilder(
                 quest,
                 pmc.Info.Level ?? 0,
                 pmc.Info.PrestigeLevel ?? 0,
-                pmc.TradersInfo,
+                profileTraders,
                 profileQuests,
                 incomingEdges.GetValueOrDefault(quest.Id) ?? [],
                 traderAvailability
@@ -156,9 +165,9 @@ internal sealed class QuestProfileStateBuilder(
         var frontierMilliseconds = stageStopwatch.Elapsed.TotalMilliseconds;
         stageStopwatch.Restart();
 
-        var traders = databaseService.GetTraders().Select(pair =>
+        var traders = tradersTable.Select(pair =>
         {
-            pmc.TradersInfo.TryGetValue(pair.Key, out var profileTrader);
+            profileTraders.TryGetValue(pair.Key, out var profileTrader);
             return new TraderStateDto(
                 pair.Key.ToString(),
                 traderAvailability.IsAvailable(pair.Key),
@@ -257,13 +266,9 @@ internal sealed class QuestProfileStateBuilder(
     {
         var locale = localeService.GetLocaleDb(language);
         var ui = QuestMapUiCatalog.For(language, locale);
-        var traders = databaseService.GetTraders();
+        var traders = tradersTable;
         var items = preload.Items;
-        var locationValues = databaseService
-            .GetLocations()
-            .GetDictionary()
-            .Values
-            .Where(location => location?.Base?.Id is not null);
+        var locationValues = preload.Locations;
         var locationsById = QuestTemplateMapper.BuildLocationLookup(locationValues);
 
         return (pmc.RepeatableQuests ?? [])

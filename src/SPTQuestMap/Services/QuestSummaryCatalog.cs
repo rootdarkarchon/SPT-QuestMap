@@ -5,7 +5,7 @@ namespace SPTQuestMap.Services;
 
 internal sealed class QuestSummaryCatalog
 {
-    internal const string ExternalRelativePath = "SPT/user/mods/SPT-QuestMap/summaries";
+    internal const string ExternalRelativePath = "SPT_Runtime/user/mods/SPT-QuestMap/summaries";
     private const string ResourcePrefix = "SPTQuestMap.Localization.Summaries.";
     private readonly string _externalDirectory;
     private readonly Action<string>? _warning;

@@ -1,5 +1,13 @@
 # Test strategy
 
+## SPT 4.1 validation
+
+Run `scripts/build.ps1 -Target Both -Configuration Release -SptRoot <installation-root>` against SPT 4.1.6 / EFT 40743. All three test projects target .NET 10. The combined run includes core, server/browser, and metadata-only native compatibility tests; the latter loads external assemblies without executing game code.
+
+Migration regressions cover injected tables, startup cancellation/order and one-time loose-loot materialization, edition applicability, unchanged profile statuses, client-feed serialization, and anonymous/non-administrator browser denial. Native checks validate all required member contracts and deliberate missing-member, changed-signature, unsupported-version, and fingerprint failures.
+
+Automated results do not establish live acceptance. Follow [the 4.1 matrix](spt-4.1-migration.md) for authentication, native actions, standalone/Fika lifecycle, notification delay at 0/10 seconds, repeatable timers, and performance measurements.
+
 ## Unit tests
 
 Cover pure state and graph logic with small fixtures:

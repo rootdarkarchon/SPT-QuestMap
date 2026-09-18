@@ -1,4 +1,5 @@
 @page "/questmap"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Administrator")]
 @layout SPTQuestMap.Components.Layout.QuestMapLayout
 @implements IAsyncDisposable
 @inject QuestMapDataService DataService

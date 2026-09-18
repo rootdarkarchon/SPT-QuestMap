@@ -41,7 +41,7 @@ elseif (-not [System.IO.Path]::IsPathRooted($OutputDirectory)) {
 
 $outputFull = [System.IO.Path]::GetFullPath($OutputDirectory)
 $packageRoot = Join-Path $outputFull 'package'
-$modDirectory = Join-Path $packageRoot 'SPT/user/mods/SPT-QuestMap'
+$modDirectory = Join-Path $packageRoot 'SPT_Runtime/user/mods/SPT-QuestMap'
 $clientDirectory = Join-Path $packageRoot 'BepInEx/plugins/SPTQuestMap'
 $archive = Join-Path $outputFull "SPT-QuestMap-$Version.zip"
 $serverRequested = $Target -in @('Server', 'Both')
@@ -125,7 +125,7 @@ if (Test-Path -LiteralPath $archive -PathType Leaf) {
 }
 
 $archiveRoots = @()
-if ($serverRequested) { $archiveRoots += Join-Path $packageRoot 'SPT' }
+if ($serverRequested) { $archiveRoots += Join-Path $packageRoot 'SPT_Runtime' }
 if ($clientRequested) { $archiveRoots += Join-Path $packageRoot 'BepInEx' }
 Compress-Archive -LiteralPath $archiveRoots -DestinationPath $archive -CompressionLevel Optimal
 
@@ -135,10 +135,10 @@ try {
     $entries = @($zip.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
     $requiredEntries = @()
     if ($serverRequested) {
-        $requiredEntries += 'SPT/user/mods/SPT-QuestMap/SPTQuestMap.dll'
-        $requiredEntries += 'SPT/user/mods/SPT-QuestMap/SPTQuestMap.Core.dll'
-        $requiredEntries += 'SPT/user/mods/SPT-QuestMap/Data/metainfo.json'
-        $requiredEntries += 'SPT/user/mods/SPT-QuestMap/Data/triggerIds.json'
+        $requiredEntries += 'SPT_Runtime/user/mods/SPT-QuestMap/SPTQuestMap.dll'
+        $requiredEntries += 'SPT_Runtime/user/mods/SPT-QuestMap/SPTQuestMap.Core.dll'
+        $requiredEntries += 'SPT_Runtime/user/mods/SPT-QuestMap/Data/metainfo.json'
+        $requiredEntries += 'SPT_Runtime/user/mods/SPT-QuestMap/Data/triggerIds.json'
     }
     if ($clientRequested) {
         $requiredEntries += 'BepInEx/plugins/SPTQuestMap/SPTQuestMap.Client.dll'
@@ -151,7 +151,7 @@ try {
     }
 
     $allowedPrefixes = @()
-    if ($serverRequested) { $allowedPrefixes += 'SPT/user/mods/SPT-QuestMap/' }
+    if ($serverRequested) { $allowedPrefixes += 'SPT_Runtime/user/mods/SPT-QuestMap/' }
     if ($clientRequested) { $allowedPrefixes += 'BepInEx/plugins/SPTQuestMap/' }
     $filesOutsideQuestMap = @($entries | Where-Object {
         if ($_.EndsWith('/')) { return $false }
@@ -170,5 +170,5 @@ finally {
 
 Write-Host "Release archive: $archive"
 Write-Host "Package target: $Target"
-if ($serverRequested) { Write-Host 'Server install root: SPT/user/mods/SPT-QuestMap/' }
+if ($serverRequested) { Write-Host 'Server install root: SPT_Runtime/user/mods/SPT-QuestMap/' }
 if ($clientRequested) { Write-Host 'Client install root: BepInEx/plugins/SPTQuestMap/' }

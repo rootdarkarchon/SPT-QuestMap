@@ -27,7 +27,7 @@ $clientRequested = $Target -in @('Client', 'Both')
 $serverRequested = $Target -in @('Server', 'Both')
 
 if ([string]::IsNullOrWhiteSpace($SptRoot) -or -not (Test-Path -LiteralPath $SptRoot -PathType Container)) {
-    throw 'Pass -SptRoot or set SPT_ROOT to the Tarkov install directory containing BepInEx and SPT.'
+    throw 'Pass -SptRoot or set SPT_ROOT to the Tarkov install directory containing BepInEx and SPT_Runtime.'
 }
 $sptRootResolved = (Resolve-Path -LiteralPath $SptRoot).Path
 
@@ -110,26 +110,19 @@ $serverDestination = $null
 $serverChanged = $false
 if ($serverRequested) {
     $serverStage = Resolve-Stage 'Server'
-    $serverDestination = Resolve-SafeDestination (Join-Path 'SPT' $ModRelativePath)
+    $serverDestination = Resolve-SafeDestination (Join-Path 'SPT_Runtime' $ModRelativePath)
     $serverChanged = Test-DllChanged $serverStage $serverDestination
 }
 
-$serverExecutable = Join-Path $sptRootResolved 'SPT/SPT.Server.exe'
 if ($serverChanged -and [string]::IsNullOrWhiteSpace($RestartCommand)) {
-    if (-not (Test-Path -LiteralPath $serverExecutable -PathType Leaf)) {
-        throw "SPT server executable was not found: $serverExecutable"
+    $restartFile = Join-Path $PSScriptRoot 'restart-command.local.txt'
+    if (Test-Path -LiteralPath $restartFile -PathType Leaf) {
+        $RestartCommand = (Get-Content -LiteralPath $restartFile -Raw).Trim()
     }
-    $serverExecutableFull = [System.IO.Path]::GetFullPath($serverExecutable)
-    foreach ($serverProcess in @(Get-Process -Name 'SPT.Server' -ErrorAction SilentlyContinue | Where-Object {
-        $_.Path -and [System.IO.Path]::GetFullPath($_.Path).Equals($serverExecutableFull, [StringComparison]::OrdinalIgnoreCase)
-    })) {
-        if ($PSCmdlet.ShouldProcess($serverProcess.Path, "Stop SPT server process $($serverProcess.Id) before DLL deployment")) {
-            Stop-Process -Id $serverProcess.Id -Force
-            Wait-Process -Id $serverProcess.Id -Timeout 30 -ErrorAction SilentlyContinue
-        }
+    if ([string]::IsNullOrWhiteSpace($RestartCommand) -and -not $WhatIfPreference) {
+        throw 'Server DLLs changed. Supply -RestartCommand or scripts/restart-command.local.txt before deployment.'
     }
 }
-
 if ($clientRequested) {
     $clientStage = Resolve-Stage 'Client'
     $clientDestination = Resolve-SafeDestination $ClientRelativePath
@@ -149,10 +142,7 @@ if ($serverChanged) {
             Invoke-Expression $RestartCommand
         }
     }
-    elseif ($PSCmdlet.ShouldProcess($serverExecutable, 'Start visible SPT server after DLL deployment')) {
-        # The visible console is intentional: the user uses it to observe server state.
-        Start-Process -FilePath $serverExecutable -WorkingDirectory (Split-Path -Parent $serverExecutable)
-    }
+
 }
 
 Write-Host "Deployment target completed: $Target"

@@ -33,8 +33,8 @@ internal static class ClientLocale
 
     private static string CurrentLanguage()
     {
-        var language = LocaleManagerClass.LocaleManagerClass?.String_0;
-        if (string.IsNullOrWhiteSpace(language)) language = LocaleManagerClass.DefaultLanguage;
+        var language = EFT.LocalizationManager.Instance?.Culture;
+        if (string.IsNullOrWhiteSpace(language)) language = EFT.LocalizationManager.DefaultLanguage;
         return string.IsNullOrWhiteSpace(language) ? English : language;
     }
 

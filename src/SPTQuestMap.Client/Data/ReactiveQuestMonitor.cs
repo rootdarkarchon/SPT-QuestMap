@@ -9,16 +9,16 @@ namespace SPTQuestMap.Client.Data;
 
 internal sealed class ReactiveQuestMonitor : IDisposable
 {
-    private readonly AbstractQuestControllerClass _controller;
+    private readonly EFT.Quests.QuestController _controller;
     private readonly Action<string, string?> _invalidate;
-    private readonly HashSet<QuestClass> _quests = new(ReferenceEqualityComparer<QuestClass>.Instance);
+    private readonly HashSet<EFT.Quests.Quest> _quests = new(ReferenceEqualityComparer<EFT.Quests.Quest>.Instance);
     private readonly HashSet<ConditionProgressChecker> _checkers = new(ReferenceEqualityComparer<ConditionProgressChecker>.Instance);
     private readonly HashSet<Profile.TraderInfo> _traders = new(ReferenceEqualityComparer<Profile.TraderInfo>.Instance);
     private InventoryController? _inventoryController;
     private bool _disposed;
 
     public ReactiveQuestMonitor(
-        AbstractQuestControllerClass controller,
+        EFT.Quests.QuestController controller,
         Action<string, string?> invalidate)
     {
         _controller = controller;
@@ -60,7 +60,7 @@ internal sealed class ReactiveQuestMonitor : IDisposable
     {
         if (_disposed) return;
 
-        var currentQuests = new HashSet<QuestClass>(_controller.Quests, ReferenceEqualityComparer<QuestClass>.Instance);
+        var currentQuests = new HashSet<EFT.Quests.Quest>(_controller.Quests, ReferenceEqualityComparer<EFT.Quests.Quest>.Instance);
         foreach (var quest in _quests.Where(quest => !currentQuests.Contains(quest)).ToArray()) UnsubscribeQuest(quest);
         foreach (var quest in currentQuests) SubscribeQuest(quest);
 
@@ -98,14 +98,14 @@ internal sealed class ReactiveQuestMonitor : IDisposable
         foreach (var trader in _traders.ToArray()) UnsubscribeTrader(trader);
     }
 
-    private void SubscribeQuest(QuestClass quest)
+    private void SubscribeQuest(EFT.Quests.Quest quest)
     {
         if (!_quests.Add(quest)) return;
         quest.OnStatusChanged += OnQuestStatusChanged;
         quest.OnConditionChanged += OnQuestConditionChanged;
     }
 
-    private void UnsubscribeQuest(QuestClass quest)
+    private void UnsubscribeQuest(EFT.Quests.Quest quest)
     {
         if (!_quests.Remove(quest)) return;
         quest.OnStatusChanged -= OnQuestStatusChanged;
@@ -146,9 +146,9 @@ internal sealed class ReactiveQuestMonitor : IDisposable
         if (_inventoryController is not null) trader.OnSalesSumChanged -= OnTraderSalesSumChanged;
     }
 
-    private void OnQuestStatusChanged(QuestClass quest, bool _) => _invalidate("quest-status", quest.Id);
+    private void OnQuestStatusChanged(EFT.Quests.Quest quest, bool _) => _invalidate("quest-status", quest.Id);
 
-    private void OnQuestConditionChanged(QuestClass quest) => _invalidate("quest-condition", quest.Id);
+    private void OnQuestConditionChanged(EFT.Quests.Quest quest) => _invalidate("quest-condition", quest.Id);
 
     private void OnCheckerChanged(ConditionProgressChecker _) => _invalidate("objective-progress", null);
 
@@ -162,41 +162,41 @@ internal sealed class ReactiveQuestMonitor : IDisposable
 
     private void OnConditionalStatusChanged() => _invalidate("conditional-status", null);
 
-    private void OnNewQuestAdded(QuestClass quest)
+    private void OnNewQuestAdded(EFT.Quests.Quest quest)
     {
         SubscribeQuest(quest);
         _invalidate("new-quest", quest.Id);
     }
 
-    private void OnQuestAdded(QuestClass quest)
+    private void OnQuestAdded(EFT.Quests.Quest quest)
     {
         SubscribeQuest(quest);
         _invalidate("quest-book-added", quest.Id);
     }
 
-    private void OnQuestRemoved(QuestClass quest)
+    private void OnQuestRemoved(EFT.Quests.Quest quest)
     {
         UnsubscribeQuest(quest);
         _invalidate("quest-book-removed", quest.Id);
     }
 
-    private void OnQuestsAdded(IEnumerable<QuestClass> quests)
+    private void OnQuestsAdded(IEnumerable<EFT.Quests.Quest> quests)
     {
         foreach (var quest in quests) SubscribeQuest(quest);
         _invalidate("quest-book-added-range", null);
     }
 
-    private void OnQuestsRemoved(IEnumerable<QuestClass> quests)
+    private void OnQuestsRemoved(IEnumerable<EFT.Quests.Quest> quests)
     {
         foreach (var quest in quests) UnsubscribeQuest(quest);
         _invalidate("quest-book-removed-range", null);
     }
 
-    private void OnQuestUpdated(QuestClass quest) => _invalidate("quest-book-updated", quest.Id);
+    private void OnQuestUpdated(EFT.Quests.Quest quest) => _invalidate("quest-book-updated", quest.Id);
 
     private void OnAllQuestsRemoved() => _invalidate("quest-book-cleared", null);
 
-    private void OnQuestExpired(GClass3996 quest) => _invalidate("repeatable-expired", quest.Id);
+    private void OnQuestExpired(EFT.Quests.DailyQuest quest) => _invalidate("repeatable-expired", quest.Id);
 
     private void OnProfileTraderChanged(Profile.TraderInfo _) => _invalidate("trader-profile", null);
 

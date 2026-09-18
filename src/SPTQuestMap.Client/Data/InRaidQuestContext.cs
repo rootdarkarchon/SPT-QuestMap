@@ -9,7 +9,7 @@ namespace SPTQuestMap.Client.Data;
 
 internal readonly struct InRaidQuestContext
 {
-    public InRaidQuestContext(string locationId, AbstractQuestControllerClass questController)
+    public InRaidQuestContext(string locationId, EFT.Quests.QuestController questController)
     {
         LocationId = locationId;
         QuestController = questController;
@@ -17,7 +17,7 @@ internal readonly struct InRaidQuestContext
 
     public string LocationId { get; }
 
-    public AbstractQuestControllerClass QuestController { get; }
+    public EFT.Quests.QuestController QuestController { get; }
 
     public static bool TryCapture(out InRaidQuestContext context)
     {
@@ -27,10 +27,10 @@ internal readonly struct InRaidQuestContext
         var world = Singleton<GameWorld>.Instance;
         if (game is null || game.Status != GameStatus.Started
             || world is null || world is HideoutGameWorld
-            || world.MainPlayer?.AbstractQuestControllerClass is null) return false;
+            || world.MainPlayer?.QuestController is null) return false;
         var locationId = game.LocationObjectId;
         if (string.IsNullOrWhiteSpace(locationId)) return false;
-        context = new InRaidQuestContext(locationId, world.MainPlayer.AbstractQuestControllerClass);
+        context = new InRaidQuestContext(locationId, world.MainPlayer.QuestController);
         return true;
     }
 

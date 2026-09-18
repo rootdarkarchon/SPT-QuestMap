@@ -1,13 +1,15 @@
-using SPTarkov.Server.Core.Services;
+using SPTarkov.Server.Core.Services.Locales;
+using SPTarkov.Server.Core.Services.Server;
+using SPTarkov.Server.Core.Models.Spt.Tables;
 
 namespace SPTQuestMap.Services;
 
-internal sealed class QuestMapLocalizationService(DatabaseService databaseService, LocaleService localeService)
+internal sealed class QuestMapLocalizationService(LocaleTable localeTable, LocaleService localeService)
 {
     internal QuestMapBootstrapDto GetBootstrap(string? requestedLanguage)
     {
         var language = ResolveLanguage(requestedLanguage);
-        var locales = databaseService.GetLocales();
+        var locales = localeTable;
         var languages = locales.Languages
             .Where(pair => locales.Global.ContainsKey(pair.Key))
             .Select(pair => new QuestMapLanguageDto(pair.Key, pair.Value))
@@ -25,7 +27,7 @@ internal sealed class QuestMapLocalizationService(DatabaseService databaseServic
 
     internal string ResolveLanguage(string? requestedLanguage)
     {
-        var locales = databaseService.GetLocales().Global;
+        var locales = localeTable.Global;
         var requested = requestedLanguage?.Trim().ToLowerInvariant();
         if (!string.IsNullOrWhiteSpace(requested) && locales.ContainsKey(requested)) return requested;
 

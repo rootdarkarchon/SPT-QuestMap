@@ -49,13 +49,13 @@ internal static class NativeQuestTableActions
 
     public static NativeQuestHandoverAction? TryCreateHandover(
         RectTransform parent,
-        QuestClass quest,
+        EFT.Quests.Quest quest,
         string objectiveId,
-        AbstractQuestControllerClass questController,
+        EFT.Quests.QuestController questController,
         InventoryController inventoryController)
     {
         if (!quest.Template.Conditions.TryGetValue(EQuestStatus.AvailableForFinish, out var finish)) return null;
-        var condition = finish.IEnumerable_0.FirstOrDefault(value => string.Equals(value.id, objectiveId, StringComparison.Ordinal));
+        var condition = finish.FirstOrDefault(value => string.Equals(value.id, objectiveId, StringComparison.Ordinal));
         if (condition is not (ConditionHandoverItem or ConditionWeaponAssembly)) return null;
         var prefab = FindObjectivePrefab();
         if (prefab is null) return null;
@@ -72,10 +72,10 @@ internal static class NativeQuestTableActions
 
     public static async Task ReplaceAsync(
         RectTransform parent,
-        ISession session,
+        EFT.IEftSession session,
         InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
-        QuestClass quest,
+        EFT.Quests.QuestController questController,
+        EFT.Quests.Quest quest,
         string traderId,
         ManualLogSource log)
     {
@@ -111,10 +111,10 @@ internal static class NativeQuestTableActions
 
     public static async Task AcceptAsync(
         RectTransform parent,
-        ISession session,
+        EFT.IEftSession session,
         InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
-        QuestClass quest,
+        EFT.Quests.QuestController questController,
+        EFT.Quests.Quest quest,
         string traderId,
         ManualLogSource log)
     {
@@ -150,10 +150,10 @@ internal static class NativeQuestTableActions
 
     public static async Task CompleteAsync(
         RectTransform parent,
-        ISession session,
+        EFT.IEftSession session,
         InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
-        QuestClass quest,
+        EFT.Quests.QuestController questController,
+        EFT.Quests.Quest quest,
         string traderId,
         ManualLogSource log)
     {
@@ -297,10 +297,10 @@ internal sealed class NativeQuestHandoverAction : IDisposable
     private static Transform? _retainedRoot;
 
     private QuestObjectiveView? _host;
-    private readonly QuestClass _quest;
+    private readonly EFT.Quests.Quest _quest;
     private bool _retained;
 
-    public NativeQuestHandoverAction(QuestObjectiveView host, QuestClass quest)
+    public NativeQuestHandoverAction(QuestObjectiveView host, EFT.Quests.Quest quest)
     {
         _host = host;
         _quest = quest;
@@ -312,7 +312,7 @@ internal sealed class NativeQuestHandoverAction : IDisposable
         RetainForTransaction();
         try
         {
-            await _host.method_2(_quest);
+            await _host.QuestHandover(_quest);
         }
         catch
         {

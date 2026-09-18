@@ -1,79 +1,45 @@
 # Build and deployment
 
-Exact paths and commands must be confirmed from the supplied SPT 4.0.13 source and installed server.
+QuestMap 2.1 targets SPT `>=4.1.6 <4.2.0`; the pinned build is SPT 4.1.6 / EFT 40743. Use .NET 10 and matching read-only external references. `-SptRoot` and `SPT_ROOT` identify the Tarkov installation root containing `SPT_Runtime`, `BepInEx`, and `EscapeFromTarkov.exe`.
 
-## Configuration
+## Local workflow
 
-Use local, ignored configuration for:
-
-- installed SPT root path;
-- resolved mod deployment directory;
-- build configuration;
-- restart command.
-
-Do not commit machine-specific paths or credentials.
-
-## Required flow
-
-1. Restore/build the project.
-2. Run unit tests and any static web checks.
-3. Produce a clean deployment directory.
-4. Compare the new DLL hash with the deployed DLL.
-5. Copy deployment files into the installed SPT mod directory.
-   Preserve the user-managed `summaries/` subtree when removing stale deployment artifacts.
-6. If and only if the DLL changed:
-   - invoke the user-provided restart command, or
-   - clearly report that restart is required if no command is configured.
-7. Verify `/questmap` after restart.
-
-## Tagged GitHub releases
-
-Pushing a semantic-version tag such as `2.0.0` runs `.github/workflows/release.yml` on a Windows GitHub-hosted runner. The workflow:
-
-1. verifies that the tag exactly matches the map, shared-core, client, and BepInEx plugin versions;
-2. downloads the exact SPT 4.0.13 archive from SP-Tushonka's maintained installer mirrors and verifies its pinned SHA-256;
-3. downloads a hash-pinned, access-controlled EFT 40087 build-reference archive;
-4. verifies the exact SPT core and `Assembly-CSharp.dll` identities;
-5. builds the server and client and runs the complete test suite;
-6. creates the combined `SPT-QuestMap-<version>.zip`; and
-7. publishes that ZIP on the matching GitHub Release.
-
-Configure `EFT_REFERENCE_ARCHIVE_URL` and `EFT_REFERENCE_ARCHIVE_SHA256` as repository secrets. The private ZIP must contain only the EFT 40087 build-reference layout required by the client project: `EscapeFromTarkov.exe`, `EscapeFromTarkov_Data/Managed/`, `BepInEx/core/`, and `BepInEx/plugins/spt/`. Do not commit or publicly distribute that archive.
-
-The GitHub workflow and a local `scripts/package-release.ps1 -Target Both` package contain both install-root-relative paths:
-
-```text
-SPT/
-  user/
-    mods/
-      SPT-QuestMap/
-        LICENSE
-        SPTQuestMap.dll
-        SPTQuestMap.pdb
-        SPTQuestMap.Core.dll
-        SPTQuestMap.Core.pdb
-        Data/
-          metainfo.json
-BepInEx/
-  plugins/
-    SPTQuestMap/
-      LICENSE
-      SPTQuestMap.Client.dll
-      SPTQuestMap.Client.pdb
-      SPTQuestMap.Core.dll
-      SPTQuestMap.Core.pdb
+```powershell
+scripts/build.ps1 -Target Both -Configuration Release -SptRoot D:\Tarkov-SPT-4.1
+scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.1.0
+scripts/deploy.ps1 -Target Both -SptRoot D:\Tarkov-SPT-4.1 -SkipBuild -RestartCommand '<your configured command>'
 ```
 
-The SPT archive and private EFT reference archive are used only as build references on the runner and are not republished inside the QuestMap archive. The SPT URL is pinned to the exact `4.0.13 / 40087 / 2891fd4` archive published by the current SP-Tushonka installer infrastructure, with primary and fallback mirrors plus a fixed SHA-256; CI does not depend on a GitHub release asset or the archived `sp-tarkov` organization. The MIT license travels with the binary distribution; installation and usage documentation remain on the GitHub Release and repository README.
+The build runs shared-core, server/browser, and metadata-only native compatibility tests before staging output. `-SkipTests` requires an explicit user request. A client-only build still runs core and compatibility tests. A server-only build does not require game references.
 
-## Restart command
+Packages contain only:
 
-The local deployment helper treats `SPT_ROOT` as the Tarkov directory containing both `BepInEx` and `SPT`. When a deployed server DLL changes and the matching server was already running, it stops only that exact `SPT/SPT.Server.exe` process and launches the same executable again. An explicit `-RestartCommand` remains available for other environments.
+- `SPT_Runtime/user/mods/SPT-QuestMap/`: server/Core assemblies, symbols, license, and `Data` catalogs.
+- `BepInEx/plugins/SPTQuestMap/`: client/Core assemblies, symbols, and license.
 
-## Safety
+No game/vendor assemblies, raw profiles, copied artwork, or loose server `.js`/`.ts` files belong in release archives. Server and client versions must match. Inspect each fresh combined ZIP for allowed roots and path containment.
 
-- Do not overwrite unrelated mod folders.
-- Do not edit profiles during deployment.
-- Do not delete installed SPT files outside the resolved SPT-QuestMap deployment directory.
-- Fail the deployment if build/tests fail.
-- Log copied files and whether the DLL hash changed.
+## Restart and preservation
+
+When server DLLs change, deployment requires `-RestartCommand` or the ignored `scripts/restart-command.local.txt` before copying either component. The command runs after copying and must handle the intended SPT server instance. No command is inferred, and an unchanged server does not restart. `-WhatIf` previews copying without requiring a command.
+
+Client deployment never inspects or stops EFT. A mapped-DLL lock is a deployment failure, not authorization to kill the game. Only QuestMap's two resolved installation directories may be synchronized; the server's user-managed `summaries/` subtree and external client configuration/tracking files are preserved. Compare staged and installed hashes after deployment. Do not poll server readiness; the user confirms readiness before runtime checks.
+
+## Private CI build references
+
+Create one combined reference ZIP from the pinned installation:
+
+```powershell
+scripts/package-build-references.ps1 -SptRoot D:\Tarkov-SPT-4.1
+```
+
+The ZIP and its SHA-256 manifest are written to ignored `artifacts/private-build-references/`. The archive contains only server DLLs, the EFT executable/managed DLLs, and SPT/BepInEx reference DLLs. It contains no profiles, credentials, logs, or installed third-party mods.
+
+The user provisions an access-controlled download and these GitHub Actions secrets:
+
+- `EFT_REFERENCE_ARCHIVE_4_1_URL`
+- `EFT_REFERENCE_ARCHIVE_4_1_SHA256`
+
+GitHub secret names permit underscores, not periods. These are the valid spellings of the requested 4.1-specific names. Never attach the private reference ZIP to a public release.
+
+Tagged CI validates the tag/project/plugin versions, downloads the private ZIP, checks its SHA-256 and the pinned server/EFT assembly hashes, runs the combined build/tests, packages QuestMap, and publishes only the QuestMap release ZIP. Provisioning secrets and executing remote CI remain separate from a successful local build. See [the migration record](spt-4.1-migration.md) for pins and runtime acceptance.

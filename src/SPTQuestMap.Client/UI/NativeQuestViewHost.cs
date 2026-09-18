@@ -36,17 +36,17 @@ internal static class NativeQuestViewSource
 internal sealed class NativeQuestViewHost : IDisposable
 {
     private readonly QuestView _view;
-    private readonly ISession _session;
+    private readonly EFT.IEftSession _session;
     private readonly InventoryController _inventoryController;
-    private readonly AbstractQuestControllerClass _questController;
+    private readonly EFT.Quests.QuestController _questController;
     private readonly ManualLogSource _log;
     private bool _bound;
 
     private NativeQuestViewHost(
         QuestView view,
-        ISession session,
+        EFT.IEftSession session,
         InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
+        EFT.Quests.QuestController questController,
         ManualLogSource log)
     {
         _view = view;
@@ -58,9 +58,9 @@ internal sealed class NativeQuestViewHost : IDisposable
 
     public static NativeQuestViewHost? TryCreate(
         RectTransform parent,
-        ISession session,
+        EFT.IEftSession session,
         InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
+        EFT.Quests.QuestController questController,
         ManualLogSource log)
     {
         var source = NativeQuestViewSource.FindForDetails();
@@ -81,7 +81,7 @@ internal sealed class NativeQuestViewHost : IDisposable
         return new NativeQuestViewHost(view, session, inventoryController, questController, log);
     }
 
-    public bool Bind(QuestClass quest, string traderId)
+    public bool Bind(EFT.Quests.Quest quest, string traderId)
     {
         var trader = _session.Traders.FirstOrDefault(
             value => string.Equals(value.Id, traderId, StringComparison.Ordinal));
@@ -97,9 +97,9 @@ internal sealed class NativeQuestViewHost : IDisposable
         return true;
     }
 
-    public Task Accept(QuestClass quest) => _view.StartQuest(quest);
+    public Task Accept(EFT.Quests.Quest quest) => _view.StartQuest(quest);
 
-    public Task Complete(QuestClass quest) => _view.FinishQuest(quest);
+    public Task Complete(EFT.Quests.Quest quest) => _view.FinishQuest(quest);
 
     public Task Replace() => _view.ShowChangeQuestConfirmation();
 

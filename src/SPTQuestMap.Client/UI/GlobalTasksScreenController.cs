@@ -39,7 +39,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private static readonly FieldInfo ScreenTooltipField = RequiredField("_tooltip");
     private static readonly FieldInfo TasksDescriptionField = RequiredTasksPanelField("_notesTaskDescription");
     private static readonly FieldInfo TasksTooltipField = RequiredTasksPanelField("simpleTooltip_0");
-    private static readonly FieldInfo FavoriteQuestServiceField = RequiredTasksPanelField("gclass3794_0");
+    private static readonly FieldInfo FavoriteQuestServiceField = RequiredTasksPanelField("_favoriteQuests");
 
     private readonly TasksScreen _screen;
     private readonly NativeQuestWorkspaceContext _workspace;
@@ -51,7 +51,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private GameObject? _tasksDescription;
     private SimpleTooltip? _screenTooltip;
     private SimpleTooltip? _tasksTooltip;
-    private GClass3794? _favoriteQuestService;
+    private EFT.UI.FavoriteQuestManager? _favoriteQuestService;
     private RectTransform? _notesPart;
     private RectTransform? _questItemsPart;
     private RectTransform? _nativeSearch;
@@ -64,7 +64,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private RectMask2D? _ownedQuestItemsMask;
     private Toggle? _notesToggle;
     private Toggle? _questItemsToggle;
-    private Func<QuestClass, bool>? _questsAdditionalFilter;
+    private Func<EFT.Quests.Quest, bool>? _questsAdditionalFilter;
     private QuestGraphTopology? _topology;
     private QuestGraphLayout? _layout;
     private QuestProfileOverlay? _overlay;
@@ -84,7 +84,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
     private GlobalQuestGraphMode _mode = GlobalQuestGraphMode.InProgress;
     private bool _raidInProgressOnly;
     private string? _raidLocationId;
-    private AbstractQuestControllerClass? _raidQuestController;
+    private EFT.Quests.QuestController? _raidQuestController;
     private bool _showAllFuture;
     private bool _hideFinished;
     private bool _levelEligibleOnly = true;
@@ -125,8 +125,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
     }
 
     private InventoryController InventoryController => _workspace.InventoryController;
-    private AbstractQuestControllerClass QuestController => _workspace.QuestController;
-    private ISession Session => _workspace.Session;
+    private EFT.Quests.QuestController QuestController => _workspace.QuestController;
+    private EFT.IEftSession Session => _workspace.Session;
     private ManualLogSource Log => _workspace.Log;
     private const bool CustomDetailsEnabled = true;
 
@@ -149,9 +149,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
             ?? throw new InvalidOperationException("TasksPanel._notesTaskDescription was null.");
         _screenTooltip = ScreenTooltipField.GetValue(_screen) as SimpleTooltip;
         _tasksTooltip = TasksTooltipField.GetValue(_tasksPanel) as SimpleTooltip;
-        _favoriteQuestService = FavoriteQuestServiceField.GetValue(_tasksPanel) as GClass3794
+        _favoriteQuestService = FavoriteQuestServiceField.GetValue(_tasksPanel) as EFT.UI.FavoriteQuestManager
             ?? throw new InvalidOperationException("TasksPanel native favorite-quest service was null.");
-        _questsAdditionalFilter = QuestsAdditionalFilterField.GetValue(_screen) as Func<QuestClass, bool>;
+        _questsAdditionalFilter = QuestsAdditionalFilterField.GetValue(_screen) as Func<EFT.Quests.Quest, bool>;
         _tasksPanelWasActive = _tasksPanel.gameObject.activeSelf;
         _tasksDescriptionWasActive = _tasksDescription.activeSelf;
         _topology = topology;
@@ -197,8 +197,8 @@ internal sealed class GlobalTasksScreenController : IDisposable
 
     public string Resume(
         InventoryController inventoryController,
-        AbstractQuestControllerClass questController,
-        ISession session,
+        EFT.Quests.QuestController questController,
+        EFT.IEftSession session,
         QuestGraphTopology topology,
         QuestGraphLayout layout,
         QuestProfileOverlay overlay)
@@ -206,7 +206,7 @@ internal sealed class GlobalTasksScreenController : IDisposable
         if (!CanResume) return "screen-cache-invalid";
         var runtimeContextChanged = RebindRuntimeContext(session, inventoryController, questController);
 
-        _favoriteQuestService = FavoriteQuestServiceField.GetValue(_tasksPanel) as GClass3794
+        _favoriteQuestService = FavoriteQuestServiceField.GetValue(_tasksPanel) as EFT.UI.FavoriteQuestManager
             ?? throw new InvalidOperationException("TasksPanel native favorite-quest service was null while resuming.");
         if (_graphView is InProgressQuestTableView existingTable)
             existingTable.RebindFavoriteQuestService(_favoriteQuestService);
@@ -1722,9 +1722,9 @@ internal sealed class GlobalTasksScreenController : IDisposable
     }
 
     private bool RebindRuntimeContext(
-        ISession session,
+        EFT.IEftSession session,
         InventoryController inventoryController,
-        AbstractQuestControllerClass questController)
+        EFT.Quests.QuestController questController)
     {
         var inventoryChanged = !ReferenceEquals(InventoryController, inventoryController);
         if (inventoryChanged) UnsubscribeInventoryUpdates();

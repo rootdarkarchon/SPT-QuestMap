@@ -26,12 +26,12 @@ internal sealed class RaidQuestRuntime : IDisposable
     private readonly RaidPerformanceTelemetry _telemetry;
     private readonly RaidProgressNotificationState _notificationProgress = new();
     private readonly RaidProgressNotificationQueue _pendingNotifications = new();
-    private readonly Action<AbstractQuestControllerClass> _observeQuestController;
+    private readonly Action<EFT.Quests.QuestController> _observeQuestController;
     private readonly Action _clearObservedQuestController;
     private readonly Action<string, string?, string?> _requestRefresh;
     private readonly Action _clearRefreshSignals;
     private readonly HashSet<string> _currentMapIds = new(StringComparer.OrdinalIgnoreCase);
-    private AbstractQuestControllerClass? _questController;
+    private EFT.Quests.QuestController? _questController;
     private RaidQuestProgressMonitor? _progressMonitor;
     private string? _locationId;
     private float _nextPollAt;
@@ -45,7 +45,7 @@ internal sealed class RaidQuestRuntime : IDisposable
         QuestMapDataAdapter adapter,
         QuestAssetSpriteCache assetCache,
         QuestTrackingService tracking,
-        Action<AbstractQuestControllerClass> observeQuestController,
+        Action<EFT.Quests.QuestController> observeQuestController,
         Action clearObservedQuestController,
         Action<string, string?, string?> requestRefresh,
         Action clearRefreshSignals)

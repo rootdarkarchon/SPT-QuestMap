@@ -9,7 +9,7 @@ namespace SPTQuestMap.Client.Data;
 
 internal static class EftLiveSnapshotAdapter
 {
-    public static LiveProfileSnapshot Capture(IEnumerable<QuestClass> liveQuests, Profile profile)
+    public static LiveProfileSnapshot Capture(IEnumerable<EFT.Quests.Quest> liveQuests, Profile profile)
     {
         if (liveQuests is null) throw new ArgumentNullException(nameof(liveQuests));
         if (profile is null) throw new ArgumentNullException(nameof(profile));
@@ -39,7 +39,7 @@ internal static class EftLiveSnapshotAdapter
         };
     }
 
-    internal static LiveQuestSnapshot CaptureQuest(QuestClass quest)
+    internal static LiveQuestSnapshot CaptureQuest(EFT.Quests.Quest quest)
     {
         var objectiveProgress = (quest.Conditions.TryGetValue(EQuestStatus.AvailableForFinish, out var finishConditions)
                 ? finishConditions
@@ -62,7 +62,7 @@ internal static class EftLiveSnapshotAdapter
                     progressKnown || complete);
             })
             .ToArray();
-        var expiration = quest is GClass3996 repeatable ? repeatable.ExpirationDate : (long?)null;
+        var expiration = quest is EFT.Quests.DailyQuest repeatable ? repeatable.ExpirationDate : (long?)null;
 
         return new LiveQuestSnapshot(
             quest.Id,

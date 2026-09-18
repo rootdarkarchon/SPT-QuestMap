@@ -6,19 +6,22 @@ using Version = SemanticVersioning.Version;
 
 namespace SPTQuestMap;
 
-public sealed record QuestMapModMetadata : AbstractModMetadata, IModWebMetadata
+public sealed record QuestMapModMetadata : IModMetadata, IModBlazorMetadata
 {
-    public override string ModGuid { get; init; } = "com.sptquestmap.server";
-    public override string Name { get; init; } = "SPT-QuestMap";
-    public override string Author { get; init; } = "SPT-QuestMap contributors";
-    public override List<string>? Contributors { get; init; }
-    public override Version Version { get; init; } = new(GetModVersion());
-    public override Range SptVersion { get; init; } = new("4.0.13");
-    public override List<string>? Incompatibilities { get; init; }
-    public override Dictionary<string, Range>? ModDependencies { get; init; }
-    public override string? Url { get; init; }
-    public override bool? IsBundleMod { get; init; } = false;
-    public override string License { get; init; } = "MIT";
+    public string ModGuid { get; init; } = "com.sptquestmap.server";
+    public string Name { get; init; } = "SPT-QuestMap";
+    public string Author { get; init; } = "SPT-QuestMap contributors";
+    public List<string>? Contributors { get; init; }
+    public Version Version { get; init; } = new(GetModVersion());
+    public Range SptVersion { get; init; } = new(">=4.1.6 <4.2.0");
+    public List<string>? Incompatibilities { get; init; }
+    public Dictionary<string, Range>? ModDependencies { get; init; }
+    public string? Url { get; init; }
+    public bool HasPrepatcher { get; init; } = false;
+    public string? WWWRootUrl { get; init; }
+    public string? HomePage { get; init; } = "/questmap";
+    public string? HomePageDescription { get; init; } = "Read-only quest planning and profile comparison.";
+    public string License { get; init; } = "MIT";
 
     private static string GetModVersion()
     {

@@ -17,13 +17,13 @@ namespace SPTQuestMap.Client.UI;
 internal static class NativeQuestCompletionRecovery
 {
     public static bool CanRecover(
-        AbstractQuestControllerClass questController,
+        EFT.Quests.QuestController questController,
         QuestGraphNode node,
-        QuestClass quest)
+        EFT.Quests.Quest quest)
     {
         if (quest.QuestStatus != EQuestStatus.Started
-            || questController is not GClass4005 exactController
-            || exactController.GClass4024_0 is null)
+            || questController is not EFT.Quests.QuestControllerClient exactController
+            || exactController.ConditionsConnectorsManagerClient is null)
             return false;
 
         try
@@ -39,14 +39,14 @@ internal static class NativeQuestCompletionRecovery
     }
 
     public static bool TryPrepare(
-        AbstractQuestControllerClass questController,
+        EFT.Quests.QuestController questController,
         QuestGraphNode node,
-        QuestClass quest,
+        EFT.Quests.Quest quest,
         ManualLogSource log)
     {
         if (quest.QuestStatus == EQuestStatus.AvailableForFinish) return true;
         if (!CanRecover(questController, node, quest)
-            || questController is not GClass4005 exactController
+            || questController is not EFT.Quests.QuestControllerClient exactController
             || !TryResolveReplay(node, quest, out var condition, out var checker, out var current))
             return false;
 
@@ -60,7 +60,7 @@ internal static class NativeQuestCompletionRecovery
                 return false;
             }
 
-            exactController.GClass4024_0.SetConditionCurrentValue(
+            exactController.ConditionsConnectorsManagerClient.SetConditionCurrentValue(
                 quest,
                 EQuestStatus.AvailableForFinish,
                 condition,
@@ -90,20 +90,20 @@ internal static class NativeQuestCompletionRecovery
         }
     }
 
-    private static bool AllNecessaryFinishConditionsRecorded(QuestClass quest)
+    private static bool AllNecessaryFinishConditionsRecorded(EFT.Quests.Quest quest)
     {
         if (!quest.Template.Conditions.TryGetValue(EQuestStatus.AvailableForFinish, out var finishConditions))
             return false;
-        var necessary = finishConditions.IEnumerable_0.Where(condition => condition.IsNecessary).ToArray();
+        var necessary = finishConditions.Where(condition => condition.IsNecessary).ToArray();
         return necessary.Length > 0 && necessary.All(quest.IsConditionDone);
     }
 
-    private static bool HasResettableIncompleteCounter(QuestGraphNode node, QuestClass quest)
+    private static bool HasResettableIncompleteCounter(QuestGraphNode node, EFT.Quests.Quest quest)
     {
         if (!quest.Template.Conditions.TryGetValue(EQuestStatus.AvailableForFinish, out var finishConditions))
             return true;
 
-        var conditions = finishConditions.IEnumerable_0
+        var conditions = finishConditions
             .GroupBy(condition => condition.id.ToString(), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         foreach (var objective in node.Objectives.Where(value =>
@@ -127,7 +127,7 @@ internal static class NativeQuestCompletionRecovery
 
     private static bool TryResolveReplay(
         QuestGraphNode node,
-        QuestClass quest,
+        EFT.Quests.Quest quest,
         out Condition condition,
         out ConditionProgressChecker checker,
         out double current)
@@ -141,7 +141,7 @@ internal static class NativeQuestCompletionRecovery
         var definitions = node.Objectives
             .GroupBy(objective => objective.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        foreach (var candidate in finishConditions.IEnumerable_0.Reverse())
+        foreach (var candidate in finishConditions.Reverse())
         {
             var id = candidate.id.ToString();
             if (!candidate.IsNecessary

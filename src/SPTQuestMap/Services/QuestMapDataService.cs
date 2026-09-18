@@ -1,16 +1,17 @@
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
-using SPTarkov.Server.Core.Helpers;
-using SPTarkov.Server.Core.Models.Utils;
+using SPTarkov.Server.Core.Helpers.Quest;
+using SPTarkov.Common.Models.Logging;
 using SPTarkov.Server.Core.Servers;
-using SPTarkov.Server.Core.Services;
+using SPTarkov.Server.Core.Services.Locales;
+using SPTarkov.Server.Core.Services.Server;
+using SPTarkov.Server.Core.Models.Spt.Tables;
 
 namespace SPTQuestMap.Services;
 
-[Injectable(InjectionType.Singleton, TypePriority = OnLoadOrder.PostSptModLoader + 1)]
+[Injectable(InjectionType.Singleton, TypePriority = OnLoadOrder.PostLoad + 2)]
 public sealed class QuestMapDataService : IOnLoad
 {
-    private readonly DatabaseService _databaseService;
     private readonly QuestMapLocalizationService _localization;
     private readonly QuestMetaInfoCatalog _metaInfoCatalog;
     private readonly QuestTopologyBuilder _topology;
@@ -19,7 +20,9 @@ public sealed class QuestMapDataService : IOnLoad
     private readonly SaveServer _saveServer;
 
     public QuestMapDataService(
-        DatabaseService databaseService,
+        TemplateTable templateTable,
+        TradersTable tradersTable,
+        LocaleTable localeTable,
         LocaleService localeService,
         SaveServer saveServer,
         QuestHelper questHelper,
@@ -28,15 +31,15 @@ public sealed class QuestMapDataService : IOnLoad
         ISptLogger<QuestMapDataService> logger
     )
     {
-        _databaseService = databaseService;
         _saveServer = saveServer;
         _preload = preload;
-        _localization = new QuestMapLocalizationService(databaseService, localeService);
+        _localization = new QuestMapLocalizationService(localeTable, localeService);
         _metaInfoCatalog = new QuestMetaInfoCatalog(
             warning: message => logger.Warning(message));
         var zoneMapCatalog = new QuestZoneMapCatalog();
         _topology = new QuestTopologyBuilder(
-            databaseService,
+            templateTable,
+            tradersTable,
             localeService,
             questHelper,
             seasonalEventService,
@@ -47,7 +50,8 @@ public sealed class QuestMapDataService : IOnLoad
             logger
         );
         _profiles = new QuestProfileStateBuilder(
-            databaseService,
+            templateTable,
+            tradersTable,
             localeService,
             saveServer,
             questHelper,
@@ -58,8 +62,9 @@ public sealed class QuestMapDataService : IOnLoad
         );
     }
 
-    public Task OnLoad()
+    public Task OnLoadAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _metaInfoCatalog.Resolve(_preload.Items);
         return Task.CompletedTask;
     }

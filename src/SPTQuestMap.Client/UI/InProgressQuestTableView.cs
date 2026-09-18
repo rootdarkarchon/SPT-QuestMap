@@ -42,7 +42,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
     private readonly Action _onBackgroundClick;
     private readonly Action<QuestTableSortColumn> _onSortChanged;
     private readonly Action<string> _onExpansionChanged;
-    private GClass3794? _favoriteQuestService;
+    private EFT.UI.FavoriteQuestManager? _favoriteQuestService;
     private readonly QuestTrackingService _tracking;
     private readonly NativeQuestWorkspaceContext _workspace;
     private readonly QuestObjectiveSkipVisibility _skipVisibility;
@@ -78,7 +78,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         Action<string> onExpansionChanged,
         ManualLogSource log,
         QuestAssetSpriteCache assetCache,
-        GClass3794? favoriteQuestService,
+        EFT.UI.FavoriteQuestManager? favoriteQuestService,
         QuestTrackingService tracking,
         NativeQuestWorkspaceContext workspace,
         Action<string, QuestDetailsActionKind> onQuestMutated,
@@ -148,7 +148,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         Action<string> onExpansionChanged,
         ManualLogSource log,
         QuestAssetSpriteCache assetCache,
-        GClass3794? favoriteQuestService,
+        EFT.UI.FavoriteQuestManager? favoriteQuestService,
         QuestTrackingService tracking,
         NativeQuestWorkspaceContext workspace,
         Action<string, QuestDetailsActionKind> onQuestMutated,
@@ -425,7 +425,7 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
         }
     }
 
-    public void RebindFavoriteQuestService(GClass3794 favoriteQuestService)
+    public void RebindFavoriteQuestService(EFT.UI.FavoriteQuestManager favoriteQuestService)
     {
         if (_disposed || ReferenceEquals(_favoriteQuestService, favoriteQuestService)) return;
         if (_favoriteQuestService is not null)

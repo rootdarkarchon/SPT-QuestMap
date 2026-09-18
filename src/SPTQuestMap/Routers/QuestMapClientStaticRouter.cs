@@ -2,7 +2,7 @@ using System.Diagnostics;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Models.Eft.Common;
-using SPTarkov.Server.Core.Models.Utils;
+using SPTarkov.Common.Models.Logging;
 using SPTarkov.Server.Core.Utils;
 using SPTQuestMap.Services;
 
@@ -23,8 +23,9 @@ public sealed class QuestMapClientStaticRouter(
         [
             new RouteAction<EmptyRequestData>(
                 "/questmap/client/topology",
-                (url, _, sessionId, _) =>
+                (url, _, sessionId, _, cancellationToken) =>
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var totalStopwatch = Stopwatch.StartNew();
                     var stageStopwatch = Stopwatch.StartNew();
                     var requestedLanguage = GetRequestedLanguage(url, Route);
@@ -127,8 +128,9 @@ public sealed class QuestMapClientStaticRouter(
                 }),
             new RouteAction<EmptyRequestData>(
                 "/questmap/client/repeatables",
-                (url, _, sessionId, _) =>
+                (url, _, sessionId, _, cancellationToken) =>
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var totalStopwatch = Stopwatch.StartNew();
                     var stageStopwatch = Stopwatch.StartNew();
                     var requestedLanguage = GetRequestedLanguage(url, RepeatablesRoute);

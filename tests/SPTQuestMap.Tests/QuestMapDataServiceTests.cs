@@ -767,7 +767,8 @@ public sealed class QuestMapDataServiceTests
             questId => questId != inactiveEvent.Id,
             (level, condition) => level >= condition.Value,
             condition => condition.Value <= 2,
-            condition => condition.Value <= 0.2);
+            condition => condition.Value <= 0.2,
+            _ => true);
 
         Assert.Multiple(() =>
         {
@@ -816,6 +817,7 @@ public sealed class QuestMapDataServiceTests
             _ => true,
             (_, _) => true,
             _ => true,
+            _ => true,
             _ => true);
 
         Assert.Multiple(() =>
@@ -852,6 +854,7 @@ public sealed class QuestMapDataServiceTests
             (_, _) => { factionChecks++; return false; },
             _ => { eventChecks++; return true; },
             (_, _) => { levelChecks++; return true; },
+            _ => true,
             _ => true,
             _ => true);
 

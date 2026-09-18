@@ -121,8 +121,10 @@ internal static class QuestTemplateMapper
 
     internal static IReadOnlyDictionary<MongoId, string[]> BuildQuestItemSpawnMapLookup(
         IEnumerable<Location> locations,
-        IReadOnlySet<MongoId> questItemIds)
+        IReadOnlySet<MongoId> questItemIds,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var applicableLocations = locations.Where(IsApplicableTaskMapLocation).ToArray();
         if (applicableLocations.Length == 0) return new Dictionary<MongoId, string[]>();
 
@@ -133,7 +135,7 @@ internal static class QuestTemplateMapper
         Parallel.For(
             0,
             applicableLocations.Length,
-            new ParallelOptions { MaxDegreeOfParallelism = maxDegreeOfParallelism },
+            new ParallelOptions { MaxDegreeOfParallelism = maxDegreeOfParallelism, CancellationToken = cancellationToken },
             index =>
             {
                 var location = applicableLocations[index];
@@ -143,6 +145,7 @@ internal static class QuestTemplateMapper
                 var itemIds = new HashSet<MongoId>();
                 foreach (var spawnPoint in location.LooseLoot?.Value?.SpawnpointsForced ?? [])
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     foreach (var item in spawnPoint.Template?.Items ?? [])
                     {
                         if (questItemIds.Contains(item.Template)) itemIds.Add(item.Template);

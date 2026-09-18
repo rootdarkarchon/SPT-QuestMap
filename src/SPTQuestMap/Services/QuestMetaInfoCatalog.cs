@@ -1,14 +1,16 @@
 using System.Text.Json;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
-using SPTarkov.Server.Core.Services;
+using SPTarkov.Server.Core.Services.Locales;
+using SPTarkov.Server.Core.Services.Server;
+using SPTarkov.Server.Core.Models.Spt.Tables;
 using IOPath = System.IO.Path;
 
 namespace SPTQuestMap.Services;
 
 internal sealed class QuestMetaInfoCatalog
 {
-    internal const string ExternalRelativePath = "SPT/user/mods/SPT-QuestMap/Data/metainfo.json";
+    internal const string ExternalRelativePath = "SPT_Runtime/user/mods/SPT-QuestMap/Data/metainfo.json";
     private readonly object _resolveLock = new();
     private readonly Action<string>? _warning;
     private readonly IReadOnlyDictionary<string, ParsedQuestMetaInfo> _parsedEntries;
@@ -32,12 +34,6 @@ internal sealed class QuestMetaInfoCatalog
         Resolve(resolveItem);
     }
 
-    internal void Resolve(DatabaseService databaseService)
-    {
-        ArgumentNullException.ThrowIfNull(databaseService);
-        var items = databaseService.GetItems();
-        Resolve(itemId => ResolveItem(items, itemId));
-    }
 
     internal void Resolve(IReadOnlyDictionary<MongoId, TemplateItem> items)
     {

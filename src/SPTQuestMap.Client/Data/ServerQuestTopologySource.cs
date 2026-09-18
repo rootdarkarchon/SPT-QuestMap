@@ -137,10 +137,10 @@ internal sealed class ServerQuestTopologySource : IQuestTopologySource
 
     private static string LocalizedRoute(string route)
     {
-        var localeManager = LocaleManagerClass.LocaleManagerClass;
-        var language = localeManager?.String_0;
-        if (string.IsNullOrWhiteSpace(language)) language = LocaleManagerClass.DefaultLanguage;
-        if (string.IsNullOrWhiteSpace(language)) language = LocaleManagerClass.ENGLISH_LOCALIZATION;
+        var localeManager = EFT.LocalizationManager.Instance;
+        var language = localeManager?.Culture;
+        if (string.IsNullOrWhiteSpace(language)) language = EFT.LocalizationManager.DefaultLanguage;
+        if (string.IsNullOrWhiteSpace(language)) language = EFT.LocalizationManager.ENGLISH_LOCALIZATION;
         return $"{route}/{Uri.EscapeDataString(language)}";
     }
 }

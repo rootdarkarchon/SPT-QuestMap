@@ -1,4 +1,5 @@
 using System;
+using QuestReward = SPTQuestMap.Core.Models.QuestReward;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -32,7 +33,7 @@ internal sealed class QuestDetailsPane : IDisposable
 
     private readonly NativeQuestWorkspaceContext _workspace;
     private readonly InventoryController _inventoryController;
-    private readonly AbstractQuestControllerClass _questController;
+    private readonly EFT.Quests.QuestController _questController;
     private readonly QuestAssetSpriteCache _assetCache;
     private readonly Action<string, QuestDetailsActionKind> _requestQuestRefresh;
     private readonly string? _contextTraderId;
@@ -379,7 +380,7 @@ internal sealed class QuestDetailsPane : IDisposable
     private void BuildActions(
         RectTransform parent,
         QuestGraphNode node,
-        QuestClass? liveQuest,
+        EFT.Quests.Quest? liveQuest,
         bool actionBound,
         bool raidOnlyTrader,
         float top,
@@ -462,7 +463,7 @@ internal sealed class QuestDetailsPane : IDisposable
         }
     }
 
-    private Task CompleteQuest(QuestGraphNode node, QuestClass quest)
+    private Task CompleteQuest(QuestGraphNode node, EFT.Quests.Quest quest)
     {
         return _workspace.TryPrepareForCompletion(node, quest)
             ? _actionHost!.Complete(quest)
@@ -602,7 +603,7 @@ internal sealed class QuestDetailsPane : IDisposable
 
             // FilterSearch is Tarkov's native "Filter by item" action. LinkedSearch instead
             // searches for compatible items and can select a category with no offers.
-            itemUiContext.ExternalRagfairSearch(new GClass3943(EFilterType.FilterSearch, templateId, true));
+            itemUiContext.ExternalRagfairSearch(new EFT.UI.Ragfair.RagfairSearch(EFilterType.FilterSearch, templateId, true));
         }
         catch (Exception exception)
         {
@@ -638,7 +639,7 @@ internal sealed class QuestDetailsPane : IDisposable
         RectTransform parent,
         QuestGraphNode node,
         QuestLiveState? liveState,
-        QuestClass? liveQuest,
+        EFT.Quests.Quest? liveQuest,
         bool future,
         float height)
     {
@@ -809,18 +810,18 @@ internal sealed class QuestDetailsPane : IDisposable
         }
     }
 
-    private float BuildRewards(RectTransform parent, QuestGraphNode node, QuestClass? liveQuest, bool future) =>
+    private float BuildRewards(RectTransform parent, QuestGraphNode node, EFT.Quests.Quest? liveQuest, bool future) =>
         BuildRewardSection(parent, node.Rewards, liveQuest, future,
             "RewardsSection", "RewardsContent", "label.rewards", EQuestStatus.Success, true);
 
-    private float BuildPenalties(RectTransform parent, QuestGraphNode node, QuestClass? liveQuest, bool future) =>
+    private float BuildPenalties(RectTransform parent, QuestGraphNode node, EFT.Quests.Quest? liveQuest, bool future) =>
         BuildRewardSection(parent, node.Penalties, liveQuest, future,
             "PenaltiesSection", "PenaltiesContent", "label.penalties", EQuestStatus.Fail, false);
 
     private float BuildRewardSection(
         RectTransform parent,
         IReadOnlyList<QuestReward> sourceRewards,
-        QuestClass? liveQuest,
+        EFT.Quests.Quest? liveQuest,
         bool future,
         string sectionName,
         string contentName,
@@ -870,7 +871,7 @@ internal sealed class QuestDetailsPane : IDisposable
 
     private bool TryBuildNativeRewards(
         IReadOnlyList<QuestReward> mappedRewards,
-        QuestClass quest,
+        EFT.Quests.Quest quest,
         EQuestStatus status,
         RectTransform section,
         RectTransform layoutRoot,
@@ -980,7 +981,7 @@ internal sealed class QuestDetailsPane : IDisposable
         _objectiveHosts.Clear();
     }
 
-    private void RequestObjectiveSkip(QuestGraphNode node, QuestObjectiveDefinition objective, QuestClass quest)
+    private void RequestObjectiveSkip(QuestGraphNode node, QuestObjectiveDefinition objective, EFT.Quests.Quest quest)
     {
         if (_disposed || !_workspace.TaskSkippingEnabled() || !_workspace.MutationsAllowed()) return;
         NativeQuestObjectiveSkip.ShowConfirmation(
@@ -1039,11 +1040,11 @@ internal sealed class QuestDetailsPane : IDisposable
         }
     }
 
-    private static IReadOnlyDictionary<string, Condition> LiveConditions(QuestClass? quest)
+    private static IReadOnlyDictionary<string, Condition> LiveConditions(EFT.Quests.Quest? quest)
     {
         if (quest is null || !quest.Template.Conditions.TryGetValue(EQuestStatus.AvailableForFinish, out var conditions))
             return new Dictionary<string, Condition>(StringComparer.Ordinal);
-        return conditions.IEnumerable_0
+        return conditions
             .GroupBy(condition => condition.id.ToString(), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
     }
