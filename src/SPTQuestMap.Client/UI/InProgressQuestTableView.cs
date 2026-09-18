@@ -935,6 +935,24 @@ internal sealed class InProgressQuestTableView : IGlobalTasksContentView
                 TextAlignmentOptions.Center, Color.white);
             badgeText.fontStyle = FontStyles.Bold;
             UnityUiFactory.FitSingleLine(badgeText, 6f, 3f);
+
+            // Use the lower banner line so narrow table columns still have room
+            // for the quest name without overlapping the badge and countdown.
+            titleRect.offsetMin = new Vector2(showTraderPortrait ? 80 : 18, -35);
+            titleRect.offsetMax = new Vector2(-10, -15);
+            UnityUiFactory.FitSingleLine(title, 12f, 0f);
+            if (QuestRepeatableTimeRules.ExpirationTime(node, _overlay) is { } expirationTime)
+            {
+                var timer = UnityUiFactory.CreateRect("RepeatableTimeRemaining", content);
+                timer.anchorMin = timer.anchorMax = timer.pivot = new Vector2(1, 1);
+                timer.anchoredPosition = new Vector2(-26, -10 - QuestTableLayoutRules.RepeatableBadgeHeight);
+                timer.sizeDelta = new Vector2(96, 20);
+                var timerText = UnityUiFactory.AddText(timer.gameObject, string.Empty, 12,
+                    TextAlignmentOptions.MidlineRight, Color.white);
+                UnityUiFactory.FitSingleLine(timerText, 9f, 0f);
+                AddTextBorder(timerText.gameObject);
+                timer.gameObject.AddComponent<QuestRepeatableCountdown>().Bind(timerText, expirationTime);
+            }
         }
 
         AddClickableHoverOutline(content, "QuestHover", bottomOnly: false);

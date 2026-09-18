@@ -210,9 +210,11 @@ internal sealed class QuestDetailsPane : IDisposable
         var descriptionHeight = DesiredDescriptionHeight(node);
         var objectivesHeight = DesiredObjectivesHeight(node, liveState);
 
-        BuildHeader(node, 0, _headerHeight);
-        AddFixedDivider(_headerHeight);
-        var actionsTop = _headerHeight + SectionGap;
+        var headerHeight = _headerHeight
+            + (QuestRepeatableTimeRules.ExpirationTime(node, _overlay) is not null ? 22f : 0f);
+        BuildHeader(node, 0, headerHeight);
+        AddFixedDivider(headerHeight);
+        var actionsTop = headerHeight + SectionGap;
         BuildActions(Root, node, liveQuest, actionBound, raidOnlyTrader, actionsTop, ActionsHeight);
         var bodyTop = actionsTop + ActionsHeight;
         AddFixedDivider(bodyTop);
@@ -342,6 +344,23 @@ internal sealed class QuestDetailsPane : IDisposable
         var collector = _topology?.CollectorPathQuestIds.Contains(node.Id) == true;
         var lightkeeper = _topology?.LightkeeperPathQuestIds.Contains(node.Id) == true;
         title.margin = new Vector4(12, 8, 12, collector || lightkeeper ? 22 : 8);
+        if (QuestRepeatableTimeRules.ExpirationTime(node, _overlay!) is { } expirationTime)
+        {
+            var margin = title.margin;
+            margin.w += 22;
+            title.margin = margin;
+            var timer = UnityUiFactory.CreateRect("RepeatableTimeRemaining", questBanner);
+            timer.anchorMin = Vector2.zero;
+            timer.anchorMax = new Vector2(1, 0);
+            timer.pivot = new Vector2(0.5f, 0);
+            timer.offsetMin = new Vector2(12, collector || lightkeeper ? 20 : 6);
+            timer.offsetMax = new Vector2(-12, collector || lightkeeper ? 40 : 26);
+            var timerText = UnityUiFactory.AddText(timer.gameObject, string.Empty, 13,
+                TextAlignmentOptions.MidlineLeft, Color.white);
+            UnityUiFactory.FitSingleLine(timerText, 10f, 0f);
+            AddTextShadow(timerText);
+            timer.gameObject.AddComponent<QuestRepeatableCountdown>().Bind(timerText, expirationTime, includePrefix: true);
+        }
         title.fontStyle = FontStyles.Bold;
         AddTextShadow(title);
         AddRouteBar(questBanner, collector, lightkeeper);

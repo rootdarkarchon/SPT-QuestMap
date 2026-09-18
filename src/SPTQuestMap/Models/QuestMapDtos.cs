@@ -95,6 +95,8 @@ public sealed record ObjectiveDefinitionDto(
 
     public bool InRaidRelevant { get; init; } = true;
 
+    public bool IsKillObjective { get; init; }
+
     public QuestMapReferenceDto[] TaskLocations { get; init; } = [];
 
     public bool ContributesToProgress { get; init; } = true;

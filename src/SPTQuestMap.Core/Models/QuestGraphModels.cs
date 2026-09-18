@@ -81,6 +81,8 @@ public sealed record QuestObjectiveDefinition(
 
     public bool InRaidRelevant { get; init; } = true;
 
+    public bool IsKillObjective { get; init; }
+
     public IReadOnlyList<QuestMapReference> TaskLocations { get; init; } = [];
 
     public bool ContributesToProgress { get; init; } = true;

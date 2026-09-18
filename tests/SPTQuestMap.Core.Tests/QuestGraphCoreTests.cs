@@ -344,6 +344,7 @@ public sealed class QuestGraphCoreTests
                 MapIds = ["bigmap"],
                 UnresolvedZoneIds = ["zone-unknown"],
                 InRaidRelevant = true,
+                IsKillObjective = true,
                 TaskLocations = [Map("bigmap", "Customs")],
             },
         ];
@@ -358,6 +359,7 @@ public sealed class QuestGraphCoreTests
             Assert.That(mapped.Objectives.Single().MapIds, Is.EqualTo(new[] { "bigmap" }));
             Assert.That(mapped.Objectives.Single().UnresolvedZoneIds, Is.EqualTo(new[] { "zone-unknown" }));
             Assert.That(mapped.Objectives.Single().InRaidRelevant, Is.True);
+            Assert.That(mapped.Objectives.Single().IsKillObjective, Is.True);
             Assert.That(mapped.Objectives.Single().TaskLocations.Select(map => map.Id), Is.EqualTo(new[] { "bigmap" }));
         });
     }

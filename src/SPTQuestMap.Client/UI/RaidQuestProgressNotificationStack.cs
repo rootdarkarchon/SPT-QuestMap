@@ -43,7 +43,7 @@ internal sealed class RaidQuestProgressNotificationStack : MonoBehaviour, IDispo
         return stack;
     }
 
-    public void Show(InRaidQuestProgressChange change)
+    public void Show(RaidProgressNotification change)
     {
         if (_log is null || _opacity is null || _minimal is null || _taskTextSize is null || _fadeDuration is null
             || _displayDuration is null || _assetCache is null) return;

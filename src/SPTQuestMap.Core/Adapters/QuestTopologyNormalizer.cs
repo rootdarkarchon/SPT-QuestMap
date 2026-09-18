@@ -214,6 +214,7 @@ public static class QuestTopologyNormalizer
                 MapIds = objective.MapIds ?? [],
                 UnresolvedZoneIds = objective.UnresolvedZoneIds ?? [],
                 InRaidRelevant = objective.InRaidRelevant,
+                IsKillObjective = objective.IsKillObjective,
                 TaskLocations = (objective.TaskLocations ?? [])
                     .Where(map => !string.IsNullOrWhiteSpace(map.Id))
                     .Select(map => new QuestMapReference(map.Id, map.Name, map.BannerImageUrl))

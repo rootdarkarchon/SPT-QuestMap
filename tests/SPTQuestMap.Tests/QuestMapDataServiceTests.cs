@@ -574,6 +574,23 @@ public sealed class QuestMapDataServiceTests
         Assert.That(result, Is.EqualTo("Survive on the location"));
     }
 
+    [TestCase("Kills", true)]
+    [TestCase("Hits", false)]
+    [TestCase("ExitStatus", false)]
+    [TestCase("Location", false)]
+    public void ObjectiveKillClassificationUsesNestedCounterType(string type, bool expected)
+    {
+        var condition = Condition("6a050718b79a994add4fba60", 0) with
+        {
+            Counter = new QuestConditionCounter
+            {
+                Conditions = [new QuestConditionCounterCondition { ConditionType = type }],
+            },
+        };
+        var result = QuestTemplateMapper.OrderObjectives([condition], new Dictionary<string, string>()).Single();
+        Assert.That(result.IsKillObjective, Is.EqualTo(expected));
+    }
+
     [Test]
     public void WttSalvageCounterExposesNestedTasksWithoutReplacingAggregateProgressOwner()
     {

@@ -73,7 +73,7 @@ internal sealed class RaidQuestProgressNotificationView : MonoBehaviour, IDispos
         if (_root is not null) _root.anchoredPosition = new Vector2(-28, -top);
     }
 
-    public void Show(InRaidQuestProgressChange change)
+    public void Show(RaidProgressNotification change)
     {
         if (_root is null || _group is null || _assetCache is null) return;
         var version = ++_contentVersion;

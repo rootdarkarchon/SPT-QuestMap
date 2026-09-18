@@ -25,6 +25,7 @@ internal sealed class RaidQuestRuntime : IDisposable
     private readonly RaidTrackedQuestListView _trackedList;
     private readonly RaidPerformanceTelemetry _telemetry;
     private readonly RaidProgressNotificationState _notificationProgress = new();
+    private readonly RaidProgressNotificationQueue _pendingNotifications = new();
     private readonly Action<AbstractQuestControllerClass> _observeQuestController;
     private readonly Action _clearObservedQuestController;
     private readonly Action<string, string?, string?> _requestRefresh;
@@ -104,6 +105,8 @@ internal sealed class RaidQuestRuntime : IDisposable
         {
             _progressMonitor?.Dispose();
             _notificationProgress.Clear();
+            _pendingNotifications.Clear();
+            _notification.Hide();
             _active = true;
             _questController = raid.QuestController;
             _locationId = raid.LocationId;
@@ -127,6 +130,7 @@ internal sealed class RaidQuestRuntime : IDisposable
         }
 
         var pollResult = _progressMonitor?.Poll(PollCheckerBudget) ?? default;
+        PublishDueNotifications();
         _telemetry.RecordPoll(ElapsedMilliseconds(startedAt), pollResult);
         _telemetry.LogIfDue();
     }
@@ -138,6 +142,7 @@ internal sealed class RaidQuestRuntime : IDisposable
         IReadOnlyCollection<string> changedQuestIds,
         IReadOnlyDictionary<string, string> preferredObjectiveIds)
     {
+        if (!_active) return;
         foreach (var questId in changedQuestIds)
         {
             if (!topology.NodesById.TryGetValue(questId, out var node)
@@ -185,7 +190,7 @@ internal sealed class RaidQuestRuntime : IDisposable
                 if (HasActiveObjective(node)
                     && !string.Equals(previous?.ExactStatus, current.ExactStatus, StringComparison.Ordinal))
                 {
-                    _notification.Show(new InRaidQuestProgressChange(
+                    ScheduleNotification(new RaidProgressNotification(
                         node,
                         null,
                         null,
@@ -211,7 +216,7 @@ internal sealed class RaidQuestRuntime : IDisposable
                 $"numericDelta={RaidProgressNotificationRules.NumericDelta(progress, previousById):0.##}; " +
                 $"effectiveDelta={RaidProgressNotificationRules.EffectivePositiveProgressDelta(progress, previousById):0.##}; " +
                 $"candidateDetail={DescribeCandidates(node, notificationObjectives, previousById, preferredObjectiveId)}");
-            _notification.Show(new InRaidQuestProgressChange(
+            ScheduleNotification(new RaidProgressNotification(
                 node,
                 definition,
                 progress,
@@ -220,6 +225,32 @@ internal sealed class RaidQuestRuntime : IDisposable
     }
 
     public void RefreshTrackedListIfVisible() => _trackedList.RefreshIfVisible();
+
+    private void ScheduleNotification(RaidProgressNotification change)
+    {
+        var immediate = _pendingNotifications.Schedule(
+            change, _configuration.KillObjectiveNotificationDelaySeconds.Value, Time.unscaledTime);
+        if (immediate is not null) _notification.Show(immediate);
+    }
+
+    private void PublishDueNotifications()
+    {
+        while (_pendingNotifications.TryDequeue(Time.unscaledTime, out var change))
+        {
+            var overlay = _adapter.Overlay;
+            if (overlay is null
+                || !_tracking.Resolve(overlay.ProfileId, change.Quest).Tracked
+                || !overlay.QuestsById.TryGetValue(change.Quest.Id, out var live)
+                || !live.HasLiveQuest) continue;
+
+            var current = live.Objectives.FirstOrDefault(objective => objective.ObjectiveId == change.Progress?.ObjectiveId);
+            if (current is null || change.Progress is null
+                || QuestProgressRules.EffectiveValue(current) < QuestProgressRules.EffectiveValue(change.Progress)
+                || (change.Progress.Complete && !current.Complete)) continue;
+
+            _notification.Show(change with { ExactStatus = live.ExactStatus ?? change.ExactStatus });
+        }
+    }
 
     public void RecordOverlayRefresh(double elapsedMilliseconds)
         => _telemetry.RecordOverlayRefresh(elapsedMilliseconds);
@@ -237,6 +268,7 @@ internal sealed class RaidQuestRuntime : IDisposable
         _locationId = null;
         _currentMapIds.Clear();
         _active = false;
+        _pendingNotifications.Clear();
         _notification.Dispose();
         _tracking.TrackingChanged -= OnTrackingChanged;
         _configuration.SmartInRaidTracking.SettingChanged -= OnSmartTrackingChanged;
@@ -254,6 +286,7 @@ internal sealed class RaidQuestRuntime : IDisposable
         _locationId = null;
         _currentMapIds.Clear();
         _notificationProgress.Clear();
+        _pendingNotifications.Clear();
         _progressMonitor?.Dispose();
         _progressMonitor = null;
         _clearRefreshSignals();
@@ -343,27 +376,4 @@ internal sealed class RaidQuestRuntime : IDisposable
 
     private static double ElapsedMilliseconds(long startedAt) =>
         (Stopwatch.GetTimestamp() - startedAt) * 1000d / Stopwatch.Frequency;
-}
-
-internal readonly struct InRaidQuestProgressChange
-{
-    public InRaidQuestProgressChange(
-        QuestGraphNode quest,
-        QuestObjectiveDefinition? objective,
-        QuestObjectiveProgress? progress,
-        string exactStatus)
-    {
-        Quest = quest;
-        Objective = objective;
-        Progress = progress;
-        ExactStatus = exactStatus;
-    }
-
-    public QuestGraphNode Quest { get; }
-
-    public QuestObjectiveDefinition? Objective { get; }
-
-    public QuestObjectiveProgress? Progress { get; }
-
-    public string ExactStatus { get; }
 }

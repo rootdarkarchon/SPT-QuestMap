@@ -98,6 +98,7 @@ The Tasks view provides:
 - natural numeric ordering for quest series;
 - quest/trader search plus trader, status, map, and repeatable filters; `Out of Raid` covers menu-only quests, while `Any` is reserved for quests with direct in-raid work;
 - separate pinned, Daily, Scav Daily, Weekly, and ordinary sections;
+- live remaining-time displays below each repeatable quest's banner badge and in its details;
 - native favorite stars and a separate QuestMap tracking control;
 - current/required objective progress while an objective remains incomplete; and
 - Accept, Restart, Hand In, Turn In, and repeatable Replace actions only when they are actually eligible.
@@ -164,6 +165,7 @@ Tracked quests can produce stacked, deduplicated in-raid progress notifications.
 | Smart in-raid tracking | On | Removes menu-only objectives from the raid list |
 | Tracked quest list hotkey | I | Toggles the raid quest list |
 | Minimal progress notifications | Off | Uses the full notification presentation |
+| Kill objective notification delay (seconds) | 0 | Delays kill-objective notifications by up to 10 seconds; further kills for the same quest replace pending progress and restart the delay |
 | Detailed diagnostics | Off | Enables verbose lifecycle/performance logging |
 | Force reload server topology | Action | Refetches and rebuilds QuestMap's server topology outside raids without restarting EFT |
 

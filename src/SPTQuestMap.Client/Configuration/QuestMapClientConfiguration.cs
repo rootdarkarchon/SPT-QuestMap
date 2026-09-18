@@ -25,6 +25,7 @@ internal sealed class QuestMapClientConfiguration
         ConfigEntry<bool> raidNotificationMinimal,
         ConfigEntry<float> raidOverlayFadeDurationSeconds,
         ConfigEntry<float> raidNotificationDisplayDurationSeconds,
+        ConfigEntry<float> killObjectiveNotificationDelaySeconds,
         ConfigEntry<float> trackedQuestListDisplayDurationSeconds,
         ConfigEntry<KeyboardShortcut> trackedQuestListHotkey,
         ConfigEntry<bool> playHoverSounds,
@@ -63,6 +64,7 @@ internal sealed class QuestMapClientConfiguration
         RaidNotificationMinimal = raidNotificationMinimal;
         RaidOverlayFadeDurationSeconds = raidOverlayFadeDurationSeconds;
         RaidNotificationDisplayDurationSeconds = raidNotificationDisplayDurationSeconds;
+        KillObjectiveNotificationDelaySeconds = killObjectiveNotificationDelaySeconds;
         TrackedQuestListDisplayDurationSeconds = trackedQuestListDisplayDurationSeconds;
         TrackedQuestListHotkey = trackedQuestListHotkey;
         PlayHoverSounds = playHoverSounds;
@@ -119,6 +121,8 @@ internal sealed class QuestMapClientConfiguration
     public ConfigEntry<float> RaidOverlayFadeDurationSeconds { get; }
 
     public ConfigEntry<float> RaidNotificationDisplayDurationSeconds { get; }
+
+    public ConfigEntry<float> KillObjectiveNotificationDelaySeconds { get; }
 
     public ConfigEntry<float> TrackedQuestListDisplayDurationSeconds { get; }
 
@@ -254,6 +258,13 @@ internal sealed class QuestMapClientConfiguration
                 new ConfigDescription(
                     "Time an in-raid quest progress notification remains fully visible between its fade animations.",
                     new AcceptableValueRange<float>(0.5f, 30f))),
+            config.Bind(
+                "Raid overlays",
+                "Kill objective notification delay (seconds)",
+                0f,
+                new ConfigDescription(
+                    "Delay in-raid kill-objective progress notifications. Further kills for the same quest replace pending progress and restart the delay. Other objective notifications remain immediate.",
+                    new AcceptableValueRange<float>(0f, 10f))),
             config.Bind(
                 "Raid overlays",
                 "Tracked quest list duration (seconds)",

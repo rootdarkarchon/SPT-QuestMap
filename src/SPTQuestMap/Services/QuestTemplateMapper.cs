@@ -384,7 +384,11 @@ internal static class QuestTemplateMapper
                 condition.VisibilityConditions?.Select(value => value.Target).Where(target => !string.IsNullOrEmpty(target)).Cast<string>().ToArray() ?? [],
                 GetObjectiveZoneIds(condition),
                 condition.OneSessionOnly == true,
-                condition.DoNotResetIfCounterCompleted == true));
+                condition.DoNotResetIfCounterCompleted == true)
+            {
+                IsKillObjective = condition.ConditionType == "Kills"
+                    || condition.Counter?.Conditions?.Any(child => child.ConditionType == "Kills") == true,
+            });
 
             var counterConditions = condition.Counter?.Conditions ?? [];
             if (!counterConditions.Any(IsWttSalvageCondition)) continue;
@@ -412,6 +416,7 @@ internal static class QuestTemplateMapper
                     GetCounterConditionZoneIds(child))
                 {
                     ContributesToProgress = false,
+                    IsKillObjective = child.ConditionType == "Kills",
                 });
             }
         }

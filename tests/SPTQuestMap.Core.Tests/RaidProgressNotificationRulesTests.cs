@@ -118,6 +118,94 @@ public sealed class RaidProgressNotificationRulesTests
         Assert.That(state.ObserveEffectiveIncrease("quest", current, previous), Is.True);
     }
 
+    [Test]
+    public void KillDelayCoalescesProgressAndHoldsSeparateFinalStatus()
+    {
+        var queue = new RaidProgressNotificationQueue();
+        var kill = Objective("kill", 0) with { IsKillObjective = true };
+        var first = new RaidProgressNotification(Node(kill), kill, Progress("kill", 1, 2), "Started");
+        Assert.That(queue.Schedule(first, 5, 10), Is.Null);
+        Assert.That(queue.TryDequeue(14.99, out _), Is.False);
+        var final = first with { Progress = Progress("kill", 2, 2, complete: true) };
+        Assert.That(queue.Schedule(final, 5, 14), Is.Null);
+        Assert.That(queue.Schedule(final with { Objective = null, Progress = null, ExactStatus = "AvailableForFinish" }, 5, 14.1), Is.Null);
+        Assert.That(queue.TryDequeue(18.99, out _), Is.False);
+        Assert.That(queue.TryDequeue(19, out var shown), Is.True);
+        Assert.That(shown.Progress, Is.EqualTo(final.Progress));
+        Assert.That(shown.ExactStatus, Is.EqualTo("AvailableForFinish"));
+        Assert.That(queue.TryDequeue(30, out _), Is.False);
+    }
+
+    [Test]
+    public void NonKillProgressIsImmediateWithoutDiscardingPendingKills()
+    {
+        var queue = new RaidProgressNotificationQueue();
+        var kill = Objective("kill", 0) with { IsKillObjective = true };
+        var item = Objective("item", 1);
+        var change = new RaidProgressNotification(Node(kill, item), kill, Progress("kill", 1, 2), "Started");
+        queue.Schedule(change, 5, 0);
+        var itemChange = change with { Objective = item, Progress = Progress("item", 1, 2) };
+        Assert.That(queue.Schedule(itemChange, 5, 1), Is.SameAs(itemChange));
+        Assert.That(queue.TryDequeue(5, out var shown), Is.True);
+        Assert.That(shown, Is.EqualTo(change));
+    }
+
+    [TestCase(0, 0)]
+    [TestCase(-1, 0)]
+    [TestCase(20, 10)]
+    [TestCase(0.5, 0.5)]
+    public void KillDelayHonorsZeroAndClampsRange(double setting, double expectedDelay)
+    {
+        var queue = new RaidProgressNotificationQueue();
+        var kill = Objective("kill", 0) with { IsKillObjective = true };
+        var change = new RaidProgressNotification(Node(kill), kill, Progress("kill", 1, 2), "Started");
+        var immediate = queue.Schedule(change, setting, 10);
+        if (expectedDelay == 0)
+        {
+            Assert.That(immediate, Is.SameAs(change));
+            Assert.That(queue.TryDequeue(100, out _), Is.False);
+        }
+        else
+        {
+            Assert.That(immediate, Is.Null);
+            Assert.That(queue.TryDequeue(10 + expectedDelay - 0.01, out _), Is.False);
+            Assert.That(queue.TryDequeue(10 + expectedDelay, out _), Is.True);
+        }
+    }
+
+    [Test]
+    public void KillDelayKeepsQuestsIndependentAndClearsAtRaidEnd()
+    {
+        var queue = new RaidProgressNotificationQueue();
+        var kill = Objective("kill", 0) with { IsKillObjective = true };
+        var change = new RaidProgressNotification(Node(kill), kill, Progress("kill", 1, 2), "Started");
+        queue.Schedule(change, 10, 0);
+        queue.Schedule(change with { Quest = change.Quest with { Id = "other" } }, 1, 0);
+        Assert.That(queue.TryDequeue(1, out var shown), Is.True);
+        Assert.That(shown.Quest.Id, Is.EqualTo("other"));
+        queue.Clear();
+        Assert.That(queue.TryDequeue(100, out _), Is.False);
+    }
+
+    [Test]
+    public void RepeatableTimerUsesServerEndWithLiveFallbackAndNoInventedDeadline()
+    {
+        var node = Node() with { RepeatableKind = "Weekly" };
+        var live = new QuestLiveState(node.Id, "Started", true, true, [], 200, false);
+        var overlay = new QuestProfileOverlay("profile", "Usec", 1,
+            new Dictionary<string, QuestLiveState> { [node.Id] = live },
+            new Dictionary<string, LiveTraderSnapshot>(), []);
+        Assert.That(QuestRepeatableTimeRules.ExpirationTime(node, overlay), Is.EqualTo(200));
+        overlay = overlay with { RepeatableEndTimes = new Dictionary<string, long> { [node.Id] = 300 } };
+        Assert.That(QuestRepeatableTimeRules.ExpirationTime(node, overlay), Is.EqualTo(300));
+        Assert.That(QuestRepeatableTimeRules.ExpirationTime(Node(), overlay), Is.Null);
+        Assert.That(QuestRepeatableTimeRules.ExpirationTime(node with { Id = "missing" }, overlay), Is.Null);
+        Assert.That(QuestRepeatableTimeRules.RemainingSeconds(300, 299), Is.EqualTo(1));
+        Assert.That(QuestRepeatableTimeRules.RemainingSeconds(300, 300), Is.Zero);
+        Assert.That(QuestRepeatableTimeRules.RemainingSeconds(300, 301), Is.Zero);
+        Assert.That(QuestRepeatableTimeRules.RemainingSeconds(7 * 86400, 0), Is.EqualTo(604800));
+    }
+
     private static QuestGraphNode Node(params QuestObjectiveDefinition[] objectives) => new(
         "quest",
         "Quest",
