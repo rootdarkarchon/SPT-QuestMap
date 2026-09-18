@@ -19,6 +19,7 @@ Last consolidated: 2026-09-18. Update this file in place; keep historical implem
 - Server Core SHA-256: `490409F7C67480A8BF647DA67ADA8B91361330C2A9324D9E9787CD1EBAF5BF27`.
 - Server and all test projects target `net10.0`; core/client remain `netstandard2.1`. All production project/plugin versions are `2.1.0`.
 - `IModMetadata` / `IModBlazorMetadata` register `/questmap`; `HasPrepatcher = false`. Embedded Razor, CSS, and Canvas assets remain in use.
+- The browser header reads `ProgramStatics.SPT_VERSION()` from the running server, matching SPT's own status page; it no longer displays a hardcoded version.
 - `TemplateTable`, `TradersTable`, `LocationTable`, and `LocaleTable` replace `DatabaseService`. Cancellation-aware preload runs at `PostLoad + 1`, catalog initialization at `+ 2`.
 - The all-profile page requires the host `Administrator` policy. SPT owns login, cookies, and configured localhost bypass. Native routes retain SPT session authentication and existing URLs.
 - Native integration uses the supplied 4.1 mappings and installed named metadata. **71 required member contracts** are validated before activating replacements; exactly four global/trader Show/Close targets are patched. Unknown fingerprints or missing contracts leave replacements disabled with diagnostics.
@@ -50,9 +51,9 @@ scripts/build.ps1 -Target Both -Configuration Release -SptRoot D:\Tarkov-SPT-4.1
 scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.1.0
 ```
 
-- Build log: `artifacts/migration-41-audit/combined-build.log`.
+- Build log: `artifacts/migration-41-audit/header-version-build.log` (fresh combined build after the browser version-label correction).
 - Combined package: `artifacts/release/SPT-QuestMap-2.1.0.zip`.
-- Package: **15 entries / 12 files, 847,349 bytes**; SHA-256 `601EF7EC405273E0FACCDFA42AF4262AA865E0A8996E57BAB930F8129E2A1003`.
+- Package: **15 entries / 12 files, 847,391 bytes**; SHA-256 `D2FB96D7389212F1762B444B8304DCF37211EDF38B476BFF106C36005B4BA4F5`.
 - Inspection: zero escaping/unexpected entries, zero loose `.js`/`.ts`, and only four QuestMap DLL entries. Install roots are `SPT_Runtime/user/mods/SPT-QuestMap/` and `BepInEx/plugins/SPTQuestMap/`.
 - `deploy.ps1 -Target Both -SkipBuild -WhatIf` confirmed destination paths; this was only a dry run.
 - New tests cover injected tables, preload cancellation/order/single materialization, edition applicability, unchanged statuses, client-feed serialization, anonymous/non-administrator page denial, and deliberate ABI/version failures. The new compatibility project is registered in the solution.

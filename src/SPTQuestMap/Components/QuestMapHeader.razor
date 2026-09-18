@@ -1,6 +1,6 @@
 <header class="topbar">
     <div class="primary-row">
-        <div class="brand"><span class="eyebrow">SPT 4.0.13</span><h1>@Localizer["app.heading"]</h1></div>
+        <div class="brand"><span class="eyebrow">SPT @SPTarkov.Server.Core.Utils.ProgramStatics.SPT_VERSION()</span><h1>@Localizer["app.heading"]</h1></div>
         <div class="identity-controls" aria-label="@Localizer["controls.aria"]">
             <button class="primary refresh-button" type="button" title="@Localizer["refresh"]" aria-label="@Localizer["refresh"]" disabled="@Busy" @onclick="RefreshRequested"><span aria-hidden="true">⟳</span></button>
             <button class="compare-toggle @(CompareMode ? "active" : null)" type="button" aria-pressed="@CompareMode.ToString().ToLowerInvariant()" title="@Localizer[CompareMode ? "compare.exit" : "compare.toggle"]" aria-label="@Localizer[CompareMode ? "compare.exit" : "compare.toggle"]" disabled="@(Busy || Profiles.Count < 2)" @onclick="() => CompareModeChanged.InvokeAsync(!CompareMode)"><span aria-hidden="true">⇄</span></button>
