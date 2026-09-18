@@ -71,7 +71,7 @@ function Test-DllChanged([string]$Stage, [string]$Destination) {
     return $false
 }
 
-function Sync-Stage([string]$Stage, [string]$Destination, [switch]$PreserveSummaries) {
+function Sync-Stage([string]$Stage, [string]$Destination, [switch]$PreserveServerUserData) {
     if (-not $PSCmdlet.ShouldProcess($Destination, "Deploy files from $Stage")) { return }
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
     $sourceFiles = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -79,6 +79,8 @@ function Sync-Stage([string]$Stage, [string]$Destination, [switch]$PreserveSumma
         $relativePath = [System.IO.Path]::GetRelativePath($Stage, $sourceFile.FullName)
         [void]$sourceFiles.Add($relativePath)
         $destinationFile = Join-Path $Destination $relativePath
+        if ($PreserveServerUserData -and $relativePath -ieq 'config.json' -and
+            (Test-Path -LiteralPath $destinationFile -PathType Leaf)) { continue }
         $copyRequired = -not (Test-Path -LiteralPath $destinationFile -PathType Leaf)
         if (-not $copyRequired) {
             $copyRequired = (Get-FileHash -LiteralPath $sourceFile.FullName -Algorithm SHA256).Hash -ne
@@ -96,9 +98,10 @@ function Sync-Stage([string]$Stage, [string]$Destination, [switch]$PreserveSumma
     }
     foreach ($deployedFile in Get-ChildItem -LiteralPath $Destination -Recurse -File) {
         $relativePath = [System.IO.Path]::GetRelativePath($Destination, $deployedFile.FullName)
-        $isPreservedSummary = $PreserveSummaries -and
-            $relativePath.StartsWith("summaries$([System.IO.Path]::DirectorySeparatorChar)", [StringComparison]::OrdinalIgnoreCase)
-        if (-not $sourceFiles.Contains($relativePath) -and -not $isPreservedSummary) {
+        $isPreservedUserData = $PreserveServerUserData -and
+            ($relativePath -ieq 'config.json' -or
+             $relativePath.StartsWith("summaries$([System.IO.Path]::DirectorySeparatorChar)", [StringComparison]::OrdinalIgnoreCase))
+        if (-not $sourceFiles.Contains($relativePath) -and -not $isPreservedUserData) {
             Remove-Item -LiteralPath $deployedFile.FullName -Force
             Write-Host "Removed stale deployment file: $relativePath"
         }
@@ -131,7 +134,7 @@ if ($clientRequested) {
     Write-Host "Deployed client to: $clientDestination"
 }
 if ($serverRequested) {
-    Sync-Stage $serverStage $serverDestination -PreserveSummaries
+    Sync-Stage $serverStage $serverDestination -PreserveServerUserData
     Write-Host "Deployed server to: $serverDestination"
     Write-Host "Server DLL changed: $serverChanged"
 }

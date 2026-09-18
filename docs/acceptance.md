@@ -3,12 +3,12 @@
 ## SPT 4.1 / QuestMap 2.1 migration
 
 - [x] Combined Release build against SPT 4.1.6 / EFT 40743: zero warnings/errors.
-- [x] Core 103/103, server/browser 178/178, metadata-only client compatibility 22/22.
+- [x] Core 103/103, server/browser 189/189, metadata-only client compatibility 22/22.
 - [x] Matching server source inspected; no installed SPT assembly decompiled.
-- [x] Browser Administrator authorization, injected-table preload/cancellation, edition filtering, native contract rejection, and feed serialization covered by automated tests.
+- [x] Configurable browser authentication (enabled by default; ordinary SPT users accepted), injected-table preload/cancellation, edition filtering, native contract rejection, and feed serialization covered by automated tests.
 - [x] Fresh combined 2.1.0 package uses `SPT_Runtime` and contains only QuestMap payloads.
 - [ ] Configured-command deployment and installed hash verification.
-- [ ] Live browser/server authentication, assets, profile comparison, and refresh.
+- [ ] Live browser/server authentication, anonymous-access option, ordinary-user access, assets, profile comparison, and refresh.
 - [ ] Live native actions, optional skipping/reset, raid transitions, tracking, and localization.
 - [ ] Live kill delay at 0/10 seconds and Daily/Weekly/Scav expiry layout.
 - [ ] Current Fika native-action and post-raid lifecycle validation.

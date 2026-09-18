@@ -14,7 +14,7 @@ The build runs shared-core, server/browser, and metadata-only native compatibili
 
 Packages contain only:
 
-- `SPT_Runtime/user/mods/SPT-QuestMap/`: server/Core assemblies, symbols, license, and `Data` catalogs.
+- `SPT_Runtime/user/mods/SPT-QuestMap/`: server/Core assemblies, symbols, license, `config.default.json`, and `Data` catalogs.
 - `BepInEx/plugins/SPTQuestMap/`: client/Core assemblies, symbols, and license.
 
 No game/vendor assemblies, raw profiles, copied artwork, or loose server `.js`/`.ts` files belong in release archives. Server and client versions must match. Inspect each fresh combined ZIP for allowed roots and path containment.
@@ -23,7 +23,11 @@ No game/vendor assemblies, raw profiles, copied artwork, or loose server `.js`/`
 
 When server DLLs change, deployment requires `-RestartCommand` or the ignored `scripts/restart-command.local.txt` before copying either component. The command runs after copying and must handle the intended SPT server instance. No command is inferred, and an unchanged server does not restart. `-WhatIf` previews copying without requiring a command.
 
-Client deployment never inspects or stops EFT. A mapped-DLL lock is a deployment failure, not authorization to kill the game. Only QuestMap's two resolved installation directories may be synchronized; the server's user-managed `summaries/` subtree and external client configuration/tracking files are preserved. Compare staged and installed hashes after deployment. Do not poll server readiness; the user confirms readiness before runtime checks.
+Client deployment never inspects or stops EFT. A mapped-DLL lock is a deployment failure, not authorization to kill the game. Only QuestMap's two resolved installation directories may be synchronized; the server's user-managed `summaries/` subtree, `config.json`, and external client configuration/tracking files are preserved. Compare staged and installed hashes after deployment. Do not poll server readiness; the user confirms readiness before runtime checks.
+
+## Browser authentication
+
+Server startup creates `SPT_Runtime/user/mods/SPT-QuestMap/config.json` with `"requireBrowserAuthentication": true` if it is missing. The package also includes `config.default.json`, which can be copied to `config.json` before startup. The default accepts any authenticated SPT user, including non-administrators, and respects SPT's configured localhost bypass. Set the value to `false` in `config.json` and restart the server to permit anonymous access to the read-only browser page and all its sanitized profile views. This changes only QuestMap's policy; native feeds and other SPT pages retain their existing authentication. Invalid configuration logs a warning and keeps authentication enabled. The active `config.json` is generated locally and is not overwritten by release archives; only the default template is shipped.
 
 ## Private CI build references
 

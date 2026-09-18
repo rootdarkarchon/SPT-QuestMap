@@ -5,7 +5,7 @@ Last consolidated: 2026-09-18. Update this file in place; keep historical implem
 ## Status at a glance
 
 - **Release candidate:** QuestMap `2.1.0`, complete server/browser/core/native migration to SPT 4.1. The accepted 2.0 feature set is retained; prior releases provide 4.0.13 support.
-- **Automated validation:** combined Release build succeeded with zero warnings/errors; **303 tests passed**: 103 core, 178 server/browser, 22 native compatibility. The old 273-test count is historical.
+- **Automated validation:** combined Release build succeeded with zero warnings/errors; **314 tests passed**: 103 core, 189 server/browser, 22 native compatibility. The old 273-test count is historical.
 - **Acceptance:** not yet accepted on the live 4.1 installation. No deployment, server restart, live browser/game/Fika validation, or new runtime performance measurements occurred.
 - **Blocker:** deployment requires the user's configured server restart command. No command is configured or inferred. CI hosting/secrets will be provisioned by the user.
 - **Next step:** deploy the validated combined package after the restart command is supplied, then complete the live matrix in [SPT 4.1 migration](spt-4.1-migration.md) and [acceptance](acceptance.md).
@@ -21,7 +21,7 @@ Last consolidated: 2026-09-18. Update this file in place; keep historical implem
 - `IModMetadata` / `IModBlazorMetadata` register `/questmap`; `HasPrepatcher = false`. Embedded Razor, CSS, and Canvas assets remain in use.
 - The browser header reads `ProgramStatics.SPT_VERSION()` from the running server, matching SPT's own status page; it no longer displays a hardcoded version.
 - `TemplateTable`, `TradersTable`, `LocationTable`, and `LocaleTable` replace `DatabaseService`. Cancellation-aware preload runs at `PostLoad + 1`, catalog initialization at `+ 2`.
-- The all-profile page requires the host `Administrator` policy. SPT owns login, cookies, and configured localhost bypass. Native routes retain SPT session authentication and existing URLs.
+- The all-profile page uses the `QuestMapBrowser` policy: any authenticated SPT user is allowed by default, without an administrator requirement. The package ships `config.default.json`; startup creates active `config.json` beside the server DLL with `requireBrowserAuthentication: true` if missing. Explicitly set it to `false` in `config.json` and restart to allow anonymous browser access. Invalid settings retain authentication. SPT owns login, cookies, and configured localhost bypass; other host policies and native feed session authentication are unchanged.
 - Native integration uses the supplied 4.1 mappings and installed named metadata. **71 required member contracts** are validated before activating replacements; exactly four global/trader Show/Close targets are patched. Unknown fingerprints or missing contracts leave replacements disabled with diagnostics.
 
 ## Preserved behavior and authority boundaries
@@ -52,12 +52,12 @@ scripts/build.ps1 -Target Both -Configuration Release -SptRoot D:\Tarkov-SPT-4.1
 scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.1.0
 ```
 
-- Build log: `artifacts/migration-41-audit/header-version-build.log` (fresh combined build after the browser version-label correction).
+- Build log: `artifacts/migration-41-audit/browser-auth-config-build.log` (fresh combined build after configurable browser authentication and ordinary-user access).
 - Combined package: `artifacts/release/SPT-QuestMap-2.1.0.zip`.
-- Package: **15 entries / 12 files, 847,391 bytes**; SHA-256 `D2FB96D7389212F1762B444B8304DCF37211EDF38B476BFF106C36005B4BA4F5`.
-- Inspection: zero escaping/unexpected entries, zero loose `.js`/`.ts`, and only four QuestMap DLL entries. Install roots are `SPT_Runtime/user/mods/SPT-QuestMap/` and `BepInEx/plugins/SPTQuestMap/`.
+- Package: **16 entries / 13 files, 852,269 bytes**; SHA-256 `AD33A042750EC0BB895AE65537C299F4B83A7BC4C9B0E90855DF82E4EDB3A49B`.
+- Inspection: zero escaping/unexpected entries, zero loose `.js`/`.ts`, and only four QuestMap DLL entries. `config.default.json` enables authentication; active `config.json` is excluded. Install roots are `SPT_Runtime/user/mods/SPT-QuestMap/` and `BepInEx/plugins/SPTQuestMap/`.
 - `deploy.ps1 -Target Both -SkipBuild -WhatIf` confirmed destination paths; this was only a dry run.
-- New tests cover injected tables, preload cancellation/order/single materialization, edition applicability, unchanged statuses, client-feed serialization, anonymous/non-administrator page denial, and deliberate ABI/version failures. The new compatibility project is registered in the solution.
+- Tests cover injected tables, preload cancellation/order/single materialization, edition applicability, unchanged statuses, client-feed serialization, and deliberate ABI/version failures. Browser tests cover anonymous denial by default, ordinary-user access, explicit anonymous access, unchanged host administrator policy, and missing/invalid configuration. Deployment fixtures confirm preservation of `config.json` with or without a staged configuration, plus custom summaries. The compatibility project is registered in the solution.
 
 ## CI and rollout
 
@@ -65,5 +65,5 @@ scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.1.0
 - Private input: `artifacts/private-build-references/eft-spt-4.1.6-build-references.zip`, **30,507,998 bytes**, SHA-256 `2494CEA377BA01DAACEA78F7CCB17CFCF63DE9EBA19F2B34F2E87C867B63453E`; manifest beside it.
 - Secret names: `EFT_REFERENCE_ARCHIVE_4_1_URL` and `EFT_REFERENCE_ARCHIVE_4_1_SHA256`. GitHub secret names cannot contain periods. Never attach this reference ZIP to a public QuestMap release.
 - Deployment requires `-RestartCommand` or ignored `scripts/restart-command.local.txt` before replacing changed server DLLs. Invoke the supplied command after copying. Never infer a command, stop EFT, or poll readiness.
-- Live validation must cover browser authentication (including host-configured bypass), all native actions, repeatable replacement/expiry, skip/reset recovery, localization/favorites/tracking, raid transitions, post-raid refresh, kill delay at **0 and 10 seconds**, and timers in both banners and details.
+- Live validation must cover browser authentication (ordinary users, explicit anonymous mode, and host-configured bypass), all native actions, repeatable replacement/expiry, skip/reset recovery, localization/favorites/tracking, raid transitions, post-raid refresh, kill delay at **0 and 10 seconds**, and timers in both banners and details.
 - Standalone and Fika lifecycle checks must pass before retaining a 4.1 Fika compatibility claim. Build/metadata success is separate from live-game evidence.

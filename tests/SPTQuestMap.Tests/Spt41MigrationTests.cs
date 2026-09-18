@@ -21,18 +21,26 @@ using SPTarkov.Server.Core.Utils.Json;
 using SPTarkov.Server.Core.Utils;
 using SPTarkov.Server.Web;
 using SPTQuestMap.Components.Pages;
+using SPTQuestMap.Configuration;
 using SPTQuestMap.Services;
 
 namespace SPTQuestMap.Tests;
 
 public sealed class Spt41MigrationTests
 {
-    [TestCase(false, false)]
-    [TestCase(true, false)]
-    [TestCase(true, true)]
-    public async Task BrowserProfileAccessUsesHostAdministratorPolicy(bool authenticated, bool administrator)
+    [TestCase(true, false, false)]
+    [TestCase(true, true, false)]
+    [TestCase(true, true, true)]
+    [TestCase(false, false, false)]
+    [TestCase(false, true, false)]
+    [TestCase(false, true, true)]
+    public async Task BrowserProfileAccessUsesConfiguredUserPolicy(bool requireAuthentication, bool authenticated, bool administrator)
     {
-        var services = new ServiceCollection().AddLogging().AddAuthorizationCore(options =>
+        var services = new ServiceCollection().AddLogging();
+        await QuestMapBrowserAuthorization.OnDIConstructAsync(services, CancellationToken.None);
+        services.AddSingleton(new QuestMapServerConfiguration { RequireBrowserAuthentication = requireAuthentication });
+        // Post-configuration must use the final host policies regardless of registration order.
+        services.AddAuthorizationCore(options =>
             options.AddPolicy("Administrator", p => p.RequireClaim("isAdministrator", "true")));
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
             administrator ? [new Claim("isAdministrator", "true")] : [], authenticated ? "SptWebCookie" : null));
@@ -40,8 +48,12 @@ public sealed class Spt41MigrationTests
         await using var provider = services.BuildServiceProvider();
         var pagePolicy = typeof(QuestMap).GetCustomAttribute<AuthorizeAttribute>()!.Policy!;
         var authorization = await provider.GetRequiredService<IAuthorizationService>().AuthorizeAsync(principal, null, pagePolicy);
-        Assert.That(authorization.Succeeded, Is.EqualTo(administrator));
-        if (administrator) return;
+        var allowed = !requireAuthentication || authenticated;
+        Assert.That(authorization.Succeeded, Is.EqualTo(allowed));
+        var administratorAccess = await provider.GetRequiredService<IAuthorizationService>()
+            .AuthorizeAsync(principal, null, "Administrator");
+        Assert.That(administratorAccess.Succeeded, Is.EqualTo(administrator), "Other SPT policies must remain unchanged.");
+        if (allowed) return;
 
         // Deliberately omit QuestMapDataService. A denied route must never instantiate the page or read profiles.
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());

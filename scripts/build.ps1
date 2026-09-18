@@ -115,6 +115,7 @@ if ($serverRequested) {
     $serverOutput = Join-Path $artifactRoot "bin/SPTQuestMap/$configurationFolder"
     Copy-StagedFile (Join-Path $serverOutput 'SPTQuestMap.dll') $serverStage
     Copy-StagedFile (Join-Path $serverOutput 'SPTQuestMap.pdb') $serverStage -Optional
+    Copy-StagedFile (Join-Path $serverOutput 'config.default.json') $serverStage
     Copy-StagedFile (Join-Path $coreOutput 'SPTQuestMap.Core.dll') $serverStage
     Copy-StagedFile (Join-Path $coreOutput 'SPTQuestMap.Core.pdb') $serverStage -Optional
     $dataStage = Join-Path $serverStage 'Data'

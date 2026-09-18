@@ -163,7 +163,7 @@ The exact structure is intentionally not prescribed. A sensible result will usua
 - a page or static app at `/questmap`;
 - server asset URLs for images.
 
-Use the existing SPT authentication/authorization facilities. Profile listing and profile quest state should not be exposed anonymously if the server web UI normally protects profile data.
+Use the existing SPT authentication/authorization facilities. Browser access requires an authenticated SPT user by default, without an administrator requirement. The server's `config.json` may explicitly disable authentication with `requireBrowserAuthentication: false`; this applies only to QuestMap's read-only browser page. Native client feeds retain SPT session authentication.
 
 Do not create write endpoints in the first version.
 

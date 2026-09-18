@@ -19,7 +19,7 @@ Injected `TemplateTable`, `TradersTable`, `LocationTable`, and `LocaleTable` rep
 
 Availability uses the matched `QuestHelper` edition blacklist/whitelist helpers for quests absent from the profile. Profile-known statuses retain precedence. Edition-inapplicable future quests are excluded from profile applicability/totals. QuestMap does not call `GetClientQuests`, which stamps shared template state. Existing faction, seasonal, Block, prestige, frontier, dependency, and task-map rules remain in place.
 
-The browser page requires the host's `Administrator` policy because it exposes all loaded profiles. SPT controls cookies, login, and optional localhost bypass. Native feeds retain existing session transport and URLs. No browser write endpoints or raw-profile payloads were added.
+The browser page uses a QuestMap-specific policy that requires an authenticated SPT user by default, including non-administrators. Server `config.json` can explicitly allow anonymous access with `requireBrowserAuthentication: false`. SPT still controls cookies, login, and optional localhost bypass; other host policies are unchanged. Native feeds retain existing session transport and URLs. No browser write endpoints or raw-profile payloads were added.
 
 ## Native migration
 
@@ -33,7 +33,7 @@ Native action ownership, duplicate-press protection, hidden transaction hosts, a
 
 ## Validation and remaining acceptance
 
-The unchanged client initially produced 145 compilation errors. The migrated combined Release build has zero warnings/errors and passes 103 core, 178 server/browser, and 22 client compatibility tests (303 total). These include edition filtering/all ten statuses, injected-table preload/cancellation/order, unauthorized route rendering, range/fingerprint rejection, missing members/changed signatures, and SPT serialization of kill classification, progress, and repeatable deadlines.
+The unchanged client initially produced 145 compilation errors. The migrated combined Release build has zero warnings/errors and passes 103 core, 189 server/browser, and 22 client compatibility tests (314 total). These include edition filtering/all ten statuses, injected-table preload/cancellation/order, configurable browser access and authenticated defaults, unauthorized route rendering, range/fingerprint rejection, missing members/changed signatures, and SPT serialization of kill classification, progress, and repeatable deadlines.
 
 Live acceptance remains pending:
 

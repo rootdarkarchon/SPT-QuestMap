@@ -52,6 +52,7 @@ $dll = Join-Path $serverOutput 'SPTQuestMap.dll'
 $serverCoreDll = Join-Path $serverOutput 'SPTQuestMap.Core.dll'
 $metaInfo = Join-Path $serverOutput 'Data/metainfo.json'
 $triggerIds = Join-Path $serverOutput 'Data/triggerIds.json'
+$defaultConfig = Join-Path $serverOutput 'config.default.json'
 $clientDll = Join-Path $clientOutput 'SPTQuestMap.Client.dll'
 $clientCoreDll = Join-Path $clientOutput 'SPTQuestMap.Core.dll'
 
@@ -66,6 +67,9 @@ if ($serverRequested -and -not (Test-Path -LiteralPath $metaInfo -PathType Leaf)
 }
 if ($serverRequested -and -not (Test-Path -LiteralPath $triggerIds -PathType Leaf)) {
     throw "Staged zone-to-map catalog was not found: $triggerIds"
+}
+if ($serverRequested -and -not (Test-Path -LiteralPath $defaultConfig -PathType Leaf)) {
+    throw "Staged default configuration was not found: $defaultConfig"
 }
 if ($clientRequested -and -not (Test-Path -LiteralPath $clientDll -PathType Leaf)) {
     throw "Staged client DLL was not found: $clientDll. Run scripts/build.ps1 -Target Client first."
@@ -89,6 +93,7 @@ if ($serverRequested) {
     New-Item -ItemType Directory -Path $modDirectory -Force | Out-Null
     Copy-Item -LiteralPath $dll -Destination $modDirectory
     Copy-Item -LiteralPath $serverCoreDll -Destination $modDirectory
+    Copy-Item -LiteralPath $defaultConfig -Destination $modDirectory
     $dataDirectory = Join-Path $modDirectory 'Data'
     New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
     Copy-Item -LiteralPath $metaInfo -Destination $dataDirectory

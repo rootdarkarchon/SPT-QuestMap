@@ -75,7 +75,19 @@ The combined archive is the recommended installation. For a server/browser-only 
    https://127.0.0.1:6969/questmap
    ```
 
-The browser page uses SPT 4.1 web authentication and requires the Administrator policy because it can inspect all loaded profiles. SPT controls localhost bypass and remote login; QuestMap does not create a separate login or bypass those settings.
+By default, the browser page requires a signed-in SPT user; administrator privileges are not required. SPT controls login and its configured localhost bypass.
+
+### Server browser configuration
+
+QuestMap ships `config.default.json` in `SPT_Runtime/user/mods/SPT-QuestMap/` and creates the active `config.json` there on server startup if it is missing. You can also copy the default file to `config.json` before starting the server:
+
+```json
+{
+  "requireBrowserAuthentication": true
+}
+```
+
+Set `requireBrowserAuthentication` to `false` and restart the server to allow anonymous access to `/questmap`. This exposes the read-only map and sanitized data for all loaded profiles to anyone who can reach the page. Other SPT pages and native client session authentication keep their existing rules. Missing or invalid settings retain authentication, and the deployment helper preserves the configuration file.
 
 Your browser may warn about SPT's local TLS certificate until you trust that certificate on your machine. Existing custom files beneath `SPT_Runtime/user/mods/SPT-QuestMap/summaries/` are user-managed and are not part of the release archive.
 
@@ -235,9 +247,9 @@ Files load in deterministic filename order, and a later file overwrites an earli
 
 Malformed optional files are logged and skipped. A missing summary simply leaves the ordinary Description view without Summary tabs. Restart the SPT server after adding or changing catalogs. QuestMap's deployment helper preserves this directory.
 
-## Local-server warning
+## Browser access
 
-SPT 4.1.6 does not provide an authentication policy for this mod's Blazor page. QuestMap therefore assumes the normal SPT setup where the web server is bound to localhost. If you expose the SPT web host to another machine or network, the QuestMap page and its sanitized profile/quest state become reachable there too.
+The browser companion is read-only and includes all loaded profiles. Its access is controlled by the server setting above; authentication is enabled by default and accepts ordinary SPT user accounts.
 
 ## Troubleshooting
 
