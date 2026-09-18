@@ -1,6 +1,6 @@
 # SPT-QuestMap
 
-SPT-QuestMap 2.1 is a **full in-game questing replacement** for **SPT 4.1.6+**. It replaces both the global **Character → Tasks** screen and every trader's **Tasks** tab with a complete quest workspace for browsing, filtering, accepting, progressing, tracking, handing in, and planning quests without leaving EFT.
+SPT-QuestMap 2.1.1 is a **full in-game questing replacement** for **SPT 4.1.6+**. It replaces both the global **Character → Tasks** screen and every trader's **Tasks** tab with a complete quest workspace for browsing, filtering, accepting, progressing, tracking, handing in, and planning quests without leaving EFT.
 
 This is not just a quest-map overlay or an extra details panel. The native client provides its own full task table, dependency graph, quest details, native quest actions, tracking system, and in-raid overlays. A read-only browser companion at `/questmap` adds large-screen planning and profile comparison.
 
@@ -294,7 +294,7 @@ After building, create an install-ready combined archive with the version declar
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\package-release.ps1 `
-  -Target Both -Configuration Release -Version 2.1.0
+  -Target Both -Configuration Release -Version 2.1.1
 ```
 
 See the [4.1 migration and acceptance record](docs/spt-4.1-migration.md) for exact reference identities and private CI setup.

@@ -4,7 +4,7 @@ Last consolidated: 2026-09-18. Update this file in place; keep historical implem
 
 ## Status at a glance
 
-- **Release candidate:** QuestMap `2.1.0`, complete server/browser/core/native migration to SPT 4.1. The accepted 2.0 feature set is retained; prior releases provide 4.0.13 support.
+- **Release candidate:** QuestMap `2.1.1`, complete server/browser/core/native migration to SPT 4.1. The accepted 2.0 feature set is retained; prior releases provide 4.0.13 support.
 - **Automated validation:** combined Release build succeeded with zero warnings/errors; **314 tests passed**: 103 core, 189 server/browser, 22 native compatibility. The old 273-test count is historical.
 - **Acceptance:** not yet accepted on the live 4.1 installation. No deployment, server restart, live browser/game/Fika validation, or new runtime performance measurements occurred.
 - **Blocker:** deployment requires the user's configured server restart command. No command is configured or inferred. CI hosting/secrets will be provisioned by the user.
@@ -17,7 +17,7 @@ Last consolidated: 2026-09-18. Update this file in place; keep historical implem
 - Matched server source: `731d7a2a4418865c37141862ec5ad2451525f7f8`, in ignored `reference/spt-4.1.6-sources/`. Vendor sources and installed assemblies remain unmodified; no SPT DLL was decompiled.
 - EFT assembly SHA-256: `EE25CEE1259777B38ED8B3E7841FDC2DB3C98540B1469FA539B1FF183476E436`.
 - Server Core SHA-256: `490409F7C67480A8BF647DA67ADA8B91361330C2A9324D9E9787CD1EBAF5BF27`.
-- Server and all test projects target `net10.0`; core/client remain `netstandard2.1`. All production project/plugin versions are `2.1.0`.
+- Server and all test projects target `net10.0`; core/client remain `netstandard2.1`. All production project/plugin versions are `2.1.1`.
 - `IModMetadata` / `IModBlazorMetadata` register `/questmap`; `HasPrepatcher = false`. Embedded Razor, CSS, and Canvas assets remain in use.
 - The browser header reads `ProgramStatics.SPT_VERSION()` from the running server, matching SPT's own status page; it no longer displays a hardcoded version.
 - `TemplateTable`, `TradersTable`, `LocationTable`, and `LocaleTable` replace `DatabaseService`. Cancellation-aware preload runs at `PostLoad + 1`, catalog initialization at `+ 2`.
@@ -49,12 +49,12 @@ Last consolidated: 2026-09-18. Update this file in place; keep historical implem
 
 ```powershell
 scripts/build.ps1 -Target Both -Configuration Release -SptRoot D:\Tarkov-SPT-4.1
-scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.1.0
+scripts/package-release.ps1 -Target Both -Configuration Release -Version 2.1.1
 ```
 
-- Build log: `artifacts/migration-41-audit/browser-auth-config-build.log` (fresh combined build after configurable browser authentication and ordinary-user access).
-- Combined package: `artifacts/release/SPT-QuestMap-2.1.0.zip`.
-- Package: **16 entries / 13 files, 852,269 bytes**; SHA-256 `AD33A042750EC0BB895AE65537C299F4B83A7BC4C9B0E90855DF82E4EDB3A49B`.
+- Build log: `artifacts/migration-41-audit/release-2.1.1-build.log` (fresh combined 2.1.1 build; all four packaged DLLs report assembly version 2.1.1.0).
+- Combined package: `artifacts/release/SPT-QuestMap-2.1.1.zip`.
+- Package: **16 entries / 13 files, 852,283 bytes**; SHA-256 `8570CA80BBAA48C0D1B4DF0023EB5072FE9A42B196D1BCFD17E8A7613BDDBCFF`.
 - Inspection: zero escaping/unexpected entries, zero loose `.js`/`.ts`, and only four QuestMap DLL entries. `config.default.json` enables authentication; active `config.json` is excluded. Install roots are `SPT_Runtime/user/mods/SPT-QuestMap/` and `BepInEx/plugins/SPTQuestMap/`.
 - `deploy.ps1 -Target Both -SkipBuild -WhatIf` confirmed destination paths; this was only a dry run.
 - Tests cover injected tables, preload cancellation/order/single materialization, edition applicability, unchanged statuses, client-feed serialization, and deliberate ABI/version failures. Browser tests cover anonymous denial by default, ordinary-user access, explicit anonymous access, unchanged host administrator policy, and missing/invalid configuration. Deployment fixtures confirm preservation of `config.json` with or without a staged configuration, plus custom summaries. The compatibility project is registered in the solution.

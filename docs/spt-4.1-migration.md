@@ -9,7 +9,7 @@
 - Game assembly SHA-256: `EE25CEE1259777B38ED8B3E7841FDC2DB3C98540B1469FA539B1FF183476E436`.
 - Server Core SHA-256: `490409F7C67480A8BF647DA67ADA8B91361330C2A9324D9E9787CD1EBAF5BF27`.
 
-QuestMap 2.0 releases retain SPT 4.0.13 support. This tree has no dual-runtime implementation. All three production projects and the plugin use version 2.1.0.
+QuestMap 2.0 releases retain SPT 4.0.13 support. This tree has no dual-runtime implementation. All three production projects and the plugin use version 2.1.1.
 
 ## Server migration
 
